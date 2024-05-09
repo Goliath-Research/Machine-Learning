@@ -4,6 +4,8 @@ import pandas as pd
 
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
+pio.renderers.default = "plotly_mimetype+notebook_connected"
 
 from sklearn.cluster import cluster_optics_dbscan
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
