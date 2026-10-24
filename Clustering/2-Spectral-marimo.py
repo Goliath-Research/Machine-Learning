@@ -2,11 +2,10 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo",
-#     "matplotlib",
 #     "numpy",
 #     "pandas",
+#     "plotly",
 #     "scikit-learn",
-#     "seaborn",
 # ]
 # ///
 
@@ -18,20 +17,15 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+    import ClusterVisualizer as cv
     import marimo as mo
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.cluster import KMeans, SpectralClustering
     from sklearn.datasets import make_circles, make_moons
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -42,31 +36,13 @@ def _():
         SpectralClustering,
         TfidfVectorizer,
         adjusted_rand_score,
+        cv,
         make_circles,
         make_moons,
+        mo,
+        np,
+        pd,
     )
-
-
-@app.cell
-def _(np, pd, sns):
-    def draw_clusters(axes, x, y, labels, title):
-        frame = pd.DataFrame(
-            {"x": np.asarray(x), "y": np.asarray(y), "cluster": np.asarray(labels).astype(str)}
-        )
-        sns.scatterplot(data=frame, x="x", y="y", hue="cluster", s=22, ax=axes, legend=False)
-        axes.set_aspect("equal", adjustable="datalim")
-        axes.set_title(title)
-
-    def spiral_points(n_points, noise=0.8):
-        rng = np.random.default_rng(12345)
-        angle = np.sqrt(rng.random((n_points, 1))) * 2 * np.pi
-        arm_x = -np.cos(angle) * angle + rng.random((n_points, 1)) * noise
-        arm_y = np.sin(angle) * angle + rng.random((n_points, 1)) * noise
-        points = np.vstack((np.hstack((arm_x, arm_y)), np.hstack((-arm_x, -arm_y))))
-        arms = np.repeat([0, 1], n_points)
-        return points, arms
-
-    return draw_clusters, spiral_points
 
 
 @app.cell(hide_code=True)
@@ -86,14 +62,29 @@ def _(mo):
 
     Spectral clustering builds a graph of nearest neighbors and clusters in that graph. `affinity="nearest_neighbors"` is that graph. `n_neighbors` is how many neighbors each point keeps. Too few neighbors can leave the graph in separate pieces, and scikit-learn warns that the embedding may not behave as expected.
 
+    Every scatter below is a `ClusterVisualizer` plot, so you can zoom. `random_state=0` and `n_jobs=1` keep the neighbor-graph fits stable on this machine. The adjusted Rand index compares a clustering with the known arms or rings. It is 1 when the groups match, and near 0 when the match is no better than chance. The index does not care which group is called 0.
+
     ## Datasets Used
 
     - **Half moons.** 300 points from `make_moons`, noise 0.05, `random_state=10`.
     - **Concentric circles.** 400 points from `make_circles`, noise 0.1, factor 0.2, `random_state=123`.
     - **Two spirals.** 300 points on each arm.
-    - **Twenty-five short sentences** about weather, animals, royalty, water, and Python.
+    - **Short sentences** about weather, animals, royalty, water, and Python.
     """)
     return
+
+
+@app.cell
+def _(np):
+    def create_spiral_data(n_points, noise=0.8):
+        """Generate two spiral arms of n_points each."""
+        np.random.seed(12345)
+        n = np.sqrt(np.random.rand(n_points, 1)) * 360 * (2 * np.pi) / 360
+        d1x = -np.cos(n) * n + np.random.rand(n_points, 1) * noise
+        d1y = np.sin(n) * n + np.random.rand(n_points, 1) * noise
+        return np.vstack((np.hstack((d1x, d1y)), np.hstack((-d1x, -d1y))))
+
+    return (create_spiral_data,)
 
 
 @app.cell
@@ -101,17 +92,19 @@ def _(
     KMeans,
     SpectralClustering,
     adjusted_rand_score,
-    draw_clusters,
+    cv,
     make_moons,
     pd,
-    plt,
 ):
     moons, moon_arms = make_moons(300, noise=0.05, random_state=10)
+    moon_view = cv.ClusterVisualizer(pd.DataFrame(moons, columns=["x", "y"]))
+    moon_labels = {}
     moon_rows = []
-    _figure, _axes = plt.subplots(2, 3, figsize=(11, 7))
-    for _column, _k in enumerate((2, 3, 6)):
-        _kmeans = KMeans(n_clusters=_k, random_state=10, n_init="auto").fit_predict(moons)
-        _spectral = SpectralClustering(
+    for _k in (2, 3, 6):
+        moon_labels[f"k-means {_k}"] = KMeans(
+            n_clusters=_k, random_state=10, n_init="auto"
+        ).fit_predict(moons)
+        moon_labels[f"spectral {_k}"] = SpectralClustering(
             n_clusters=_k,
             affinity="nearest_neighbors",
             n_neighbors=20,
@@ -119,27 +112,75 @@ def _(
             random_state=0,
             n_jobs=1,
         ).fit_predict(moons)
-        draw_clusters(_axes[0, _column], moons[:, 0], moons[:, 1], _kmeans, f"k-means, k = {_k}")
-        draw_clusters(_axes[1, _column], moons[:, 0], moons[:, 1], _spectral, f"Spectral, k = {_k}")
         moon_rows.append(
             {
                 "k": _k,
-                "kmeans_ari": adjusted_rand_score(moon_arms, _kmeans),
-                "spectral_ari": adjusted_rand_score(moon_arms, _spectral),
+                "kmeans_ari": adjusted_rand_score(moon_arms, moon_labels[f"k-means {_k}"]),
+                "spectral_ari": adjusted_rand_score(
+                    moon_arms, moon_labels[f"spectral {_k}"]
+                ),
             }
         )
     moon_scores = pd.DataFrame(moon_rows).set_index("k")
-    _figure.tight_layout()
     print(moon_scores.round(3).to_string())
-    return _figure
+    moon_view.plot_data(title="Half Moons")
+    return moon_labels, moon_scores, moon_view
+
+
+@app.cell
+def _(moon_labels, moon_view):
+    moon_view.plot_clusters(
+        moon_labels["k-means 2"], title="Half Moons: k-Means Clustering (k=2)"
+    )
+    return
+
+
+@app.cell
+def _(moon_labels, moon_view):
+    moon_view.plot_clusters(
+        moon_labels["spectral 2"], title="Half Moons: Spectral Clustering (k=2)"
+    )
+    return
+
+
+@app.cell
+def _(moon_labels, moon_view):
+    moon_view.plot_clusters(
+        moon_labels["k-means 3"], title="Half Moons: k-Means Clustering (k=3)"
+    )
+    return
+
+
+@app.cell
+def _(moon_labels, moon_view):
+    moon_view.plot_clusters(
+        moon_labels["spectral 3"], title="Half Moons: Spectral Clustering (k=3)"
+    )
+    return
+
+
+@app.cell
+def _(moon_labels, moon_view):
+    moon_view.plot_clusters(
+        moon_labels["k-means 6"], title="Half Moons: k-Means Clustering (k=6)"
+    )
+    return
+
+
+@app.cell
+def _(moon_labels, moon_view):
+    moon_view.plot_clusters(
+        moon_labels["spectral 6"], title="Half Moons: Spectral Clustering (k=6)"
+    )
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The adjusted Rand index compares a clustering with the two true arms. It is 1 when the groups match, and near 0 when the match is no better than chance. The index does not care which group is called 0.
+    ## Concentric circles
 
-    For the rings, 20 neighbors leaves the graph disconnected. The fit below uses 40 neighbors.
+    Twenty neighbors leaves this graph disconnected. The warning is the lesson. The next fit raises `n_neighbors` to 40, which is the connected graph drawn in the notebook.
     """)
     return
 
@@ -149,15 +190,26 @@ def _(
     KMeans,
     SpectralClustering,
     adjusted_rand_score,
-    draw_clusters,
+    cv,
     make_circles,
-    plt,
+    pd,
 ):
     circles, circle_rings = make_circles(
         n_samples=400, random_state=123, noise=0.1, factor=0.2
     )
-    circle_kmeans = KMeans(n_clusters=2, random_state=10, n_init="auto").fit_predict(circles)
-    circle_spectral = SpectralClustering(
+    circle_view = cv.ClusterVisualizer(pd.DataFrame(circles, columns=["x", "y"]))
+    circle_kmeans = KMeans(n_clusters=2, random_state=10, n_init="auto").fit_predict(
+        circles
+    )
+    circle_spectral_20 = SpectralClustering(
+        n_clusters=2,
+        affinity="nearest_neighbors",
+        n_neighbors=20,
+        assign_labels="kmeans",
+        random_state=0,
+        n_jobs=1,
+    ).fit_predict(circles)
+    circle_spectral_40 = SpectralClustering(
         n_clusters=2,
         affinity="nearest_neighbors",
         n_neighbors=40,
@@ -166,24 +218,78 @@ def _(
         n_jobs=1,
     ).fit_predict(circles)
     circle_kmeans_ari = adjusted_rand_score(circle_rings, circle_kmeans)
-    circle_spectral_ari = adjusted_rand_score(circle_rings, circle_spectral)
-    _figure, _axes = plt.subplots(1, 2, figsize=(9, 4))
-    draw_clusters(_axes[0], circles[:, 0], circles[:, 1], circle_kmeans, f"k-means, ARI {circle_kmeans_ari:.3f}")
-    draw_clusters(
-        _axes[1], circles[:, 0], circles[:, 1], circle_spectral, f"Spectral, ARI {circle_spectral_ari:.3f}"
+    circle_spectral_20_ari = adjusted_rand_score(circle_rings, circle_spectral_20)
+    circle_spectral_ari = adjusted_rand_score(circle_rings, circle_spectral_40)
+    print(f"k-means ARI {circle_kmeans_ari:.3f}")
+    print(f"spectral, 20 neighbors, ARI {circle_spectral_20_ari:.3f}")
+    print(f"spectral, 40 neighbors, ARI {circle_spectral_ari:.3f}")
+    circle_view.plot_data(title="Concentric Circles")
+    return (
+        circle_kmeans,
+        circle_kmeans_ari,
+        circle_spectral_20,
+        circle_spectral_20_ari,
+        circle_spectral_40,
+        circle_spectral_ari,
+        circle_view,
     )
-    _figure.tight_layout()
-    return _figure
 
 
 @app.cell
-def _(KMeans, SpectralClustering, adjusted_rand_score, draw_clusters, pd, plt, spiral_points):
-    spirals, spiral_arms = spiral_points(300)
+def _(circle_kmeans, circle_view):
+    circle_view.plot_clusters(
+        circle_kmeans, title="Concentric Circles: k-Means Clustering (k=2)"
+    )
+    return
+
+
+@app.cell
+def _(circle_spectral_20, circle_view):
+    circle_view.plot_clusters(
+        circle_spectral_20,
+        title="Concentric Circles: Spectral Clustering (k=2, 20 neighbors)",
+    )
+    return
+
+
+@app.cell
+def _(circle_spectral_40, circle_view):
+    circle_view.plot_clusters(
+        circle_spectral_40, title="Concentric Circles: Spectral Clustering (k=2)"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Spirals
+
+    `create_spiral_data` stacks one arm, then the other. The first 300 rows are one arm and the next 300 are the other. Those two blocks are the labels used for the adjusted Rand index. k-means still sees only coordinates.
+    """)
+    return
+
+
+@app.cell
+def _(
+    KMeans,
+    SpectralClustering,
+    adjusted_rand_score,
+    create_spiral_data,
+    cv,
+    np,
+    pd,
+):
+    spirals = create_spiral_data(300)
+    spiral_arms = np.repeat([0, 1], 300)
+    spiral_view = cv.ClusterVisualizer(pd.DataFrame(spirals, columns=["x", "y"]))
+    spiral_labels = {}
     spiral_rows = []
-    _figure, _axes = plt.subplots(2, 2, figsize=(9, 8))
-    for _column, _k in enumerate((2, 3)):
-        _kmeans = KMeans(n_clusters=_k, random_state=0, n_init="auto").fit_predict(spirals)
-        _spectral = SpectralClustering(
+    for _k in (2, 3):
+        spiral_labels[f"k-means {_k}"] = KMeans(
+            n_clusters=_k, random_state=0, n_init="auto"
+        ).fit_predict(spirals)
+        spiral_labels[f"spectral {_k}"] = SpectralClustering(
             n_clusters=_k,
             affinity="nearest_neighbors",
             n_neighbors=10,
@@ -191,33 +297,88 @@ def _(KMeans, SpectralClustering, adjusted_rand_score, draw_clusters, pd, plt, s
             random_state=0,
             n_jobs=1,
         ).fit_predict(spirals)
-        draw_clusters(_axes[0, _column], spirals[:, 0], spirals[:, 1], _kmeans, f"k-means, k = {_k}")
-        draw_clusters(_axes[1, _column], spirals[:, 0], spirals[:, 1], _spectral, f"Spectral, k = {_k}")
         spiral_rows.append(
             {
                 "k": _k,
-                "kmeans_ari": adjusted_rand_score(spiral_arms, _kmeans),
-                "spectral_ari": adjusted_rand_score(spiral_arms, _spectral),
+                "kmeans_ari": adjusted_rand_score(
+                    spiral_arms, spiral_labels[f"k-means {_k}"]
+                ),
+                "spectral_ari": adjusted_rand_score(
+                    spiral_arms, spiral_labels[f"spectral {_k}"]
+                ),
             }
         )
     spiral_scores = pd.DataFrame(spiral_rows).set_index("k")
-    _figure.tight_layout()
     print(spiral_scores.round(3).to_string())
-    return _figure
+    spiral_view.plot_data(title="Spiral-Shaped Data")
+    return spiral_labels, spiral_scores, spiral_view
+
+
+@app.cell
+def _(spiral_labels, spiral_view):
+    spiral_view.plot_clusters(
+        spiral_labels["k-means 2"],
+        title="Spiral-Shaped Data: k-Means Clustering (k=2)",
+    )
+    return
+
+
+@app.cell
+def _(spiral_labels, spiral_view):
+    spiral_view.plot_clusters(
+        spiral_labels["spectral 2"],
+        title="Spiral-Shaped Data: Spectral Clustering (k=2)",
+    )
+    return
+
+
+@app.cell
+def _(spiral_labels, spiral_view):
+    spiral_view.plot_clusters(
+        spiral_labels["k-means 3"],
+        title="Spiral-Shaped Data: k-Means Clustering (k=3)",
+    )
+    return
+
+
+@app.cell
+def _(spiral_labels, spiral_view):
+    spiral_view.plot_clusters(
+        spiral_labels["spectral 3"],
+        title="Spiral-Shaped Data: Spectral Clustering (k=3)",
+    )
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Twenty-five sentences
+    ## Sentences
 
-    `TfidfVectorizer` turns each sentence into word weights. Common English words are dropped. Spectral clustering then uses the neighbor graph of those weights. The cluster numbers are arbitrary, so the list below is the thing to read: sentences about the same subject should land together.
+    `TfidfVectorizer` turns each sentence into word weights and drops common English words. Spectral clustering then uses the neighbor graph of those weights. The cluster numbers are arbitrary. Read the lists.
     """)
     return
 
 
 @app.cell
-def _(SpectralClustering, TfidfVectorizer):
+def _(SpectralClustering, TfidfVectorizer, np):
+    def spectral_clustering_docs(X, documents, n_clusters=2, n_neighbors=10):
+        """Perform spectral clustering on the document matrix and print each cluster."""
+        clustering = SpectralClustering(
+            n_clusters=n_clusters,
+            affinity="nearest_neighbors",
+            n_neighbors=n_neighbors,
+            assign_labels="kmeans",
+            random_state=0,
+            n_jobs=1,
+        )
+        labels = clustering.fit_predict(X)
+        for i in range(n_clusters):
+            print(f"Cluster {i}:")
+            for doc_index in np.where(labels == i)[0]:
+                print(f" - {documents[doc_index]}")
+        return labels
+
     documents = [
         "The sky is blue and beautiful",
         "Love this blue and beautiful sky!",
@@ -247,21 +408,46 @@ def _(SpectralClustering, TfidfVectorizer):
         "Stay healthy by drinking clear water",
     ]
     document_matrix = TfidfVectorizer(stop_words="english").fit_transform(documents).toarray()
-    document_labels = SpectralClustering(
-        n_clusters=4,
-        affinity="nearest_neighbors",
-        n_neighbors=8,
-        assign_labels="kmeans",
-        random_state=0,
-        n_jobs=1,
-    ).fit_predict(document_matrix)
-    for _cluster in sorted(set(document_labels)):
-        print(f"Cluster {_cluster}")
-        for _sentence in (documents[i] for i, label in enumerate(document_labels) if label == _cluster):
-            print(f"  {_sentence}")
-    document_sizes = {int(_cluster): int((document_labels == _cluster).sum()) for _cluster in set(document_labels)}
-    print(f"{len(documents)} sentences in {len(document_sizes)} clusters: {document_sizes}")
-    return document_sizes
+    print(f"{len(documents)} sentences, {document_matrix.shape[1]} word weights")
+    print("\nAsking for 4 clusters")
+    labels4 = spectral_clustering_docs(document_matrix, documents, n_clusters=4)
+    document_sizes = {
+        int(_cluster): int((labels4 == _cluster).sum()) for _cluster in set(labels4)
+    }
+
+    def _subject(sentence):
+        text = sentence.lower()
+        if "water" in text or "hydrat" in text:
+            return "water"
+        if "sky" in text or "sun" in text:
+            return "sky"
+        if "python" in text or "machine" in text or "intelligence" in text:
+            return "code"
+        if "fox" in text or "dog" in text:
+            return "animals"
+        if "crown" in text or "king" in text or "gold" in text or "diadem" in text:
+            return "royalty"
+        return "other"
+
+    mixed = []
+    for _cluster in sorted(set(labels4)):
+        _subjects = sorted(
+            {
+                _subject(documents[_i])
+                for _i, _label in enumerate(labels4)
+                if _label == _cluster
+            }
+        )
+        if len(_subjects) > 1:
+            mixed.append(
+                f"Cluster {_cluster} mixes {', '.join(_subjects)}"
+            )
+    document_mix = (
+        "; ".join(mixed) if mixed else "Each printed cluster stays on one subject"
+    )
+    print(document_sizes)
+    print(document_mix)
+    return document_mix, document_sizes, documents
 
 
 @app.cell(hide_code=True)
@@ -269,7 +455,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which value of `affinity` builds the neighbor graph? Replace `None` with that string.
+    Which value of `affinity` builds the neighbor graph used on the moons, rings, and spirals? Replace `None` with that string.
     """)
     return
 
@@ -289,7 +475,7 @@ def _(mo):
 ```python
 student_affinity = "nearest_neighbors"
 ```
-**nearest_neighbors.** Each point is joined to `n_neighbors` nearby points. The clustering then works on that graph.
+**nearest_neighbors.** Each point is joined to `n_neighbors` nearby points. The clustering then works on that graph. On the rings, 20 neighbors is not enough to keep the graph in one piece, and 40 is.
 ''')
         },
         lazy=True,
@@ -298,16 +484,26 @@ student_affinity = "nearest_neighbors"
 
 
 @app.cell(hide_code=True)
-def _(circle_kmeans_ari, circle_spectral_ari, document_sizes, mo, moon_scores, spiral_scores):
+def _(
+    circle_kmeans_ari,
+    circle_spectral_20_ari,
+    circle_spectral_ari,
+    document_mix,
+    document_sizes,
+    documents,
+    mo,
+    moon_scores,
+    spiral_scores,
+):
     mo.md(f"""
     ## Conclusions
 
     **Key takeaways:**
 
-    - On the moons, k-means at k = 2 has adjusted Rand index {moon_scores.loc[2, "kmeans_ari"]:.3f}. Spectral clustering at the same k has {moon_scores.loc[2, "spectral_ari"]:.3f}.
-    - On the rings, k-means has adjusted Rand index {circle_kmeans_ari:.3f} and spectral clustering has {circle_spectral_ari:.3f}. The spectral fit uses 40 neighbors so the graph stays connected.
-    - On the spirals, k-means at k = 2 has adjusted Rand index {spiral_scores.loc[2, "kmeans_ari"]:.3f}. Spectral clustering has {spiral_scores.loc[2, "spectral_ari"]:.3f}.
-    - The {sum(document_sizes.values())} sentences are split into groups of sizes {", ".join(str(size) for size in document_sizes.values())}. Read the printed lists for the shared subject. The cluster numbers themselves are arbitrary.
+    - On the moons, k-means at k = 2 has adjusted Rand index {moon_scores.loc[2, "kmeans_ari"]:.3f}. Spectral clustering with 20 neighbors has {moon_scores.loc[2, "spectral_ari"]:.3f}.
+    - On the rings, k-means has adjusted Rand index {circle_kmeans_ari:.3f}. Spectral clustering with 20 neighbors has {circle_spectral_20_ari:.3f}. With 40 neighbors it has {circle_spectral_ari:.3f}.
+    - On the spirals, k-means at k = 2 has adjusted Rand index {spiral_scores.loc[2, "kmeans_ari"]:.3f}. Spectral clustering with 10 neighbors has {spiral_scores.loc[2, "spectral_ari"]:.3f}.
+    - The {len(documents)} sentences, asked for 4 clusters, land in groups of sizes {", ".join(str(size) for size in document_sizes.values())}. {document_mix}. The cluster numbers themselves are arbitrary.
     """)
     return
 
@@ -317,12 +513,11 @@ def _(mo):
     mo.md(r"""
     ## Check your understanding
 
-    1. Why does a nearest center mix the two moons?
-    2. What does `n_neighbors` control?
-    3. What does a disconnected neighbor graph warn you about?
-    4. Why can the adjusted Rand index ignore the names of the clusters?
-    5. What does the TF–IDF step produce?
-    6. Why is a sentence that mentions both water and the sun a hard case?
+    1. Why does k-means mix the two moons?
+    2. What does `affinity="nearest_neighbors"` build?
+    3. What does the disconnected-graph warning mean for the rings?
+    4. Why can the adjusted Rand index be 1 when the cluster numbers differ from the true arm numbers?
+    5. What does the sentence clustering actually compare?
     """)
     return
 
@@ -332,12 +527,11 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-1. **The moons are not round blobs:** Points on opposite moons can be closer to the same center than to the rest of their own moon.
-2. **The size of the local graph:** Each point keeps that many neighbors. A larger value connects more of the shape.
-3. **The embedding can split the data into pieces the graph never joins:** Raising `n_neighbors` is the usual response when the shapes are far apart.
-4. **It compares pairs of points:** Two points that belong together in the truth should belong together in the clustering, whatever the labels are called.
-5. **One row of word weights per sentence:** Words that appear in many sentences get less weight.
-6. **It shares words with two themes:** The neighbor graph has to put it with one group.
+1. **It cuts by nearest center:** The moons bend around each other, so a straight cut through the middle puts points from both arms in one cluster.
+2. **A graph:** Each point keeps `n_neighbors` neighbors. Spectral clustering then separates pieces of that graph.
+3. **The rings are not one connected graph at 20 neighbors:** The embedding can fail to follow the rings. Raising the neighbor count to 40 joins the graph.
+4. **It compares pairs, not names:** Two points on the same arm should share a cluster, whatever that cluster is called.
+5. **Word weights:** `TfidfVectorizer` turns the sentences into numbers. Neighbors are sentences with similar weights, after common English words are dropped.
 """)
         },
         lazy=True,
@@ -351,7 +545,6 @@ def _(mo):
     ## References
 
     - [SpectralClustering](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.SpectralClustering.html)
-    - [TfidfVectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html)
     - VanderPlas, J. (2017). *Python Data Science Handbook*. O'Reilly Media. Chapter 5.
     """)
     return

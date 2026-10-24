@@ -241,7 +241,7 @@ class ClusterVisualizer:
         fig.update_layout(
             width=self.width,
             height=self.height,
-            itle=title,
+            title=title,
             xaxis_title='Cluster',
             yaxis_title='Adjusted Rand Score',
             coloraxis_showscale=False,

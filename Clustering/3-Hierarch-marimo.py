@@ -5,8 +5,8 @@
 #     "matplotlib",
 #     "numpy",
 #     "pandas",
+#     "plotly",
 #     "scikit-learn",
-#     "seaborn",
 #     "scipy",
 # ]
 # ///
@@ -19,20 +19,16 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+    import ClusterVisualizer as cv
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
     from sklearn.cluster import AgglomerativeClustering
     from sklearn.datasets import load_iris, make_blobs
@@ -51,26 +47,19 @@ def _():
         TSNE,
         adjusted_mutual_info_score,
         adjusted_rand_score,
+        cv,
         dendrogram,
         fcluster,
         fowlkes_mallows_score,
         linkage,
         load_iris,
         make_blobs,
+        mo,
         normalized_mutual_info_score,
+        np,
+        pd,
+        plt,
     )
-
-
-@app.cell
-def _(np, pd, sns):
-    def draw_clusters(axes, x, y, labels, title):
-        frame = pd.DataFrame(
-            {"x": np.asarray(x), "y": np.asarray(y), "cluster": np.asarray(labels).astype(str)}
-        )
-        sns.scatterplot(data=frame, x="x", y="y", hue="cluster", s=28, ax=axes, legend=False)
-        axes.set_title(title)
-
-    return (draw_clusters,)
 
 
 @app.cell(hide_code=True)
@@ -81,14 +70,16 @@ def _(mo):
     ## Objectives
 
     - Read a dendrogram from the joins at the bottom to the last merge at the top.
-    - Compare ward, single, complete, and average linkage.
-    - Score those clusterings against known labels, then repeat the idea on the iris measurements.
+    - Compare ward, single, complete, and average linkage on the same cloud.
+    - Score those clusterings against known labels, then repeat the comparison on the iris measurements.
 
     ## Background
 
     Hierarchical clustering joins points into larger groups. The height of a join is the distance between the groups being merged. A horizontal cut keeps every join below that height and produces one clustering.
 
     Linkage is the distance between two groups. Single linkage uses the closest pair. Complete linkage uses the farthest pair. Average linkage uses the mean of the pairs. Ward linkage chooses the merge that increases the within-group variance the least.
+
+    The dendrogram is drawn with matplotlib and SciPy. Plotly did not draw dendrograms when these lessons were written, and `ClusterVisualizer` has no dendrogram method. Every later scatter, and every external score bar, goes through `ClusterVisualizer`.
 
     ## Datasets Used
 
@@ -100,35 +91,79 @@ def _(mo):
 
 
 @app.cell
-def _(dendrogram, fcluster, linkage, make_blobs, np, plt):
-    tiny, _tiny_labels = make_blobs(random_state=2, n_samples=10)
-    tiny_link = linkage(tiny, method="ward")
-    tiny_groups = fcluster(tiny_link, t=2, criterion="distance")
-    print(f"A cut at height 2 produces {len(np.unique(tiny_groups))} clusters")
-    _figure, _axes = plt.subplots(1, 2, figsize=(10, 4))
-    dendrogram(tiny_link, ax=_axes[0])
-    _axes[0].axhline(2, color="gray", linestyle="--")
-    _axes[0].set_title("Ward dendrogram")
-    _axes[0].set_ylabel("Distance")
-    _axes[1].scatter(tiny[:, 0], tiny[:, 1], c=tiny_groups, cmap="tab10", s=40)
-    for _i, _xy in enumerate(tiny):
-        _axes[1].annotate(str(_i), _xy, textcoords="offset points", xytext=(0, 4), ha="center")
-    _axes[1].set_title("Cut at height 2")
-    _figure.tight_layout()
-    return _figure
+def _(dendrogram, fcluster, linkage, np, plt):
+    def plot_clusters_from_dendrogram(X, method="ward", threshold=1):
+        """Plot the dendrogram with a threshold, and the associate scatter plot with the clusters."""
+        data_labels = np.array([i for i in range(X.shape[0])])
+        Z = linkage(X, method=method)
+        plt.figure(figsize=(10, 4))
+        plt.subplot(121)
+        dendrogram(Z)
+        plt.title(f"Dendrogram - ({method} method)")
+        plt.xlabel("Data Points")
+        plt.ylabel("Euclidean Distance")
+        plt.grid(True, color="lightgrey", linestyle="-", linewidth=0.5)
+        plt.axhline(y=threshold, color="grey", linestyle="--")
+        plt.subplot(122)
+        labels = fcluster(Z, threshold, criterion="distance")
+        num_clusters = len(np.unique(labels))
+        plt.scatter(X[:, 0], X[:, 1], c=labels, cmap="gist_rainbow")
+        plt.title("Scatter Plot - (%d clusters)" % num_clusters)
+        for i, txt in enumerate(data_labels):
+            plt.annotate(
+                text=txt,
+                xy=(X[i, 0], X[i, 1]),
+                textcoords="offset points",
+                xytext=(0, 5),
+                ha="center",
+                color="k",
+                size=9,
+            )
+        plt.grid(True, color="lightgrey", linestyle="-", linewidth=0.5)
+        figure = plt.gcf()
+        figure.tight_layout()
+        return figure
+
+    return (plot_clusters_from_dendrogram,)
 
 
 @app.cell
-def _(dendrogram, fcluster, linkage, np, plt, tiny):
-    _figure, _axes = plt.subplots(2, 2, figsize=(10, 8))
-    for _ax, _method in zip(_axes.ravel(), ("ward", "single", "complete", "average")):
-        _link = linkage(tiny, method=_method)
-        _groups = fcluster(_link, t=4, criterion="distance")
-        dendrogram(_link, ax=_ax)
-        _ax.axhline(4, color="gray", linestyle="--")
-        _ax.set_title(f"{_method}: {len(np.unique(_groups))} clusters below height 4")
-    _figure.tight_layout()
-    return _figure
+def _(fcluster, linkage, make_blobs, np):
+    tiny, _tiny_labels = make_blobs(random_state=2, n_samples=10)
+    tiny_groups = fcluster(linkage(tiny, method="ward"), t=2, criterion="distance")
+    tiny_cut = len(np.unique(tiny_groups))
+    print(f"A cut at height 2 produces {tiny_cut} clusters")
+    return tiny, tiny_cut
+
+
+@app.cell
+def _(plot_clusters_from_dendrogram, tiny):
+    plot_clusters_from_dendrogram(tiny, threshold=2)
+    return
+
+
+@app.cell
+def _(plot_clusters_from_dendrogram, tiny):
+    plot_clusters_from_dendrogram(tiny, method="ward", threshold=4)
+    return
+
+
+@app.cell
+def _(plot_clusters_from_dendrogram, tiny):
+    plot_clusters_from_dendrogram(tiny, method="single", threshold=4)
+    return
+
+
+@app.cell
+def _(plot_clusters_from_dendrogram, tiny):
+    plot_clusters_from_dendrogram(tiny, method="complete", threshold=4)
+    return
+
+
+@app.cell
+def _(plot_clusters_from_dendrogram, tiny):
+    plot_clusters_from_dendrogram(tiny, method="average", threshold=4)
+    return
 
 
 @app.cell(hide_code=True)
@@ -136,57 +171,171 @@ def _(mo):
     mo.md(r"""
     The same height does not mean the same number of clusters once the linkage changes. Single linkage can chain nearby points into one long group. Ward tends to keep the groups more even.
 
-    The next cloud has labels from the generator. Each linkage is asked for four clusters and for three. The adjusted Rand index, adjusted mutual information, normalized mutual information, and Fowlkes–Mallows score all compare those labels with the generator labels. Higher is closer agreement. A score near 0 is no better than chance.
+    The next cloud has labels from the generator. Each linkage is asked for four clusters and for three. The titles name the linkage that was actually fit. The adjusted Rand index, adjusted mutual information, normalized mutual information, and Fowlkes–Mallows score compare those labels with the generator labels. Higher is closer agreement. A score near 0 is no better than chance.
     """)
     return
 
 
 @app.cell
-def _(
-    AgglomerativeClustering,
-    adjusted_mutual_info_score,
-    adjusted_rand_score,
-    draw_clusters,
-    fowlkes_mallows_score,
-    make_blobs,
-    normalized_mutual_info_score,
-    pd,
-    plt,
-):
+def _(AgglomerativeClustering, cv, make_blobs, pd):
     wide, wide_labels = make_blobs(
         n_samples=400, centers=4, cluster_std=1.8, random_state=10
     )
-    link_rows = []
-    _figure, _axes = plt.subplots(2, 2, figsize=(9, 8))
-    for _ax, _method in zip(_axes.ravel(), ("ward", "single", "complete", "average")):
-        _labels = AgglomerativeClustering(n_clusters=4, linkage=_method).fit_predict(wide)
-        draw_clusters(_ax, wide[:, 0], wide[:, 1], _labels, _method)
-        link_rows.append({"linkage": _method, "clusters": 4, "labels": _labels})
-    for _method in ("ward", "single", "complete", "average"):
-        link_rows.append(
-            {
-                "linkage": _method,
-                "clusters": 3,
-                "labels": AgglomerativeClustering(n_clusters=3, linkage=_method).fit_predict(wide),
-            }
-        )
-    score_rows = []
-    for _row in link_rows:
-        _labels = _row["labels"]
-        score_rows.append(
-            {
-                "fit": f"{_row['linkage']}-{_row['clusters']}",
-                "adjusted_rand": adjusted_rand_score(wide_labels, _labels),
-                "adjusted_mutual_info": adjusted_mutual_info_score(wide_labels, _labels),
-                "normalized_mutual_info": normalized_mutual_info_score(wide_labels, _labels),
-                "fowlkes_mallows": fowlkes_mallows_score(wide_labels, _labels),
-            }
-        )
-    link_scores = pd.DataFrame(score_rows).set_index("fit")
+    wide_view = cv.ClusterVisualizer(
+        pd.DataFrame(wide, columns=["x", "y"]), wide_labels
+    )
+    agg_labels = pd.DataFrame()
+    for _method, _k in (
+        ("ward", 4),
+        ("ward", 3),
+        ("single", 4),
+        ("single", 3),
+        ("complete", 4),
+        ("complete", 3),
+        ("average", 4),
+        ("average", 3),
+    ):
+        agg_labels[f"{_method.title()}-{_k}"] = AgglomerativeClustering(
+            n_clusters=_k, linkage=_method
+        ).fit_predict(wide)
+    wide_view.plot_data()
+    return agg_labels, wide_labels, wide_view
+
+
+@app.cell
+def _(wide_view):
+    wide_view.plot_data_with_true_labels()
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Ward-4"], title="Agglomerative Clustering - Ward Linkage, 4 clusters"
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Ward-3"], title="Agglomerative Clustering - Ward Linkage, 3 clusters"
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Single-4"],
+        title="Agglomerative Clustering - Single Linkage, 4 clusters",
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Single-3"],
+        title="Agglomerative Clustering - Single Linkage, 3 clusters",
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Complete-4"],
+        title="Agglomerative Clustering - Complete Linkage, 4 clusters",
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Complete-3"],
+        title="Agglomerative Clustering - Complete Linkage, 3 clusters",
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Average-4"],
+        title="Agglomerative Clustering - Average Linkage, 4 clusters",
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Average-3"],
+        title="Agglomerative Clustering - Average Linkage, 3 clusters",
+    )
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_adjusted_rand(agg_labels, title="Agglomerative Clustering")
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_adjusted_mutual_info(agg_labels, title="Agglomerative Clustering")
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_normalized_mutual_info(agg_labels, title="Agglomerative Clustering")
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_fowlkes_mallows(agg_labels, title="Agglomerative Clustering")
+    return
+
+
+@app.cell
+def _(
+    adjusted_mutual_info_score,
+    adjusted_rand_score,
+    agg_labels,
+    fowlkes_mallows_score,
+    normalized_mutual_info_score,
+    pd,
+    wide_labels,
+):
+    link_scores = pd.DataFrame(
+        {
+            "adjusted_rand": {
+                _name: adjusted_rand_score(wide_labels, agg_labels[_name])
+                for _name in agg_labels.columns
+            },
+            "adjusted_mutual_info": {
+                _name: adjusted_mutual_info_score(wide_labels, agg_labels[_name])
+                for _name in agg_labels.columns
+            },
+            "normalized_mutual_info": {
+                _name: normalized_mutual_info_score(wide_labels, agg_labels[_name])
+                for _name in agg_labels.columns
+            },
+            "fowlkes_mallows": {
+                _name: fowlkes_mallows_score(wide_labels, agg_labels[_name])
+                for _name in agg_labels.columns
+            },
+        }
+    )
     best_link = link_scores["adjusted_rand"].idxmax()
-    _figure.tight_layout()
     print(link_scores.round(3).to_string())
-    return _figure
+    print(f"Highest adjusted Rand index: {best_link}")
+    return best_link, link_scores
 
 
 @app.cell(hide_code=True)
@@ -196,7 +345,7 @@ def _(mo):
 
     The four measurements are standardized together. There is no holdout, so every flower contributes to the means and the standard deviations. The clustering uses those four columns.
 
-    t-SNE is only a picture. It is fit once, with `random_state=0`, and it is not the input to the clustering. Agglomerative clustering with ward linkage asks for three clusters, one for each species.
+    t-SNE is only a picture. It is fit once, with `random_state=0`, and it is not the input to the clustering. Agglomerative clustering with ward linkage asks for three clusters. The bars below compare those labels with the species. They do not score the t-SNE coordinates.
     """)
     return
 
@@ -208,12 +357,11 @@ def _(
     TSNE,
     adjusted_mutual_info_score,
     adjusted_rand_score,
-    draw_clusters,
+    cv,
     fowlkes_mallows_score,
     load_iris,
     normalized_mutual_info_score,
     pd,
-    plt,
 ):
     iris = load_iris()
     iris_frame = pd.DataFrame(iris.data, columns=iris.feature_names)
@@ -222,8 +370,12 @@ def _(
         StandardScaler().fit_transform(iris_frame[iris.feature_names]),
         columns=iris.feature_names,
     )
-    iris_view = TSNE(n_components=2, random_state=0, init="pca").fit_transform(iris_z)
+    iris_plane = pd.DataFrame(
+        TSNE(n_components=2, random_state=0, init="pca").fit_transform(iris_z),
+        columns=["t-SNE 1", "t-SNE 2"],
+    )
     iris_labels = AgglomerativeClustering(n_clusters=3).fit_predict(iris_z)
+    iris_view = cv.ClusterVisualizer(iris_plane, iris_frame["species"].to_numpy())
     iris_rand = adjusted_rand_score(iris_frame["species"], iris_labels)
     iris_ami = adjusted_mutual_info_score(iris_frame["species"], iris_labels)
     iris_nmi = normalized_mutual_info_score(iris_frame["species"], iris_labels)
@@ -231,19 +383,24 @@ def _(
     iris_table = pd.crosstab(
         iris_frame["species"], pd.Series(iris_labels, name="cluster")
     )
-    _figure, _axes = plt.subplots(1, 2, figsize=(10, 4))
-    draw_clusters(
-        _axes[0], iris_view[:, 0], iris_view[:, 1], iris_frame["species"], "Species, t-SNE view"
-    )
-    draw_clusters(
-        _axes[1], iris_view[:, 0], iris_view[:, 1], iris_labels, "Ward, 3 clusters"
-    )
-    _figure.tight_layout()
     print(
         f"ARI {iris_rand:.3f}   AMI {iris_ami:.3f}   NMI {iris_nmi:.3f}   FMI {iris_fm:.3f}"
     )
     print(iris_table.to_string())
-    return _figure
+    iris_view.plot_data(title="Iris in the t-SNE view")
+    return iris_ami, iris_fm, iris_labels, iris_nmi, iris_rand, iris_table, iris_view
+
+
+@app.cell
+def _(iris_view):
+    iris_view.plot_data_with_true_labels(title="Species, t-SNE view")
+    return
+
+
+@app.cell
+def _(iris_labels, iris_view):
+    iris_view.plot_clusters(iris_labels, title="Ward, 3 clusters")
+    return
 
 
 @app.cell(hide_code=True)
@@ -271,7 +428,7 @@ def _(mo):
 ```python
 student_linkage = "ward"
 ```
-**ward.** Single, complete, and average linkage use a distance between pairs. Ward uses the change in variance.
+**ward.** Single, complete, and average linkage use a distance between pairs. Ward uses the change in variance. On the labeled blobs, the score bars show which linkage agrees with the generator.
 ''')
         },
         lazy=True,
@@ -280,7 +437,17 @@ student_linkage = "ward"
 
 
 @app.cell(hide_code=True)
-def _(best_link, iris_ami, iris_fm, iris_nmi, iris_rand, iris_table, link_scores, mo):
+def _(
+    best_link,
+    iris_ami,
+    iris_fm,
+    iris_nmi,
+    iris_rand,
+    iris_table,
+    link_scores,
+    mo,
+    tiny_cut,
+):
     _main = iris_table.idxmax(axis=1)
     _lines = "\n".join(
         f"- **{_species}** has most of its flowers in cluster {_cluster}."
@@ -291,7 +458,8 @@ def _(best_link, iris_ami, iris_fm, iris_nmi, iris_rand, iris_table, link_scores
 
     **Key takeaways:**
 
-    - On the labeled blobs, the highest adjusted Rand index is **{best_link}**, at {link_scores.loc[best_link, "adjusted_rand"]:.3f}. Its Fowlkes–Mallows score is {link_scores.loc[best_link, "fowlkes_mallows"]:.3f}.
+    - On the ten-point cloud, a ward cut at height 2 produces {tiny_cut} clusters. The four linkage pictures at height 4 do not have to produce the same count, because the joins sit at different heights.
+    - On the labeled blobs, the highest adjusted Rand index is **{best_link}**, at {link_scores.loc[best_link, "adjusted_rand"]:.3f}. Its Fowlkes–Mallows score is {link_scores.loc[best_link, "fowlkes_mallows"]:.3f}. The bars are those four scores, drawn by `ClusterVisualizer` against the generator labels.
     - Asking for three clusters when four were generated lowers the agreement. The table shows the size of that drop for each linkage.
     - On the iris flowers, ward linkage with three clusters has adjusted Rand index {iris_rand:.3f}, adjusted mutual information {iris_ami:.3f}, normalized mutual information {iris_nmi:.3f}, and Fowlkes–Mallows score {iris_fm:.3f}.
     {_lines}
