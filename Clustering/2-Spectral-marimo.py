@@ -18,7 +18,11 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import sys
+    import warnings
     from pathlib import Path
+
+    warnings.filterwarnings("ignore", message=".*as_object_map.*")
+    warnings.filterwarnings("ignore", message="Graph is not fully connected")
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -178,9 +182,42 @@ def _(moon_labels, moon_view):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### Try it yourself
+
+    On the half moons, which fit at k = 2 has adjusted Rand index 1? Replace `None` with `k-means` or `spectral`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_moons = None
+    print(student_moons)
+    return (student_moons,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r'''
+```python
+student_moons = "spectral"
+```
+**spectral.** k-means at k = 2 cuts across both arms. Spectral clustering with 20 neighbors recovers the two arms, so the adjusted Rand index is 1.
+''')
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## Concentric circles
 
-    Twenty neighbors leaves this graph disconnected. The warning is the lesson. The next fit raises `n_neighbors` to 40, which is the connected graph drawn in the notebook.
+    Twenty neighbors leaves this graph in separate pieces. The next fit raises `n_neighbors` to 40, which joins the rings into one graph.
     """)
     return
 
@@ -256,6 +293,39 @@ def _(circle_spectral_20, circle_view):
 def _(circle_spectral_40, circle_view):
     circle_view.plot_clusters(
         circle_spectral_40, title="Concentric Circles: Spectral Clustering (k=2)"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which value of `n_neighbors` joins the ring graph into one piece? Replace `None` with that integer.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_rings = None
+    print(student_rings)
+    return (student_rings,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r'''
+```python
+student_rings = 40
+```
+**40.** With 20 neighbors the rings are separate pieces of the graph. With 40 neighbors the graph is connected, and spectral clustering can follow each ring.
+''')
+        },
+        lazy=True,
     )
     return
 
@@ -346,6 +416,39 @@ def _(spiral_labels, spiral_view):
     spiral_view.plot_clusters(
         spiral_labels["spectral 3"],
         title="Spiral-Shaped Data: Spectral Clustering (k=3)",
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the spirals, which fit at k = 2 follows the arms instead of cutting across them? Replace `None` with `k-means` or `spectral`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_spirals = None
+    print(student_spirals)
+    return (student_spirals,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r'''
+```python
+student_spirals = "spectral"
+```
+**spectral.** k-means splits each arm by distance to a center. Spectral clustering with 10 neighbors follows the arm, so the adjusted Rand index at k = 2 is 1.
+''')
+        },
+        lazy=True,
     )
     return
 
@@ -455,16 +558,16 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which value of `affinity` builds the neighbor graph used on the moons, rings, and spirals? Replace `None` with that string.
+    The sentence fit asks for how many clusters? Replace `None` with that integer.
     """)
     return
 
 
 @app.cell
 def _():
-    student_affinity = None
-    print(student_affinity)
-    return (student_affinity,)
+    student_sentences = None
+    print(student_sentences)
+    return (student_sentences,)
 
 
 @app.cell(hide_code=True)
@@ -473,9 +576,9 @@ def _(mo):
         {
             "Show answers": mo.md(r'''
 ```python
-student_affinity = "nearest_neighbors"
+student_sentences = 4
 ```
-**nearest_neighbors.** Each point is joined to `n_neighbors` nearby points. The clustering then works on that graph. On the rings, 20 neighbors is not enough to keep the graph in one piece, and 40 is.
+**4.** The printed lists are that fit. Cluster numbers are arbitrary. One of the four groups mixes the sky sentences with the water sentences.
 ''')
         },
         lazy=True,
