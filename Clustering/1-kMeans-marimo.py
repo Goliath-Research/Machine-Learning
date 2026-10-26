@@ -553,29 +553,99 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Find the k with the highest silhouette score and the k with the lowest Davies–Bouldin score in `blob_scores`. Use `idxmax()` and `idxmin()`, which return the index of the selected value.
+    Use the datasets generated around **four centers** with seeds **42, 30, and 17**, as in the previous exercise. The code below recreates those same datasets so you can compare them together.
+
+    1. Fit k-means for **k = 2 through 6** on each dataset, keeping `random_state=10` and `n_init="auto"`.
+    2. Compute the silhouette score for every solution.
+    3. Plot silhouette score against k in **one graph**, with a separate line for each seed.
+    4. Select the k with the highest silhouette score for each dataset and display the selected values with their scores.
+
+    Replace each `None` with your code. `silhouette_datasets` contains the provided data.
+
+    **Write a conclusion:** Does the silhouette score select four clusters for every dataset? Compare your selections with the cluster plots from the previous exercise. Explain why the number of generating centers and the number favored by silhouette may differ.
     """)
     return
 
 
 @app.cell
-def _(blob_scores):
-    student_silhouette_k = None
-    student_davies_k = None
-    (student_silhouette_k, student_davies_k)
-    return (student_silhouette_k, student_davies_k)
+def _(KMeans, make_blobs, pd, px, silhouette_score):
+    # Provided: recreate the same datasets used in the preceding exercise.
+    silhouette_datasets = {
+        _seed: make_blobs(
+            n_samples=300, centers=4, cluster_std=0.5, random_state=_seed
+        )[0]
+        for _seed in (42, 30, 17)
+    }
+
+    student_silhouette_scores = None
+    student_silhouette_plot = None
+    student_selected_k = None
+    student_silhouette_plot
+    return silhouette_datasets, student_silhouette_scores, student_silhouette_plot, student_selected_k
+
+
+@app.cell
+def _(student_selected_k):
+    student_selected_k
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.accordion({"Show answers": mo.md(r"""
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
 ```python
-student_silhouette_k = int(blob_scores["silhouette"].idxmax())
-student_davies_k = int(blob_scores["davies_bouldin"].idxmin())
-(student_silhouette_k, student_davies_k)
+student_silhouette_scores = pd.DataFrame([
+    {
+        "Seed": _seed,
+        "k": _k,
+        "Silhouette": silhouette_score(
+            _points,
+            KMeans(
+                n_clusters=_k, random_state=10, n_init="auto"
+            ).fit_predict(_points),
+        ),
+    }
+    for _seed, _points in silhouette_datasets.items()
+    for _k in range(2, 7)
+])
+
+student_silhouette_plot = px.line(
+    student_silhouette_scores.assign(
+        Seed=student_silhouette_scores["Seed"].astype(str)
+    ),
+    x="k", y="Silhouette", color="Seed", markers=True,
+    title="Silhouette scores for the three generated datasets",
+    labels={"k": "Number of clusters (k)", "Silhouette": "Silhouette score"},
+    color_discrete_sequence=px.colors.qualitative.G10,
+)
+student_silhouette_plot.update_layout(
+    template="plotly_white", width=800, height=450,
+    legend=dict(orientation="h", x=0.5, xanchor="center", y=1.15),
+)
+student_silhouette_plot.update_xaxes(dtick=1)
+
+student_selected_k = student_silhouette_scores.loc[
+    student_silhouette_scores.groupby("Seed", sort=False)["Silhouette"].idxmax()
+].set_index("Seed").round(4)
 ```
-Both select k = 4 for these data. Inertia alone would favor adding still more centers, so we also inspect the elbow and validation scores.
-""")}, expanded=False)
+
+The plot and selection table are displayed by the exercise cells. Select the highest score before rounding the displayed results.
+
+| Seed | Selected k | Silhouette score |
+| :--- | ---: | ---: |
+| 42 | 4 | 0.8966 |
+| 30 | 3 | 0.7723 |
+| 17 | 3 | 0.8143 |
+
+**Conclusion:** Silhouette favors four clusters for seed 42, but three for seeds 30 and 17. Generating observations around four centers does not guarantee that four clusters will maximize silhouette: the score evaluates within-cluster closeness relative to separation from the nearest other cluster, rather than recovering the generating centers.
+
+Compare these results with the earlier cluster plots. When two generating groups are close, combining them can improve the average silhouette. For seed 17, the scores for three and four clusters are particularly close (0.8143 and 0.8125), so the numerical maximum alone provides little basis for strongly preferring one solution. Justify your selection using both the score curve and the visible separation of the groups.
+    """)
+        },
+        expanded=False,
+    )
     return
 
 
