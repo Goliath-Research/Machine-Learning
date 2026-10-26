@@ -100,31 +100,27 @@ def _(mo):
 
     By the end of this lesson, you should be able to:
 
-    1. Explain how k-means assigns points to clusters and updates their centers.
+    1. Explain how **k-means** assigns points to clusters and updates their centers.
     2. Compare different values of **k** using cluster plots, an elbow curve, and three internal validation scores.
-    3. Explain why variables with different scales should be standardized before k-means.
+    3. Explain why variables with different scales should be standardized before **k-means**.
     4. Use Principal Component Analysis (PCA) to display clusters fitted using all four standardized variables.
     5. Describe how the USArrests clusters differ using their original variables, without treating the groups as proven categories.
 
-    ## Before you begin
-
-    You only need basic Python: variables, tables, and function calls. Read the explanation before each code cell, run it, and inspect its output. In each **Try it yourself**, replace `None` with your answer. Expand **Show answers** when you are ready to compare.
-
-    The first code cell installs any missing packages before the imports run. Run it when you open the lesson for the first time; installation requires an internet connection. Keep `ClusterVisualizer.py` and `USArrests.csv` in the same folder as this notebook. For browser Marimo, upload both companion files to the notebook environment before running the lesson.
-
     ## Background
 
-    Clustering groups observations with similar measured features. It is **unsupervised**: we do not supply correct group labels when fitting the model.
+    Clustering groups observations with similar measured features. It is **unsupervised**: we do not supply group labels when fitting the model.
 
-    The letter **k** is the number of clusters we request. A **center** (or centroid) is the average position of the points assigned to a cluster. K-means repeats these steps:
+    **k-means** is an unsupervised learning algorithm that divides observations into **k** clusters based on how close they are to one another. You choose the number of clusters, **k**, before fitting the model.
+
+    The letter **k** is the number of clusters we request. A **center** (or centroid) is the average position of the points assigned to a cluster. **k-means** repeats these steps:
 
     1. Assign each point to its nearest center using Euclidean distance.
     2. Move each center to the mean of the points assigned to it.
     3. Repeat until the solution stops changing appreciably or the iteration limit is reached.
 
-    K-means seeks to minimize **inertia**, the sum of squared distances from points to their assigned centers. Different initial centers can lead to different solutions. We use fixed `random_state` values so rerunning the examples is reproducible, and `n_init="auto"`; with the default k-means++ initialization, `auto` uses one initialization. In other analyses, trying several initializations can improve stability.
+    **k-means** seeks to minimize **inertia**, the sum of squared distances from points to their assigned centers. Different initial centers can lead to different solutions. We use fixed `random_state` values so rerunning the examples is reproducible, and `n_init="auto"`; with the default k-means++ initialization, `auto` uses one initialization. In other analyses, trying several initializations can improve stability.
 
-    K-means works especially well for compact, roughly spherical groups of similar spread. Outliers and elongated or unequal groups can make the result misleading. Cluster numbers such as 0 and 1 are names, not ranks.
+    **k-means** works especially well for compact, roughly spherical groups of similar spread. Outliers and elongated or unequal groups can make the result misleading. Cluster numbers such as 0 and 1 are names, not ranks.
 
     ## Datasets used
 
@@ -182,7 +178,7 @@ def _(mo):
 
     We generated these data around four centers, so four clusters are a useful starting point. In a real dataset, we usually do not know the number of groups beforehand.
 
-    Run the next cell and compare it with the uncolored scatter plot. Most points in each visible blob receive the same color, and each black center lies near the middle of its assigned points. This shows how a fitted four-cluster solution describes the data. It does not mean k-means discovered the number four: **we supplied k = 4**.
+    Run the next cell and compare it with the uncolored scatter plot. Most points in each visible blob receive the same color, and each black center lies near the middle of its assigned points. This shows how a fitted four-cluster solution describes the data. It does not mean **k-means** discovered the number four: **we supplied k = 4**.
     """)
     return
 
@@ -226,7 +222,7 @@ def _(mo):
 
     With only two centers, the model must describe all 300 points using two groups. More of the visible structure is combined than with k = 3. Find which blobs share a color and notice where their centers move.
 
-    Each value of k is fitted independently. K-means does not simply merge two clusters from the preceding plot, so do not assume that cluster boundaries or color labels will stay the same.
+    Each value of k is fitted independently. **k-means** does not simply merge two clusters from the preceding plot, so do not assume that cluster boundaries or color labels will stay the same.
     """)
     return
 
@@ -246,7 +242,7 @@ def _(mo):
     mo.md(r"""
     ### Increase the number to k = 5
 
-    We now request more clusters than the four visible blobs. To create five groups, k-means must split at least one blob into smaller parts. Look for a blob containing two colors and two nearby centers.
+    We now request more clusters than the four visible blobs. To create five groups, **k-means** must split at least one blob into smaller parts. Look for a blob containing two colors and two nearby centers.
 
     The split can reduce distances to the assigned centers and therefore reduce inertia. However, a lower inertia does not automatically give a more useful description: the extra group may only subdivide a blob that we would prefer to keep together.
     """)
@@ -270,7 +266,7 @@ def _(mo):
 
     Two more clusters are requested than the number of visible blobs. Compared with k = 4, the model uses additional centers to describe variation within the blobs.
 
-    Inspect where the extra centers are placed and which blobs contain several colors. Their placement depends on the fitted solution; k-means does not promise an equal number of subgroups in each blob. Ask whether these subdivisions add useful information.
+    Inspect where the extra centers are placed and which blobs contain several colors. Their placement depends on the fitted solution; **k-means** does not promise an equal number of subgroups in each blob. Ask whether these subdivisions add useful information.
     """)
     return
 
@@ -312,7 +308,7 @@ def _(mo):
 
     Eight centers give an even finer description of the four blobs. Find the centers within each blob and the boundaries between its subgroups. Do not assume that every blob must be split into exactly two groups: the model minimizes squared distances rather than enforcing that arrangement.
 
-    Across these examples, too few clusters combine visible groups, while extra clusters divide them. K-means returns the number we request. We therefore need a reason for choosing k, rather than accepting a detailed plot simply because it has more colors. The elbow curve and validation scores in the next section help us compare the choices.
+    Across these examples, too few clusters combine visible groups, while extra clusters divide them. **k-means** returns the number we request. We therefore need a reason for choosing k, rather than accepting a detailed plot simply because it has more colors. The elbow curve and validation scores in the next section help us compare the choices.
     """)
     return
 
@@ -824,11 +820,17 @@ def _(
     mo.md(f"""
     ## Conclusions
 
-    1. **Assign and update (Goal 1):** K-means assigns each point to its nearest center, then moves each center to the mean of its assigned points. Too few centers merge the synthetic blobs; extra centers split them.
-    2. **Compare k (Goal 2):** Visual inspection suggests an elbow near k = 4. On the synthetic data, silhouette favors k = {silhouette_k}, Davies–Bouldin favors k = {davies_k}, and Calinski–Harabasz favors k = {calinski_k}. Scores support a choice among candidates; they do not prove a true number of groups. On the four-variable USArrests data, the corresponding choices are {arrest_silhouette_k}, {arrest_davies_k}, and {arrest_calinski_k}.
-    3. **Standardize (Goal 3):** Standardization puts each arrest variable on a comparable scale, limiting domination by large numerical spreads. Scaling is a modeling choice, not a guarantee that all variables are equally informative.
-    4. **Distinguish fitting from display (Goal 4):** The USArrests models and main score bars use all four standardized variables; PCA supplies a two-dimensional picture. The PCA comparison table instead scores the two-dimensional projection.
-    5. **Describe the groups (Goal 5):** The two-cluster box plot and original-unit means show how arrest rates and urban population differ across the fitted groups. These are descriptive patterns in historical data, not proven population categories or causal explanations.
+    1. **K-means** assigns observations to their nearest center and updates each center using the mean of its 
+    assigned observations.
+    2. The number of clusters must be specified beforehand. In the synthetic example, too few clusters merge 
+    visible groups, while additional clusters divide them.
+    3. The elbow curve and the three validation scores support choosing k = 4 for the synthetic data. These tools 
+    help compare solutions but do not guarantee a single correct choice.
+    4. Standardizing the USArrests variables prevents differences in numerical scale from dominating the 
+    distances. **K-means** uses all four standardized variables; PCA provides a two-dimensional visualization.
+    5. For USArrests, all three validation scores favor k = 2 among the evaluated solutions. The box plots and 
+    original-unit means help describe how the fitted groups differ in arrest rates and urban population 
+    percentage.
     """)
     return
 
