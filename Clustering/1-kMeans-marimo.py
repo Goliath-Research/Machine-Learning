@@ -1,12 +1,10 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "kneed",
 #     "marimo",
 #     "numpy",
 #     "pandas",
 #     "plotly",
-#     "pydataset",
 #     "scikit-learn>=1.2",
 # ]
 # ///
@@ -18,9 +16,8 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
     import importlib.util as _import_util
-    import subprocess as _subprocess
     import sys as _sys
 
     # Install missing packages into the Python environment running this notebook.
@@ -28,8 +25,6 @@ def _():
         "numpy": "numpy",
         "pandas": "pandas",
         "plotly": "plotly",
-        "kneed": "kneed",
-        "pydataset": "pydataset",
         "sklearn": "scikit-learn>=1.2",
     }
     _missing = [
@@ -37,7 +32,13 @@ def _():
         if _import_util.find_spec(_module) is None
     ]
     if _missing:
-        _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+        if _sys.platform == "emscripten":
+            # Browser Python uses micropip; it cannot launch subprocesses.
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
 
     # The imports below wait until package installation has completed.
     packages_ready = True
@@ -60,8 +61,6 @@ def _(packages_ready):
 
     pio.templates.default = "plotly_white"
     px.defaults.color_discrete_sequence = px.colors.qualitative.G10
-    from kneed import KneeLocator
-    from pydataset import data
     from sklearn.cluster import KMeans
     from sklearn.decomposition import PCA
     from sklearn.datasets import make_blobs
@@ -73,13 +72,12 @@ def _(packages_ready):
     from sklearn.preprocessing import StandardScaler
 
     return (
-        KneeLocator,
         KMeans,
         PCA,
         StandardScaler,
         calinski_harabasz_score,
         cv,
-        data,
+        Path,
         davies_bouldin_score,
         make_blobs,
         mo,
@@ -111,7 +109,7 @@ def _(mo):
 
     You only need basic Python: variables, tables, and function calls. Read the explanation before each code cell, run it, and inspect its output. In each **Try it yourself**, replace `None` with your answer. Expand **Show answers** when you are ready to compare.
 
-    The first code cell installs any missing packages before the imports run. Run it when you open the lesson for the first time; installation requires an internet connection. Keep `ClusterVisualizer.py` in the same folder as this notebook.
+    The first code cell installs any missing packages before the imports run. Run it when you open the lesson for the first time; installation requires an internet connection. Keep `ClusterVisualizer.py` and `USArrests.csv` in the same folder as this notebook. For browser Marimo, upload both companion files to the notebook environment before running the lesson.
 
     ## Background
 
@@ -284,22 +282,20 @@ def _(mo):
 
     Inertia, stored in `inertia_`, measures within-cluster squared distances. A smaller value means a tighter fit, but adding centers can improve the fit even when it splits a useful group. For the globally best fit at each k, inertia cannot increase as k grows; individual fitted runs can occasionally depart from this because of local solutions.
 
-    Look for an **elbow**: a bend after which extra clusters produce smaller improvements. This is a guide, not proof of a unique correct k. An automatic detector may find no clear elbow.
+    Look for an **elbow**: a bend after which extra clusters produce smaller improvements. This is a guide, not proof of a unique correct k. Some curves have no clear elbow.
 
-    Inertia typically keeps falling after the four blobs have their own centers. `KneeLocator` marks the bend, with `curve="convex"` and `direction="decreasing"`.
+    Inertia typically keeps falling after the four blobs have their own centers. Inspect the curve yourself: here the bend is near **k = 4**, where the decrease begins to flatten. No automatic elbow detector is used.
     """)
     return
 
 
 @app.cell
-def _(KMeans, KneeLocator, blobs, px):
+def _(KMeans, blobs, px):
     ks = list(range(2, 21))
     inertia = [
         KMeans(n_clusters=_k, random_state=10, n_init="auto").fit(blobs).inertia_
         for _k in ks
     ]
-    elbow = KneeLocator(ks, inertia, curve="convex", direction="decreasing")
-    elbow_k = int(elbow.knee) if elbow.knee is not None else None
     _fig = px.scatter(x=ks, y=inertia)
     _fig.update_traces(marker=dict(size=8, opacity=0.8), mode="lines+markers")
     _fig.update_layout(
@@ -309,10 +305,8 @@ def _(KMeans, KneeLocator, blobs, px):
         xaxis_title="Number of clusters (k)",
         yaxis_title="Sum of squared distances",
     )
-    if elbow_k is not None:
-        _fig.add_vline(x=elbow_k, line_width=2, line_dash="dash", line_color="grey")
     _fig
-    return (elbow_k,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -464,8 +458,11 @@ def _(mo):
 
 
 @app.cell
-def _(StandardScaler, data, pd, px):
-    arrests = data("USArrests")
+def _(Path, pd, px):
+    # Source and variable descriptions: https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/USArrests.html
+    # Save USArrests.csv beside this notebook; in browser Marimo, upload it to the notebook's files.
+    # CSV columns: State, Murder, Assault, UrbanPop, Rape (50 states, 1973).
+    arrests = pd.read_csv(Path(__file__).resolve().parent / "USArrests.csv", index_col="State")
     arrest_columns = ["Murder", "Assault", "UrbanPop", "Rape"]
     _raw = arrests[arrest_columns].melt(var_name="measure", value_name="value")
     _fig = px.box(_raw, x="measure", y="value", color="measure")
@@ -736,7 +733,6 @@ def _(
     blob_scores,
     calinski_k,
     davies_k,
-    elbow_k,
     mo,
     silhouette_k,
 ):
@@ -744,7 +740,7 @@ def _(
     ## Conclusions
 
     1. **Assign and update (Goal 1):** K-means assigns each point to its nearest center, then moves each center to the mean of its assigned points. Too few centers merge the synthetic blobs; extra centers split them.
-    2. **Compare k (Goal 2):** The detected elbow is {elbow_k if elbow_k is not None else "not clear"}. On the synthetic data, silhouette favors k = {silhouette_k}, Davies–Bouldin favors k = {davies_k}, and Calinski–Harabasz favors k = {calinski_k}. Scores support a choice among candidates; they do not prove a true number of groups. On the four-variable USArrests data, the corresponding choices are {arrest_silhouette_k}, {arrest_davies_k}, and {arrest_calinski_k}.
+    2. **Compare k (Goal 2):** Visual inspection suggests an elbow near k = 4. On the synthetic data, silhouette favors k = {silhouette_k}, Davies–Bouldin favors k = {davies_k}, and Calinski–Harabasz favors k = {calinski_k}. Scores support a choice among candidates; they do not prove a true number of groups. On the four-variable USArrests data, the corresponding choices are {arrest_silhouette_k}, {arrest_davies_k}, and {arrest_calinski_k}.
     3. **Standardize (Goal 3):** Standardization puts each arrest variable on a comparable scale, limiting domination by large numerical spreads. Scaling is a modeling choice, not a guarantee that all variables are equally informative.
     4. **Distinguish fitting from display (Goal 4):** The USArrests models and main score bars use all four standardized variables; PCA supplies a two-dimensional picture. The reference comparison table instead scores that picture.
     5. **Describe the groups (Goal 5):** The two-cluster box plot and original-unit means show how arrest rates and urban population differ across the fitted groups. These are descriptive patterns in historical data, not proven population categories or causal explanations.
@@ -793,7 +789,7 @@ def _(mo):
     ## References
 
     - [KMeans](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html)
-    - [KneeLocator](https://kneed.readthedocs.io/)
+    - [USArrests dataset documentation](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/USArrests.html)
     - VanderPlas, J. (2017). *Python Data Science Handbook*. O'Reilly Media. Chapter 5.
     """)
     return
