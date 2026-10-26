@@ -20,7 +20,8 @@ async def _():
     import importlib.util as _import_util
     import sys as _sys
 
-    # Install missing packages into the Python environment running this notebook.
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
     _packages = {
         "numpy": "numpy",
         "pandas": "pandas",
@@ -121,7 +122,7 @@ def _(mo):
     2. Move each center to the mean of the points assigned to it.
     3. Repeat until the solution stops changing appreciably or the iteration limit is reached.
 
-    K-means seeks to minimize **inertia**, the sum of squared distances from points to their assigned centers. Different initial centers can lead to different solutions. We keep the reference notebook's `random_state` and `n_init="auto"` settings for comparison; with the default k-means++ initialization, `auto` uses one initialization. In other analyses, trying several initializations can improve stability.
+    K-means seeks to minimize **inertia**, the sum of squared distances from points to their assigned centers. Different initial centers can lead to different solutions. We use fixed `random_state` values so rerunning the examples is reproducible, and `n_init="auto"`; with the default k-means++ initialization, `auto` uses one initialization. In other analyses, trying several initializations can improve stability.
 
     K-means works especially well for compact, roughly spherical groups of similar spread. Outliers and elongated or unequal groups can make the result misleading. Cluster numbers such as 0 and 1 are names, not ranks.
 
@@ -174,6 +175,18 @@ def _(KMeans, blobs):
     return (blob_models,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Start with k = 4
+
+    We generated these data around four centers, so four clusters are a useful starting point. In a real dataset, we usually do not know the number of groups beforehand.
+
+    Run the next cell and compare it with the uncolored scatter plot. Most points in each visible blob receive the same color, and each black center lies near the middle of its assigned points. This shows how a fitted four-cluster solution describes the data. It does not mean k-means discovered the number four: **we supplied k = 4**.
+    """)
+    return
+
+
 @app.cell
 def _(blob_models, blob_view):
     blob_view.plot_clusters(
@@ -181,6 +194,18 @@ def _(blob_models, blob_view):
         blob_models[4].cluster_centers_,
         title="k-Means with 4 clusters",
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Reduce the number to k = 3
+
+    The data have not changed; we now request only three clusters. Because there are four visible blobs but only three available centers, at least two blobs must share a cluster label.
+
+    In the next plot, find the two blobs with the same color. Their shared center summarizes points from both blobs and can lie in the space between them. Reducing k gives a simpler description, but here it merges groups that looked separate.
+    """)
     return
 
 
@@ -194,6 +219,18 @@ def _(blob_models, blob_view):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Reduce the number again to k = 2
+
+    With only two centers, the model must describe all 300 points using two groups. More of the visible structure is combined than with k = 3. Find which blobs share a color and notice where their centers move.
+
+    Each value of k is fitted independently. K-means does not simply merge two clusters from the preceding plot, so do not assume that cluster boundaries or color labels will stay the same.
+    """)
+    return
+
+
 @app.cell
 def _(blob_models, blob_view):
     blob_view.plot_clusters(
@@ -201,6 +238,18 @@ def _(blob_models, blob_view):
         blob_models[2].cluster_centers_,
         title="k-Means with 2 clusters",
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Increase the number to k = 5
+
+    We now request more clusters than the four visible blobs. To create five groups, k-means must split at least one blob into smaller parts. Look for a blob containing two colors and two nearby centers.
+
+    The split can reduce distances to the assigned centers and therefore reduce inertia. However, a lower inertia does not automatically give a more useful description: the extra group may only subdivide a blob that we would prefer to keep together.
+    """)
     return
 
 
@@ -214,6 +263,18 @@ def _(blob_models, blob_view):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Increase to k = 6
+
+    Two more clusters are requested than the number of visible blobs. Compared with k = 4, the model uses additional centers to describe variation within the blobs.
+
+    Inspect where the extra centers are placed and which blobs contain several colors. Their placement depends on the fitted solution; k-means does not promise an equal number of subgroups in each blob. Ask whether these subdivisions add useful information.
+    """)
+    return
+
+
 @app.cell
 def _(blob_models, blob_view):
     blob_view.plot_clusters(
@@ -223,12 +284,36 @@ def _(blob_models, blob_view):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Increase to k = 7
+
+    With seven centers, the partition becomes more detailed. Some points that belonged together in the four-cluster solution now receive different labels, even though their coordinates have not changed.
+
+    Compare this plot with k = 6. The goal is not to count colors as evidence of newly discovered natural groups. Instead, notice how requesting more clusters creates finer divisions of the same data.
+    """)
+    return
+
+
 @app.cell
 def _(blob_models, blob_view):
     blob_view.plot_clusters(
         blob_models[7].labels_, blob_models[7].cluster_centers_,
         title="k-Means with 7 clusters",
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Increase to k = 8
+
+    Eight centers give an even finer description of the four blobs. Find the centers within each blob and the boundaries between its subgroups. Do not assume that every blob must be split into exactly two groups: the model minimizes squared distances rather than enforcing that arrangement.
+
+    Across these examples, too few clusters combine visible groups, while extra clusters divide them. K-means returns the number we request. We therefore need a reason for choosing k, rather than accepting a detailed plot simply because it has more colors. The elbow curve and validation scores in the next section help us compare the choices.
+    """)
     return
 
 
@@ -552,7 +637,7 @@ def _(mo, pca_variance):
 
     Principal Component Analysis (PCA) creates new axes that summarize variation in the standardized variables. The first two components retain **{pca_variance:.1%}** of the total variance. Some information is omitted, so apparent overlap in this picture need not mean overlap in all four dimensions.
 
-    Models for k = 2, 3, 4, and 5 are fitted using all four standardized variables. The main score charts below also use those four variables. A separate reference comparison evaluates the two displayed components.
+    Models for k = 2, 3, 4, and 5 are fitted using all four standardized variables. The main score charts below also use those four variables. A later comparison shows how the scores change when evaluated on only the two displayed components.
     """)
     return
 
@@ -630,9 +715,9 @@ def _(arrest_models, arrest_silhouette_k, arrest_view):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Compare scores with the reference notebook
+    ### How the data representation changes the scores
 
-    The Jupyter notebook computes the USArrests score bars on the **two PCA components**, despite fitting on four standardized variables. For correspondence, the table below repeats that evaluation. Use the preceding four-variable scores to evaluate the fitted clustering in its input space. Scores from different representations need not agree.
+    The table below evaluates the same cluster assignments using only the **two PCA components**. Compare it with the four-variable table above. Projecting the data changes distances and loses some information, so the scores can change even though the cluster labels stay the same. Use the four-variable scores to assess the fitted clustering in its input space; use this table to understand how a two-dimensional display can differ.
     """)
     return
 
@@ -655,7 +740,7 @@ def _(mo):
     mo.md(r"""
     ## 6. Describe the clusters
 
-    The reference notebook uses **k = 2** as an illustrative choice for USArrests. We retain that example below, alongside the silhouette-selected plot above. Neither choice proves that states belong to two natural categories.
+    We now examine **k = 2** in more detail to describe what the fitted groups contain. The preceding scores support comparing this solution with the other candidates, but do not prove that states belong to two natural categories.
 
     Compare the distributions of the four standardized variables within each cluster. A box shows the middle 50% of values and its line marks the median. The table reports cluster means in the original units. Interpret the measured variables rather than calling one cluster simply “better” or “worse.”
     """)
@@ -665,7 +750,7 @@ def _(mo):
 @app.cell
 def _(arrest_models, arrest_view):
     arrest_view.plot_clusters(
-        arrest_models[2].labels_, title="USArrests: reference two-cluster example in PCA space"
+        arrest_models[2].labels_, title="USArrests: two clusters displayed in PCA space"
     )
     return
 
@@ -742,7 +827,7 @@ def _(
     1. **Assign and update (Goal 1):** K-means assigns each point to its nearest center, then moves each center to the mean of its assigned points. Too few centers merge the synthetic blobs; extra centers split them.
     2. **Compare k (Goal 2):** Visual inspection suggests an elbow near k = 4. On the synthetic data, silhouette favors k = {silhouette_k}, Davies–Bouldin favors k = {davies_k}, and Calinski–Harabasz favors k = {calinski_k}. Scores support a choice among candidates; they do not prove a true number of groups. On the four-variable USArrests data, the corresponding choices are {arrest_silhouette_k}, {arrest_davies_k}, and {arrest_calinski_k}.
     3. **Standardize (Goal 3):** Standardization puts each arrest variable on a comparable scale, limiting domination by large numerical spreads. Scaling is a modeling choice, not a guarantee that all variables are equally informative.
-    4. **Distinguish fitting from display (Goal 4):** The USArrests models and main score bars use all four standardized variables; PCA supplies a two-dimensional picture. The reference comparison table instead scores that picture.
+    4. **Distinguish fitting from display (Goal 4):** The USArrests models and main score bars use all four standardized variables; PCA supplies a two-dimensional picture. The PCA comparison table instead scores the two-dimensional projection.
     5. **Describe the groups (Goal 5):** The two-cluster box plot and original-unit means show how arrest rates and urban population differ across the fitted groups. These are descriptive patterns in historical data, not proven population categories or causal explanations.
     """)
     return
@@ -773,7 +858,7 @@ def _(mo):
 2. Adding centers can reduce inertia by splitting useful groups. Compare the elbow, internal scores, plots, and the purpose of the analysis instead.
 3. Davies–Bouldin should be small. A silhouette near zero suggests points lie close to a boundary between clusters.
 4. Their units and numerical spreads differ; otherwise a large-scale variable can dominate distances.
-5. Four standardized variables are used for fitting and for the main score bars. Two PCA components are used for display and the explicitly labeled reference comparison table.
+5. Four standardized variables are used for fitting and for the main score bars. Two PCA components are used for display and the PCA comparison table.
 6. No. The scores emphasize different aspects of separation and spread. Report disagreement and justify a practical choice; there may be no single compelling k.
 7. No. Labels are arbitrary. Inspect the variable distributions and original-unit means to describe the group's measured characteristics.
 """)
