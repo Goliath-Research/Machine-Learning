@@ -72,6 +72,15 @@ def _(packages_ready):
     )
     from sklearn.preprocessing import StandardScaler
 
+    import warnings
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r"JsProxy\.as_object_map\(\) is deprecated.*",
+        category=RuntimeWarning,
+        module=r"threadpoolctl",
+    )
+
     return (
         KMeans,
         PCA,
