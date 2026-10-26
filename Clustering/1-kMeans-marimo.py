@@ -498,7 +498,7 @@ def _(mo):
 
     1. Start with `seed = 42` and `k = 4`.
     2. Keep `seed = 42` and compare k = 2, 3, 4, and 5.
-    3. Keep `k = 4` and compare seeds 42, 10, and 20.
+    3. Keep `k = 4` and compare seeds 42, 30, and 17.
 
     Replace each `None` with the appropriate expression. Use `KMeans` with `n_clusters=k`, `random_state=10`, and `n_init="auto"`. Use `ClusterVisualizer` 
     to plot the fitted labels and centers.
@@ -525,6 +525,7 @@ def _(KMeans, cv, make_blobs, pd):
     student_model = KMeans(n_clusters=k, random_state=10, n_init="auto").fit(student_points)
 
     student_view = cv.ClusterVisualizer(student_frame)
+    
     student_cluster_plot = student_view.plot_clusters(student_model.labels_, student_model.cluster_centers_,title=f"Generated data: seed = {seed}, k = {k}")
     student_cluster_plot
     return seed, k, student_points, student_frame, student_model, student_view, student_cluster_plot
