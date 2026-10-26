@@ -354,7 +354,6 @@ def _(mo):
     mo.accordion({"Show answers": mo.md(r"""
 ```python
 student_cluster_counts = pd.Series(blob_models[4].labels_).value_counts().sort_index()
-student_cluster_counts
 ```
 The four counts sum to 300 because each point belongs to exactly one cluster. The labels identify groups; they do not indicate an ordering.
 """)}, expanded=False)
@@ -472,28 +471,91 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which attribute of a fitted `KMeans` model holds the sum of squared distances to the centers? Replace `None` with its name.
+    Which attribute of a fitted `KMeans` model stores the sum of squared distances from the points to their assigned cluster centers?
     """)
     return
-
-
-@app.cell
-def _():
-    student_inertia = None
-    student_inertia
-    return (student_inertia,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
+            "Show answers": mo.md(r"""
+    The attribute is **`inertia_`**. It stores the sum of squared distances from the points to their assigned cluster centers, called **inertia**.
+    """)
+        },
+        expanded=False,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Generate 300 observations around four centers using `make_blobs`, with `cluster_std=0.5` and `random_state=42`.
+
+    Fit k-means with **k = 3** and **k = 4**, using `random_state=10` and `n_init="auto"` for both models. Visualize both solutions with their centers using `ClusterVisualizer`.
+
+    Compare the plots. What happens when you request fewer clusters than the number of centers used to generate the data?
+
+    Replace each `None` in the next cell with the appropriate expression. Use `make_blobs(...)[0]` to obtain the points, `pd.DataFrame` to create columns named `x` and `y`, and `mo.vstack` to display the two plots together.
+    """)
+    return
+
+
+@app.cell
+def _(KMeans, cv, make_blobs, mo, pd):
+    student_points = None
+    student_frame = None
+    student_view = None
+    student_model_three = None
+    student_model_four = None
+    student_cluster_plots = None
+    student_cluster_plots
+    return (
+        student_points,
+        student_frame,
+        student_view,
+        student_model_three,
+        student_model_four,
+        student_cluster_plots,
+    )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
 ```python
-student_inertia = "inertia_"
+student_points = make_blobs(
+    n_samples=300, centers=4, cluster_std=0.5, random_state=42
+)[0]
+student_frame = pd.DataFrame(student_points, columns=["x", "y"])
+student_view = cv.ClusterVisualizer(student_frame)
+student_model_three = KMeans(
+    n_clusters=3, random_state=10, n_init="auto"
+).fit(student_points)
+student_model_four = KMeans(
+    n_clusters=4, random_state=10, n_init="auto"
+).fit(student_points)
+student_cluster_plots = mo.vstack([
+    student_view.plot_clusters(
+        student_model_three.labels_, student_model_three.cluster_centers_,
+        title="New data: k = 3",
+    ),
+    student_view.plot_clusters(
+        student_model_four.labels_, student_model_four.cluster_centers_,
+        title="New data: k = 4",
+    ),
+])
+student_cluster_plots
 ```
-**inertia_.** The trailing underscore marks a value computed during `fit`. It is the vertical axis of the elbow curve, and its best possible value cannot increase as k grows.
-''')
+
+With **k = 3**, two of the four visible blobs share a cluster label because only three centers are available. With **k = 4**, each visible blob has its own center. Changing the data-generation seed produces a different arrangement, but k-means still fits the number of clusters we request.
+    """)
         },
         expanded=False,
     )
