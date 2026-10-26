@@ -500,11 +500,13 @@ def _(mo):
     2. Keep `seed = 42` and compare k = 2, 3, 4, and 5.
     3. Keep `k = 4` and compare seeds 42, 10, and 20.
 
-    Replace each `None` with the appropriate expression. Use `KMeans` with `n_clusters=k`, `random_state=10`, and `n_init="auto"`. Use `ClusterVisualizer` to plot the fitted labels and centers.
+    Replace each `None` with the appropriate expression. Use `KMeans` with `n_clusters=k`, `random_state=10`, and `n_init="auto"`. Use `ClusterVisualizer` 
+    to plot the fitted labels and centers.
 
     Change only `seed` and `k` between runs; keep the data-generation setting `centers=4`. Rerun the cell to update the same plot.
 
-    **Write a conclusion:** Explain how changing k affects the grouping when the data remain fixed, and how changing the seed affects the data and the resulting clusters. Support your explanation with observations from your plots. Does generating data around four centers guarantee that k-means will recover those four groups?
+    **Write a conclusion:** Explain how changing k affects the grouping when the data remain fixed, and how changing the seed affects the data and the resulting clusters. 
+    Support your explanation with observations from your plots. Does generating data around four centers guarantee that k-means will recover those four groups?
     """)
     return
 
@@ -520,9 +522,10 @@ def _(KMeans, cv, make_blobs, pd):
     )[0]
     student_frame = pd.DataFrame(student_points, columns=["x", "y"])
 
-    student_model = None
-    student_view = None
-    student_cluster_plot = None
+    student_model = KMeans(n_clusters=k, random_state=10, n_init="auto").fit(student_points)
+
+    student_view = cv.ClusterVisualizer(student_frame)
+    student_cluster_plot = student_view.plot_clusters(student_model.labels_, student_model.cluster_centers_,title=f"Generated data: seed = {seed}, k = {k}")
     student_cluster_plot
     return seed, k, student_points, student_frame, student_model, student_view, student_cluster_plot
 
@@ -532,17 +535,7 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_model = KMeans(
-    n_clusters=k, random_state=10, n_init="auto"
-).fit(student_points)
-student_view = cv.ClusterVisualizer(student_frame)
-student_cluster_plot = student_view.plot_clusters(
-    student_model.labels_, student_model.cluster_centers_,
-    title=f"Generated data: seed = {seed}, k = {k}",
-)
-student_cluster_plot
-```
+
 
 **Conclusion:** With seed 42, requesting fewer than four clusters combines visible blobs, while requesting five clusters subdivides a blob. Changing k changes the fitted partition without changing the observations. Changing the data-generation seed changes the observations and their arrangement, even though four generating centers are retained. The k-means initialization seed stays fixed at 10 so that these comparisons focus on the data and the requested number of clusters.
 
