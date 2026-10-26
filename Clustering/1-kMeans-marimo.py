@@ -494,13 +494,15 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    The provided code generates 300 observations around four centers. Fit k-means and display one plot showing the assigned clusters and their centers.
+    The provided code generates 300 observations around four centers. Complete the missing code to fit k-means and display **one plot** showing the assigned clusters and their centers.
 
     1. Start with `seed = 42` and `k = 4`.
-    2. Keep the seed fixed and compare k = 2, 3, 4, and 5.
-    3. Set k = 4 and repeat with seeds 10 and 20.
+    2. Keep `seed = 42` and compare k = 2, 3, 4, and 5.
+    3. Keep `k = 4` and compare seeds 42, 10, and 20.
 
-    Replace each `None` with the appropriate expression. Use `KMeans` with `n_clusters=k`, `random_state=10`, and `n_init="auto"`. Use `ClusterVisualizer` to plot the fitted labels and centers. Change `seed` and `k` and rerun the cell to update the same plot.
+    Replace each `None` with the appropriate expression. Use `KMeans` with `n_clusters=k`, `random_state=10`, and `n_init="auto"`. Use `ClusterVisualizer` to plot the fitted labels and centers.
+
+    Change only `seed` and `k` between runs; keep the data-generation setting `centers=4`. Rerun the cell to update the same plot.
 
     **Write a conclusion:** Explain how changing k affects the grouping when the data remain fixed, and how changing the seed affects the data and the resulting clusters. Support your explanation with observations from your plots. Does generating data around four centers guarantee that k-means will recover those four groups?
     """)
@@ -531,14 +533,6 @@ def _(mo):
         {
             "Show answers": mo.md(r"""
 ```python
-seed = 42
-k = 4
-
-student_points = make_blobs(
-    n_samples=300, centers=4, cluster_std=0.5, random_state=seed
-)[0]
-student_frame = pd.DataFrame(student_points, columns=["x", "y"])
-
 student_model = KMeans(
     n_clusters=k, random_state=10, n_init="auto"
 ).fit(student_points)
