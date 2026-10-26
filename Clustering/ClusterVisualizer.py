@@ -82,9 +82,11 @@ class ClusterVisualizer:
         '''
         Plot clusters for a given dataset. 
         If labels are not provided, all points are assigned to the same cluster.
+        Labels may be a list, NumPy array, or pandas Series.
         '''
         if labels is None:
-            labels = [0] * self.data.shape[0]
+            labels = np.zeros(self.data.shape[0], dtype=int)
+        labels = np.asarray(labels)
         fig = px.scatter(
             x=self.data.iloc[:, 0],
             y=self.data.iloc[:, 1],
@@ -123,7 +125,8 @@ class ClusterVisualizer:
         silh_scores = np.array(
             [silhouette_score(self.data, labels[col])
              for col in labels.columns]
-        ).round(4)
+        )
+        # Select the best candidate using full precision; format only the display.
         best_score = silh_scores.argmax()
         colors = [0] * len(silh_scores)
         colors[best_score] = 1
@@ -144,8 +147,10 @@ class ClusterVisualizer:
             coloraxis_showscale=False,
             showlegend=False
         )
-        fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
-        fig.update_yaxes(range=[0, silh_scores.max() + 0.1])
+        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
+        # Include negative scores and leave room for the labels outside each bar.
+        fig.update_yaxes(range=[min(0.0, silh_scores.min()) - 0.1,
+                                max(0.0, silh_scores.max()) + 0.1])
         return fig
 
     def plot_davies_bouldin(self, labels, title='Davies-Bouldin Scores'):
@@ -157,7 +162,8 @@ class ClusterVisualizer:
         db_scores = np.array(
             [davies_bouldin_score(self.data, labels[col])
              for col in labels.columns]
-        ).round(4)
+        )
+        # Select the best candidate using full precision; format only the display.
         best_score = db_scores.argmin()
         colors = [0] * len(db_scores)
         colors[best_score] = 1
@@ -178,7 +184,7 @@ class ClusterVisualizer:
             coloraxis_showscale=False,
             showlegend=False
         )
-        fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
         fig.update_yaxes(range=[0, db_scores.max() + 0.1*db_scores.max()])
         return fig
 
@@ -191,7 +197,8 @@ class ClusterVisualizer:
         ch_scores = np.array(
             [calinski_harabasz_score(self.data, labels[col])
              for col in labels.columns]
-        ).round(4)
+        )
+        # Select the best candidate using full precision; format only the display.
         best_score = ch_scores.argmax()
         colors = [0] * len(ch_scores)
         colors[best_score] = 1
@@ -212,7 +219,7 @@ class ClusterVisualizer:
             coloraxis_showscale=False,
             showlegend=False
         )
-        fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
         fig.update_yaxes(range=[0, ch_scores.max() + 0.1*ch_scores.max()])
         return fig
 
@@ -226,7 +233,8 @@ class ClusterVisualizer:
         ar_scores = np.array(
             [adjusted_rand_score(self.true_labels, labels[col])
              for col in labels.columns]
-        ).round(4)
+        )
+        # Select the best candidate using full precision; format only the display.
         best_score = ar_scores.argmax()
         colors = [0] * len(ar_scores)
         colors[best_score] = 1
@@ -247,7 +255,7 @@ class ClusterVisualizer:
             coloraxis_showscale=False,
             showlegend=False
         )
-        fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
         fig.update_yaxes(range=[0, ar_scores.max() + 0.1*ar_scores.max()])
         return fig
 
@@ -261,7 +269,8 @@ class ClusterVisualizer:
         am_scores = np.array(
             [adjusted_mutual_info_score(self.true_labels, labels[col])
              for col in labels.columns]
-        ).round(4)
+        )
+        # Select the best candidate using full precision; format only the display.
         best_score = am_scores.argmax()
         colors = [0] * len(am_scores)
         colors[best_score] = 1
@@ -282,7 +291,7 @@ class ClusterVisualizer:
             coloraxis_showscale=False,
             showlegend=False
         )
-        fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
         fig.update_yaxes(range=[0, am_scores.max() + 0.1*am_scores.max()])
         return fig
 
@@ -296,7 +305,8 @@ class ClusterVisualizer:
         nm_scores = np.array(
             [normalized_mutual_info_score(self.true_labels, labels[col])
              for col in labels.columns]
-        ).round(4)
+        )
+        # Select the best candidate using full precision; format only the display.
         best_score = nm_scores.argmax()
         colors = [0] * len(nm_scores)
         colors[best_score] = 1
@@ -317,7 +327,7 @@ class ClusterVisualizer:
             coloraxis_showscale=False,
             showlegend=False
         )
-        fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
         fig.update_yaxes(range=[0, nm_scores.max() + 0.1*nm_scores.max()])
         return fig
 
@@ -331,7 +341,8 @@ class ClusterVisualizer:
         fm_scores = np.array(
             [fowlkes_mallows_score(self.true_labels, labels[col])
              for col in labels.columns]
-        ).round(4)
+        )
+        # Select the best candidate using full precision; format only the display.
         best_score = fm_scores.argmax()
         colors = [0] * len(fm_scores)
         colors[best_score] = 1
@@ -352,7 +363,7 @@ class ClusterVisualizer:
             coloraxis_showscale=False,
             showlegend=False
         )
-        fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
         fig.update_yaxes(range=[0, fm_scores.max() + 0.1 * fm_scores.max()])
         return fig
 

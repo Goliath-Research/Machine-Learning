@@ -7,7 +7,7 @@
 #     "pandas",
 #     "plotly",
 #     "pydataset",
-#     "scikit-learn",
+#     "scikit-learn>=1.2",
 # ]
 # ///
 
@@ -29,6 +29,10 @@ def _():
     import numpy as np
     import pandas as pd
     import plotly.express as px
+    import plotly.io as pio
+
+    pio.templates.default = "plotly_white"
+    px.defaults.color_discrete_sequence = px.colors.qualitative.G10
     from kneed import KneeLocator
     from pydataset import data
     from sklearn.cluster import KMeans
@@ -59,29 +63,51 @@ def _():
     )
 
 
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     # k-Means Clustering
 
-    ## Objectives
+    ## Goals
 
-    - Place centers for several values of k and read the clusters those centers produce.
-    - Choose k with the elbow of the inertia curve, the silhouette score, the Davies–Bouldin score, and the Calinski–Harabasz score.
-    - Standardize the US arrest rates, draw the states with two principal components, and cluster the four standardized columns.
+    By the end of this lesson, you should be able to:
+
+    1. Explain how k-means assigns points to clusters and updates their centers.
+    2. Compare different values of **k** using cluster plots, an elbow curve, and three internal validation scores.
+    3. Explain why variables with different scales should be standardized before k-means.
+    4. Use Principal Component Analysis (PCA) to display clusters fitted using all four standardized variables.
+    5. Describe how the USArrests clusters differ using their original variables, without treating the groups as proven categories.
+
+    ## Before you begin
+
+    You only need basic Python: variables, tables, and function calls. Read the explanation before each code cell, run it, and inspect its output. In each **Try it yourself**, replace `None` with your answer. Expand **Show answers** when you are ready to compare.
+
+    The package script is at the top of this file. Keep `ClusterVisualizer.py` in the same folder. You can run this lesson with `marimo edit --sandbox 1-kMeans-marimo.py`; the sandbox uses the declared packages.
 
     ## Background
 
-    k-means places k centers and assigns each point to the nearest center. The centers then move to the mean of their points, and the assignment repeats. Inertia, stored as `inertia_`, is the sum of squared distances from each point to its center. It falls as k grows, because a point can always get a closer center.
+    Clustering groups observations with similar measured features. It is **unsupervised**: we do not supply correct group labels when fitting the model.
 
-    The silhouette score is high when points sit inside their own group and away from the others. The Davies–Bouldin score is low in that same situation. The Calinski–Harabasz score is high when the groups are tight and far apart.
+    The letter **k** is the number of clusters we request. A **center** (or centroid) is the average position of the points assigned to a cluster. K-means repeats these steps:
 
-    The scatters and the score bars come from `ClusterVisualizer`. That class scores the table it was given. On the blobs, that table is the data k-means saw. On the states, the visualizer is given the two principal components, so its bars score the picture. A second table below scores the four standardized columns the centers were fit on.
+    1. Assign each point to its nearest center using Euclidean distance.
+    2. Move each center to the mean of the points assigned to it.
+    3. Repeat until the solution stops changing appreciably or the iteration limit is reached.
 
-    ## Datasets Used
+    K-means seeks to minimize **inertia**, the sum of squared distances from points to their assigned centers. Different initial centers can lead to different solutions. We keep the reference notebook's `random_state` and `n_init="auto"` settings for comparison; with the default k-means++ initialization, `auto` uses one initialization. In other analyses, trying several initializations can improve stability.
 
-    - **Blobs.** 300 points in four round groups, from `make_blobs`, with `random_state=0` and `cluster_std=0.5`.
-    - **USArrests.** Murder, assault, and rape arrests per 100,000 residents, and the percent urban, for 50 states in 1973. The table comes from `pydataset`.
+    K-means works especially well for compact, roughly spherical groups of similar spread. Outliers and elongated or unequal groups can make the result misleading. Cluster numbers such as 0 and 1 are names, not ranks.
+
+    ## Datasets used
+
+    - **Synthetic blobs:** 300 points generated around four centers. We know how these data were generated, but do not use their true labels for fitting.
+    - **USArrests:** murder, assault, and rape arrest rates per 100,000 residents, plus urban population percentage for 50 US states in 1973. Arrest rates are not direct measurements of crime rates.
+
+    ## 1. Explore the synthetic data
+
+    Each row is one point; `x` and `y` give its coordinates. `ClusterVisualizer` returns interactive Plotly charts. Hover over points or zoom to inspect them.
     """)
     return
 
@@ -93,9 +119,24 @@ def _(cv, make_blobs, pd):
     )
     blob_frame = pd.DataFrame(blobs, columns=["x", "y"])
     blob_view = cv.ClusterVisualizer(blob_frame)
-    print(f"{len(blobs)} points")
     blob_view.plot_data()
     return blobs, blob_view
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 2. Fit and compare k-means solutions
+
+    Start with **k = 4**, then compare 3, 2, 5, 6, 7, and 8. Black markers show centers. `fit` learns the centers, `labels_` stores each point's assigned cluster, and `cluster_centers_` stores the centers' coordinates. The dictionary below stores one fitted model for each k from 2 to 8; `blob_models[4]` selects the four-cluster model.
+    """)
+    return
+
+
+@app.cell
+def _(blobs, pd):
+    pd.DataFrame(blobs, columns=["x", "y"]).head().round(4)
+    return
 
 
 @app.cell
@@ -104,8 +145,7 @@ def _(KMeans, blobs):
         _k: KMeans(n_clusters=_k, random_state=10, n_init="auto").fit(blobs)
         for _k in range(2, 9)
     }
-    print("Centers for k = 4")
-    print(blob_models[4].cluster_centers_.round(2))
+    blob_models[4].cluster_centers_.round(4)
     return (blob_models,)
 
 
@@ -152,6 +192,24 @@ def _(blob_models, blob_view):
 @app.cell
 def _(blob_models, blob_view):
     blob_view.plot_clusters(
+        blob_models[6].labels_, blob_models[6].cluster_centers_,
+        title="k-Means with 6 clusters",
+    )
+    return
+
+
+@app.cell
+def _(blob_models, blob_view):
+    blob_view.plot_clusters(
+        blob_models[7].labels_, blob_models[7].cluster_centers_,
+        title="k-Means with 7 clusters",
+    )
+    return
+
+
+@app.cell
+def _(blob_models, blob_view):
+    blob_view.plot_clusters(
         blob_models[8].labels_,
         blob_models[8].cluster_centers_,
         title="k-Means with 8 clusters",
@@ -162,9 +220,46 @@ def _(blob_models, blob_view):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### Try it yourself
+
+    Use the four-cluster model to find the number of points assigned to each cluster. Replace `None` with an expression using `pd.Series` and `value_counts()`. Do the counts add to 300?
+    """)
+    return
+
+
+@app.cell
+def _(blob_models, pd):
+    student_cluster_counts = None
+    student_cluster_counts
+    return (student_cluster_counts,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_cluster_counts = pd.Series(blob_models[4].labels_).value_counts().sort_index()
+student_cluster_counts
+```
+The four counts sum to 300 because each point belongs to exactly one cluster. The labels identify groups; they do not indicate an ordering.
+""")}, expanded=False)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     With three centers, two blobs share a center. With five or eight, a blob is split. Zoom the Plotly scatter if a center is sitting on top of its points.
 
-    Inertia keeps falling after the four blobs have their own centers. `KneeLocator` marks the bend, with `curve="convex"` and `direction="decreasing"`.
+    ## 3. Compare values of k
+
+    ### The elbow method
+
+    Inertia, stored in `inertia_`, measures within-cluster squared distances. A smaller value means a tighter fit, but adding centers can improve the fit even when it splits a useful group. For the globally best fit at each k, inertia cannot increase as k grows; individual fitted runs can occasionally depart from this because of local solutions.
+
+    Look for an **elbow**: a bend after which extra clusters produce smaller improvements. This is a guide, not proof of a unique correct k. An automatic detector may find no clear elbow.
+
+    Inertia typically keeps falling after the four blobs have their own centers. `KneeLocator` marks the bend, with `curve="convex"` and `direction="decreasing"`.
     """)
     return
 
@@ -177,20 +272,38 @@ def _(KMeans, KneeLocator, blobs, px):
         for _k in ks
     ]
     elbow = KneeLocator(ks, inertia, curve="convex", direction="decreasing")
-    elbow_k = int(elbow.knee)
-    print(f"Elbow point at: {elbow_k}")
+    elbow_k = int(elbow.knee) if elbow.knee is not None else None
     _fig = px.scatter(x=ks, y=inertia)
-    _fig.update_traces(marker=dict(size=8, opacity=0.8))
+    _fig.update_traces(marker=dict(size=8, opacity=0.8), mode="lines+markers")
     _fig.update_layout(
         width=600,
         height=400,
         title="Elbow curve",
-        xaxis_title="k",
+        xaxis_title="Number of clusters (k)",
         yaxis_title="Sum of squared distances",
     )
-    _fig.add_vline(x=elbow_k, line_width=2, line_dash="dash", line_color="grey")
+    if elbow_k is not None:
+        _fig.add_vline(x=elbow_k, line_width=2, line_dash="dash", line_color="grey")
     _fig
     return (elbow_k,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Internal validation scores
+
+    These scores use the feature values and assigned clusters; they do not require known correct labels. Compare them on the **same data representation**.
+
+    | Score | Prefer | What it measures |
+    | :--- | :--- | :--- |
+    | Silhouette | Higher | How close points are to their own cluster compared with the nearest other cluster. Values range from −1 to 1; near zero suggests overlap. |
+    | Davies–Bouldin | Lower | How similar each cluster is to its most similar other cluster, using within-cluster spread and separation. |
+    | Calinski–Harabasz | Higher | Between-cluster dispersion relative to within-cluster dispersion, adjusted for the numbers of clusters and observations. |
+
+    There is no universal good cutoff for all three. They can disagree, and they do not establish whether groups are useful in practice. The bars compare k = 2 through 8; the highlighted bar is the best score among these candidates.
+    """)
+    return
 
 
 @app.cell
@@ -239,10 +352,7 @@ def _(
     silhouette_k = int(blob_scores["silhouette"].idxmax())
     davies_k = int(blob_scores["davies_bouldin"].idxmin())
     calinski_k = int(blob_scores["calinski_harabasz"].idxmax())
-    print(blob_scores.round(3).to_string())
-    print(f"Silhouette highest at k = {silhouette_k}")
-    print(f"Davies-Bouldin lowest at k = {davies_k}")
-    print(f"Calinski-Harabasz highest at k = {calinski_k}")
+    blob_scores.round(4)
     return blob_scores, calinski_k, davies_k, silhouette_k
 
 
@@ -259,7 +369,7 @@ def _(mo):
 @app.cell
 def _():
     student_inertia = None
-    print(student_inertia)
+    student_inertia
     return (student_inertia,)
 
 
@@ -271,10 +381,10 @@ def _(mo):
 ```python
 student_inertia = "inertia_"
 ```
-**inertia_.** The trailing underscore marks a value computed during `fit`. It is the vertical axis of the elbow curve, and it falls as k grows.
+**inertia_.** The trailing underscore marks a value computed during `fit`. It is the vertical axis of the elbow curve, and its best possible value cannot increase as k grows.
 ''')
         },
-        lazy=True,
+        expanded=False,
     )
     return
 
@@ -282,11 +392,46 @@ student_inertia = "inertia_"
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## USArrests
+    ### Try it yourself
 
-    Assault counts are much larger than murder rates, so a distance on the raw columns is mostly a distance in assaults. `StandardScaler` gives each column a standard deviation of 1. Every state is used, because there is no holdout.
+    Find the k with the highest silhouette score and the k with the lowest Davies–Bouldin score in `blob_scores`. Use `idxmax()` and `idxmin()`, which return the index of the selected value.
+    """)
+    return
 
-    k-means is fit on the four standardized columns. `ClusterVisualizer` is given the two principal components, which is the picture in the notebook. Its score bars therefore score that picture. The printed table scores the four columns.
+
+@app.cell
+def _(blob_scores):
+    student_silhouette_k = None
+    student_davies_k = None
+    (student_silhouette_k, student_davies_k)
+    return (student_silhouette_k, student_davies_k)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_silhouette_k = int(blob_scores["silhouette"].idxmax())
+student_davies_k = int(blob_scores["davies_bouldin"].idxmin())
+(student_silhouette_k, student_davies_k)
+```
+Both select k = 4 for these data. Inertia alone would favor adding still more centers, so we also inspect the elbow and validation scores.
+""")}, expanded=False)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 4. Standardize the USArrests variables
+
+    The four columns have different units and spreads. Assault rates vary on a much larger numerical scale than murder rates. Without scaling, that variable can dominate Euclidean distances.
+
+    `StandardScaler` subtracts each column's mean and divides by its population standard deviation. Each transformed column has mean approximately 0 and standard deviation 1. A standardized value of 1 means one standard deviation above that variable's mean; it is not an arrest rate.
+
+    The first box plot shows the original scales; the next shows the standardized values. The shared raw axis combines different units only to illustrate the scale difference.
+
+    We fit k-means on **all four standardized columns**. PCA will provide a two-dimensional view, rather than replace the four clustering inputs.
     """)
     return
 
@@ -295,7 +440,6 @@ def _(mo):
 def _(StandardScaler, data, pd, px):
     arrests = data("USArrests")
     arrest_columns = ["Murder", "Assault", "UrbanPop", "Rape"]
-    print(f"{len(arrests)} states")
     _raw = arrests[arrest_columns].melt(var_name="measure", value_name="value")
     _fig = px.box(_raw, x="measure", y="value", color="measure")
     _fig.update_layout(
@@ -303,6 +447,12 @@ def _(StandardScaler, data, pd, px):
     )
     _fig
     return arrest_columns, arrests
+
+
+@app.cell
+def _(arrests):
+    arrests.head().round(4)
+    return
 
 
 @app.cell
@@ -330,14 +480,57 @@ def _(
         _k: KMeans(n_clusters=_k, random_state=22, n_init="auto").fit(arrests_z)
         for _k in (2, 3, 4, 5)
     }
-    print(f"Share of variance in the picture: {arrest_pca.explained_variance_ratio_.sum():.3f}")
+    pca_variance = float(arrest_pca.explained_variance_ratio_.sum())
     _long = arrests_z.melt(var_name="measure", value_name="z")
     _fig = px.box(_long, x="measure", y="z", color="measure")
     _fig.update_layout(
         width=600, height=400, title="USArrests, standardized", showlegend=False
     )
     _fig
-    return arrest_models, arrest_plane, arrest_view, arrests_z
+    return arrest_models, arrest_plane, arrest_view, arrests_z, pca_variance
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Check the mean and population standard deviation of each standardized column. Use `mean()` and `std(ddof=0)`. Why do we specify `ddof=0` here?
+    """)
+    return
+
+
+@app.cell
+def _(arrests_z):
+    student_standardized_means = None
+    student_standardized_stds = None
+    (student_standardized_means, student_standardized_stds)
+    return (student_standardized_means, student_standardized_stds)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_standardized_means = arrests_z.mean().round(4)
+student_standardized_stds = arrests_z.std(ddof=0).round(4)
+(student_standardized_means, student_standardized_stds)
+```
+The means are approximately 0 and the standard deviations are 1. `StandardScaler` uses the population standard deviation (`ddof=0`); pandas defaults to the sample version (`ddof=1`).
+""")}, expanded=False)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, pca_variance):
+    mo.md(f"""
+    ## 5. Display four-variable clusters with PCA
+
+    Principal Component Analysis (PCA) creates new axes that summarize variation in the standardized variables. The first two components retain **{pca_variance:.1%}** of the total variance. Some information is omitted, so apparent overlap in this picture need not mean overlap in all four dimensions.
+
+    Models for k = 2, 3, 4, and 5 are fitted using all four standardized variables. The main score charts below also use those four variables. A separate reference comparison evaluates the two displayed components.
+    """)
+    return
 
 
 @app.cell
@@ -347,28 +540,29 @@ def _(arrest_view):
 
 
 @app.cell
-def _(arrest_models, arrest_view, pd):
+def _(arrest_models, arrests_z, cv, pd):
+    arrest_score_view = cv.ClusterVisualizer(arrests_z)
     arrest_picture_labels = pd.DataFrame(
         {f"k={_k}": _model.labels_ for _k, _model in arrest_models.items()}
     )
-    arrest_view.plot_silhouette(
-        arrest_picture_labels, title="Silhouette scores on the two components"
+    arrest_score_view.plot_silhouette(
+        arrest_picture_labels, title="Silhouette scores: four standardized variables"
     )
-    return (arrest_picture_labels,)
+    return arrest_picture_labels, arrest_score_view
 
 
 @app.cell
-def _(arrest_picture_labels, arrest_view):
-    arrest_view.plot_davies_bouldin(
-        arrest_picture_labels, title="Davies-Bouldin scores on the two components"
+def _(arrest_picture_labels, arrest_score_view):
+    arrest_score_view.plot_davies_bouldin(
+        arrest_picture_labels, title="Davies–Bouldin: four standardized variables"
     )
     return
 
 
 @app.cell
-def _(arrest_picture_labels, arrest_view):
-    arrest_view.plot_calinski_harabasz(
-        arrest_picture_labels, title="Calinski-Harabasz scores on the two components"
+def _(arrest_picture_labels, arrest_score_view):
+    arrest_score_view.plot_calinski_harabasz(
+        arrest_picture_labels, title="Calinski–Harabasz: four standardized variables"
     )
     return
 
@@ -396,7 +590,7 @@ def _(
     arrest_silhouette_k = int(arrest_scores["silhouette"].idxmax())
     arrest_davies_k = int(arrest_scores["davies_bouldin"].idxmin())
     arrest_calinski_k = int(arrest_scores["calinski_harabasz"].idxmax())
-    print(arrest_scores.round(3).to_string())
+    arrest_scores.round(4)
     return arrest_calinski_k, arrest_davies_k, arrest_scores, arrest_silhouette_k
 
 
@@ -406,6 +600,103 @@ def _(arrest_models, arrest_silhouette_k, arrest_view):
         arrest_models[arrest_silhouette_k].labels_,
         title=f"k = {arrest_silhouette_k} in the PCA space",
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Compare scores with the reference notebook
+
+    The Jupyter notebook computes the USArrests score bars on the **two PCA components**, despite fitting on four standardized variables. For correspondence, the table below repeats that evaluation. Use the preceding four-variable scores to evaluate the fitted clustering in its input space. Scores from different representations need not agree.
+    """)
+    return
+
+
+@app.cell
+def _(arrest_models, arrest_plane, calinski_harabasz_score, davies_bouldin_score, pd, silhouette_score):
+    arrest_pca_scores = pd.DataFrame([
+        {"k": _k,
+         "silhouette": silhouette_score(arrest_plane, _model.labels_),
+         "davies_bouldin": davies_bouldin_score(arrest_plane, _model.labels_),
+         "calinski_harabasz": calinski_harabasz_score(arrest_plane, _model.labels_)}
+        for _k, _model in arrest_models.items()
+    ]).set_index("k")
+    arrest_pca_scores.round(4)
+    return (arrest_pca_scores,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 6. Describe the clusters
+
+    The reference notebook uses **k = 2** as an illustrative choice for USArrests. We retain that example below, alongside the silhouette-selected plot above. Neither choice proves that states belong to two natural categories.
+
+    Compare the distributions of the four standardized variables within each cluster. A box shows the middle 50% of values and its line marks the median. The table reports cluster means in the original units. Interpret the measured variables rather than calling one cluster simply “better” or “worse.”
+    """)
+    return
+
+
+@app.cell
+def _(arrest_models, arrest_view):
+    arrest_view.plot_clusters(
+        arrest_models[2].labels_, title="USArrests: reference two-cluster example in PCA space"
+    )
+    return
+
+
+@app.cell
+def _(arrest_models, arrests_z, px):
+    arrest_profiles = arrests_z.assign(Cluster=arrest_models[2].labels_.astype(str))
+    _profile_long = arrest_profiles.melt(id_vars="Cluster", var_name="Variable", value_name="Standardized value")
+    _profile_fig = px.box(
+        _profile_long, x="Cluster", y="Standardized value", color="Variable",
+        title="USArrests: variable distributions within the two clusters",
+        color_discrete_sequence=px.colors.qualitative.G10,
+    )
+    _profile_fig.update_layout(width=800, height=450,
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=1.15))
+    _profile_fig
+    return (arrest_profiles,)
+
+
+@app.cell
+def _(arrest_columns, arrest_models, arrests):
+    arrest_cluster_means = (
+        arrests[arrest_columns].assign(Cluster=arrest_models[2].labels_)
+        .groupby("Cluster").mean()
+    )
+    arrest_cluster_means.round(4)
+    return (arrest_cluster_means,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Use `arrest_cluster_means` to identify which cluster has the higher mean assault arrest rate. Use `idxmax()`. Can its label alone tell you what the cluster means?
+    """)
+    return
+
+
+@app.cell
+def _(arrest_cluster_means):
+    student_high_assault_cluster = None
+    student_high_assault_cluster
+    return (student_high_assault_cluster,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_high_assault_cluster = int(arrest_cluster_means["Assault"].idxmax())
+student_high_assault_cluster
+```
+Read that row of the table to describe its other variables. Cluster labels are arbitrary identifiers and may swap between fitted solutions. The label itself has no substantive meaning.
+""")}, expanded=False)
     return
 
 
@@ -425,12 +716,11 @@ def _(
     mo.md(f"""
     ## Conclusions
 
-    **Key takeaways:**
-
-    - On the blobs, the elbow is k = {elbow_k}. The silhouette score is highest at k = {silhouette_k} ({blob_scores.loc[silhouette_k, "silhouette"]:.3f}). Davies–Bouldin is lowest at k = {davies_k}. Calinski–Harabasz is highest at k = {calinski_k}. Those bars score the same two columns k-means saw.
-    - Asking for fewer than four clusters merges blobs. Asking for more splits one. Inertia alone does not stop that, which is why the elbow is read together with the three scores.
-    - On the arrest rates, the four standardized columns give silhouette k = {arrest_silhouette_k} ({arrest_scores.loc[arrest_silhouette_k, "silhouette"]:.3f}), Davies–Bouldin k = {arrest_davies_k}, and Calinski–Harabasz k = {arrest_calinski_k}.
-    - The bars drawn by `ClusterVisualizer` for the states score the two principal components, because that is the table the visualizer was given. The printed table scores the four columns the centers were fit on.
+    1. **Assign and update (Goal 1):** K-means assigns each point to its nearest center, then moves each center to the mean of its assigned points. Too few centers merge the synthetic blobs; extra centers split them.
+    2. **Compare k (Goal 2):** The detected elbow is {elbow_k if elbow_k is not None else "not clear"}. On the synthetic data, silhouette favors k = {silhouette_k}, Davies–Bouldin favors k = {davies_k}, and Calinski–Harabasz favors k = {calinski_k}. Scores support a choice among candidates; they do not prove a true number of groups. On the four-variable USArrests data, the corresponding choices are {arrest_silhouette_k}, {arrest_davies_k}, and {arrest_calinski_k}.
+    3. **Standardize (Goal 3):** Standardization puts each arrest variable on a comparable scale, limiting domination by large numerical spreads. Scaling is a modeling choice, not a guarantee that all variables are equally informative.
+    4. **Distinguish fitting from display (Goal 4):** The USArrests models and main score bars use all four standardized variables; PCA supplies a two-dimensional picture. The reference comparison table instead scores that picture.
+    5. **Describe the groups (Goal 5):** The two-cluster box plot and original-unit means show how arrest rates and urban population differ across the fitted groups. These are descriptive patterns in historical data, not proven population categories or causal explanations.
     """)
     return
 
@@ -440,11 +730,13 @@ def _(mo):
     mo.md(r"""
     ## Check your understanding
 
-    1. What does k-means do with the centers after the assignment step?
-    2. Why does inertia fall as k increases?
-    3. Which of the three scores should be small rather than large?
-    4. Why are the arrest columns standardized before the distance is computed?
-    5. What table do the state score bars use?
+    1. After assigning points to their nearest centers, how does k-means update each center?
+    2. Why is choosing the largest k just because it has the smallest inertia unhelpful?
+    3. Which validation score should be small? What does a silhouette score near zero suggest?
+    4. Why standardize the USArrests columns before fitting k-means?
+    5. Are the states clustered using two PCA components or four standardized variables? Which data do the main score bars evaluate?
+    6. If the scores favor different values of k, has the analysis failed?
+    7. Does a cluster label such as 1 mean higher arrest rates? How should you describe that group?
     """)
     return
 
@@ -454,14 +746,16 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-1. **They move to the mean:** Each center is replaced by the average of the points assigned to it.
-2. **A point can get a closer center:** More centers shrink the squared distances. The drop slows once the real groups have their own centers. That slowdown is the elbow.
-3. **Davies–Bouldin:** A lower score means each cluster is less like its nearest neighbor. Silhouette and Calinski–Harabasz are read in the other direction.
-4. **Assault would dominate:** Its raw numbers are much larger than the murder rate. Standardization gives each column a standard deviation of 1.
-5. **The two principal components:** `ClusterVisualizer` scores the frame it stores. The centers were fit on Murder, Assault, UrbanPop, and Rape after standardization. The printed table is that fit.
+1. Replace each center with the mean of the points assigned to it.
+2. Adding centers can reduce inertia by splitting useful groups. Compare the elbow, internal scores, plots, and the purpose of the analysis instead.
+3. Davies–Bouldin should be small. A silhouette near zero suggests points lie close to a boundary between clusters.
+4. Their units and numerical spreads differ; otherwise a large-scale variable can dominate distances.
+5. Four standardized variables are used for fitting and for the main score bars. Two PCA components are used for display and the explicitly labeled reference comparison table.
+6. No. The scores emphasize different aspects of separation and spread. Report disagreement and justify a practical choice; there may be no single compelling k.
+7. No. Labels are arbitrary. Inspect the variable distributions and original-unit means to describe the group's measured characteristics.
 """)
         },
-        lazy=True,
+        expanded=False,
     )
     return
 
