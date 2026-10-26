@@ -19,6 +19,33 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import importlib.util as _import_util
+    import subprocess as _subprocess
+    import sys as _sys
+
+    # Install missing packages into the Python environment running this notebook.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "plotly": "plotly",
+        "kneed": "kneed",
+        "pydataset": "pydataset",
+        "sklearn": "scikit-learn>=1.2",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    # The imports below wait until package installation has completed.
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
     import sys
     from pathlib import Path
 
@@ -84,7 +111,7 @@ def _(mo):
 
     You only need basic Python: variables, tables, and function calls. Read the explanation before each code cell, run it, and inspect its output. In each **Try it yourself**, replace `None` with your answer. Expand **Show answers** when you are ready to compare.
 
-    The package script is at the top of this file. Keep `ClusterVisualizer.py` in the same folder. You can run this lesson with `marimo edit --sandbox 1-kMeans-marimo.py`; the sandbox uses the declared packages.
+    The first code cell installs any missing packages before the imports run. Run it when you open the lesson for the first time; installation requires an internet connection. Keep `ClusterVisualizer.py` in the same folder as this notebook.
 
     ## Background
 
