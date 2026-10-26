@@ -494,34 +494,35 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Generate 300 observations around four centers using `make_blobs`, with `cluster_std=0.5` and `random_state=42`.
+    The provided code generates 300 observations around four centers. Fit k-means and display one plot showing the assigned clusters and their centers.
 
-    Fit k-means with **k = 3** and **k = 4**, using `random_state=10` and `n_init="auto"` for both models. Visualize both solutions with their centers using `ClusterVisualizer`.
+    1. Start with `seed = 42` and `k = 4`.
+    2. Keep the seed fixed and compare k = 2, 3, 4, and 5.
+    3. Set k = 4 and repeat with seeds 10 and 20.
 
-    Compare the plots. What happens when you request fewer clusters than the number of centers used to generate the data?
+    Replace each `None` with the appropriate expression. Use `KMeans` with `n_clusters=k`, `random_state=10`, and `n_init="auto"`. Use `ClusterVisualizer` to plot the fitted labels and centers. Change `seed` and `k` and rerun the cell to update the same plot.
 
-    Replace each `None` in the next cell with the appropriate expression. Use `make_blobs(...)[0]` to obtain the points, `pd.DataFrame` to create columns named `x` and `y`, and `mo.vstack` to display the two plots together.
+    **Write a conclusion:** Explain how changing k affects the grouping when the data remain fixed, and how changing the seed affects the data and the resulting clusters. Support your explanation with observations from your plots. Does generating data around four centers guarantee that k-means will recover those four groups?
     """)
     return
 
 
 @app.cell
-def _(KMeans, cv, make_blobs, mo, pd):
-    student_points = None
-    student_frame = None
+def _(KMeans, cv, make_blobs, pd):
+    seed = 42
+    k = 4
+
+    # Provided data generation: keep centers=4 while changing seed and k.
+    student_points = make_blobs(
+        n_samples=300, centers=4, cluster_std=0.5, random_state=seed
+    )[0]
+    student_frame = pd.DataFrame(student_points, columns=["x", "y"])
+
+    student_model = None
     student_view = None
-    student_model_three = None
-    student_model_four = None
-    student_cluster_plots = None
-    student_cluster_plots
-    return (
-        student_points,
-        student_frame,
-        student_view,
-        student_model_three,
-        student_model_four,
-        student_cluster_plots,
-    )
+    student_cluster_plot = None
+    student_cluster_plot
+    return seed, k, student_points, student_frame, student_model, student_view, student_cluster_plot
 
 
 @app.cell(hide_code=True)
@@ -530,31 +531,28 @@ def _(mo):
         {
             "Show answers": mo.md(r"""
 ```python
+seed = 42
+k = 4
+
 student_points = make_blobs(
-    n_samples=300, centers=4, cluster_std=0.5, random_state=42
+    n_samples=300, centers=4, cluster_std=0.5, random_state=seed
 )[0]
 student_frame = pd.DataFrame(student_points, columns=["x", "y"])
+
+student_model = KMeans(
+    n_clusters=k, random_state=10, n_init="auto"
+).fit(student_points)
 student_view = cv.ClusterVisualizer(student_frame)
-student_model_three = KMeans(
-    n_clusters=3, random_state=10, n_init="auto"
-).fit(student_points)
-student_model_four = KMeans(
-    n_clusters=4, random_state=10, n_init="auto"
-).fit(student_points)
-student_cluster_plots = mo.vstack([
-    student_view.plot_clusters(
-        student_model_three.labels_, student_model_three.cluster_centers_,
-        title="New data: k = 3",
-    ),
-    student_view.plot_clusters(
-        student_model_four.labels_, student_model_four.cluster_centers_,
-        title="New data: k = 4",
-    ),
-])
-student_cluster_plots
+student_cluster_plot = student_view.plot_clusters(
+    student_model.labels_, student_model.cluster_centers_,
+    title=f"Generated data: seed = {seed}, k = {k}",
+)
+student_cluster_plot
 ```
 
-With **k = 3**, two of the four visible blobs share a cluster label because only three centers are available. With **k = 4**, each visible blob has its own center. Changing the data-generation seed produces a different arrangement, but k-means still fits the number of clusters we request.
+**Conclusion:** With seed 42, requesting fewer than four clusters combines visible blobs, while requesting five clusters subdivides a blob. Changing k changes the fitted partition without changing the observations. Changing the data-generation seed changes the observations and their arrangement, even though four generating centers are retained. The k-means initialization seed stays fixed at 10 so that these comparisons focus on the data and the requested number of clusters.
+
+Generating data around four centers does not guarantee recovery of the four generating groups. Groups may overlap, and the fitted solution also depends on initialization. Compare your plots for seeds 42, 10, and 20 and describe how clearly the groups are separated; a plausible clustering needs support from the data, rather than just matching the requested number of clusters.
     """)
         },
         expanded=False,
