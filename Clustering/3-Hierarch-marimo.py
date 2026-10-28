@@ -264,7 +264,7 @@ def _(fcluster, linkage, make_blobs, np, pd):
 
 @app.cell
 def _(tiny_merges):
-    tiny_merges.round(3)
+    mo.Html(tiny_merges.round(3).to_html())
     return
 
 
@@ -651,7 +651,7 @@ def _(agg_labels, adjusted_rand_score, np, pd, wide_labels):
             }
         )
     fit_summary = pd.DataFrame(_rows).set_index("Fit")
-    fit_summary.round(3)
+    mo.Html(fit_summary.round(3).to_html())
     return (fit_summary,)
 
 
@@ -830,7 +830,7 @@ def _(
 
 @app.cell
 def _(link_scores):
-    link_scores.round(3)
+    mo.Html(link_scores.round(3).to_html())
     return
 
 
@@ -853,7 +853,7 @@ def _(mo):
 
 @app.cell
 def _(chance_scores):
-    chance_scores.round(3)
+    mo.Html(chance_scores.round(3).to_html())
     return
 
 
@@ -999,7 +999,7 @@ def _(StandardScaler, load_iris, pd):
     iris_ranges = iris_frame[iris.feature_names].describe().loc[
         ["mean", "std", "min", "max"]
     ]
-    iris_ranges.round(2)
+    mo.Html(iris_ranges.round(3).to_html())
     return iris, iris_frame, iris_ranges, iris_z
 
 
@@ -1099,7 +1099,7 @@ def _(iris_labels, iris_view):
 
 @app.cell
 def _(iris_table):
-    iris_table
+    mo.Html(iris_table.to_html())
     return
 
 
