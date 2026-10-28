@@ -352,7 +352,6 @@ def _(mo):
             "Show answers": mo.md(r"""
 ```python
 student_moons = "spectral"
-student_moons
 ```
 **spectral.** At k = 2, k-means scores about 0.25 because one boundary cuts through both crescents. Spectral clustering with 25 neighbors scores 1.00: each cluster holds exactly one crescent. The cluster numbers are arbitrary, so the index compares groupings, not names.
 """)
@@ -388,7 +387,6 @@ def _(mo):
 student_moon_gap = (
     moon_scores.loc[2, "spectral ARI"] - moon_scores.loc[2, "k-means ARI"]
 )
-student_moon_gap
 ```
 The value is about **0.746**, since 1.000 − 0.254 = 0.746. `loc[2, ...]` selects the row labelled 2 and then one column by name. The gap is large because the neighbor graph follows each crescent, while k-means can only compare distances to a center.
 """)
@@ -571,7 +569,7 @@ def _(mo):
 
 @app.cell
 def _(circle_scores):
-    circle_scores.round(3)
+    mo.Html(circle_scores.round(3).to_html())
     return
 
 
@@ -605,7 +603,6 @@ def _(mo):
             "Show answers": mo.md(r"""
 ```python
 student_rings = circle_scores.loc["spectral, suitable value", "ARI"]
-student_rings
 ```
 The value is **1.0**. `loc` takes the row first and then the column, both by name. The same row shows two groups of 200 points and no warning, which is why this value suits the data: the graph stays connected without reaching across the gap between the rings.
 """)
@@ -629,7 +626,8 @@ def _(mo):
 def _(SpectralClustering, adjusted_rand_score, circle_points, circle_rings):
     student_circle_model = None
     student_circle_score = None
-    (student_circle_model, student_circle_score)
+    print("Model: ", student_circle_model)
+    print("ARI:   ", student_circle_score)    
     return student_circle_model, student_circle_score
 
 
@@ -650,7 +648,6 @@ student_circle_model = SpectralClustering(
 student_circle_score = adjusted_rand_score(
     circle_rings, student_circle_model.fit_predict(circle_points)
 )
-(student_circle_model, round(student_circle_score, 4))
 ```
 The score is **1.0**, matching the fit in the table. The five settings each do a job: `n_clusters` is how many groups you request, `affinity` chooses the neighbor graph, `n_neighbors` decides how far each point can "see", `assign_labels` selects the final step on the eigenvectors, and `random_state` keeps that step reproducible.
 """)
@@ -779,7 +776,7 @@ def _(mo):
 
 @app.cell
 def _(spiral_scores):
-    spiral_scores.round(3)
+    mo.Html(spiral_scores.round(3).to_html())
     return
 
 
@@ -813,7 +810,6 @@ def _(mo):
             "Show answers": mo.md(r"""
 ```python
 student_spirals = "spectral"
-student_spirals
 ```
 **spectral.** k-means can only compare a point with a centre, so its boundary is a straight line and each cluster holds parts of both arms; its index is about 0.02. Spectral clustering with 25 neighbors follows connectivity along each arm and scores 1.00. Asking for three clusters splits an arm rather than separating the arms, so the index falls to about 0.34.
 """)
@@ -850,7 +846,6 @@ student_spiral_reason = (
     "Too many neighbors connect points on different arms, so the graph blurs the gap "
     "between them and the two spirals merge."
 )
-student_spiral_reason
 ```
 The graph is the model. With 40 neighbors, some points on one arm are joined to points on the other, so the eigenvectors no longer separate the arms and the index falls from 1.00 to about 0.09. Unlike the too-small case, this failure raises no warning, because a densely connected graph is not an error.
 """)
@@ -1052,7 +1047,7 @@ def _(mo):
 
 @app.cell
 def _(document_clusters_3):
-    document_clusters_3
+    mo.Html(document_clusters_3.to_html())
     return
 
 
@@ -1068,7 +1063,7 @@ def _(mo):
 
 @app.cell
 def _(document_clusters_4):
-    document_clusters_4
+    mo.Html(document_clusters_4.to_html())
     return
 
 
@@ -1084,7 +1079,7 @@ def _(mo):
 
 @app.cell
 def _(document_clusters_5):
-    document_clusters_5
+    mo.Html(document_clusters_5.to_html())
     return
 
 
@@ -1119,7 +1114,6 @@ def _(mo):
             "Show answers": mo.md(r"""
 ```python
 student_doc_counts = pd.Series(document_labels_4).value_counts().sort_index()
-student_doc_counts
 ```
 The counts are **11, 4, 7, and 4**. `value_counts()` counts how many times each label appears, and `sort_index()` puts them in cluster order instead of size order. The four counts add to 26.
 """)
@@ -1157,7 +1151,6 @@ student_docs_neighbors = (
     "graph blurs the topics; a smaller graph keeps each sentence tied to its closest "
     "vocabulary neighbors."
 )
-student_docs_neighbors
 ```
 With 26 documents, 25 neighbors would mean almost every sentence is connected to almost every other, and the topics would merge. Ten neighbors keeps each sentence tied to the few sentences that share its vocabulary. On the 300-point shapes the same reasoning gives a larger number, so the setting follows the size and density of the data.
 """)
