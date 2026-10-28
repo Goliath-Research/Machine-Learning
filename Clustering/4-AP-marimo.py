@@ -272,7 +272,6 @@ def _(mo):
             "Show answers": mo.md(r"""
 ```python
 student_exemplars = blob_model.cluster_centers_indices_
-print(student_exemplars)
 ```
 `cluster_centers_indices_` gives the positions in the original data of the points that became exemplars. For this fit it holds three row numbers, and the cluster centres are exactly those rows, which is why the black markers sit on top of dots.
 """)
@@ -459,7 +458,6 @@ student_moon_gap = (
     adjusted_rand_score(moon_truth, moon_low.labels_)
     - adjusted_rand_score(moon_truth, moon_default.labels_)
 )
-print(student_moon_gap)
 ```
 The value is about **+0.025**, so lowering the preference changed the score by almost nothing even though it cut the number of clusters from 8 to 2. That is the point of the exercise: the cluster count moved a long way, and the agreement with the true crescents barely moved at all.
 """)
@@ -570,7 +568,6 @@ def _(mo):
 student_sentence_exemplars = [
     sentences[i] for i in sentence_model.cluster_centers_indices_
 ]
-print(student_sentence_exemplars)
 ```
 The list holds one representative sentence for each cluster: a nature sentence and an AI sentence. `cluster_centers_indices_` gives positions in the original data, so you use them to look the sentences back up.
 
@@ -693,7 +690,7 @@ def _(mo):
 
 @app.cell
 def _(wine_sweep):
-    wine_sweep
+    mo.Html(wine_sweep.to_html())
     return
 
 
@@ -882,7 +879,7 @@ def _(mo, sweep_scores):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(adjusted_rand_score, mo, np, sweep_scores, wine, wine_labels):
     _shuffled = np.random.RandomState(0).permutation(wine_labels["preference=-200"])
     mo.md(f"""
@@ -926,7 +923,6 @@ def _(mo):
 ```python
 student_wine_count = len(wine_model.cluster_centers_indices_)
 student_wine_ari = adjusted_rand_score(wine.target, wine_model.labels_)
-print(student_wine_count, student_wine_ari)
 ```
 The count is **3** and the adjusted Rand index is about **0.622**. `cluster_centers_indices_` has one entry per exemplar, so its length is the number of clusters; this is the same expression used for the blobs and the moons.
 """)
