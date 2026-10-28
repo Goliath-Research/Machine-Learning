@@ -97,7 +97,7 @@ def _(mo):
     2. Explain what `eps` and `min_samples` each control, and predict whether raising or lowering one increases noise or merges groups.
     3. Explain why a single `eps` cannot suit a dataset whose groups have different densities, and how OPTICS addresses that.
     4. Explain how `min_samples`, `xi`, and `min_cluster_size` change what OPTICS reports, and why a fraction is accepted.
-    5. Interpret the adjusted Rand index on moons and rings, including why noise points count as disagreements.
+    5. Interpret the adjusted Rand index on moons and rings, including how noise labels interact with it and why a perfect score does not prove that every point was clustered.
 
     ## Background
 
@@ -155,14 +155,34 @@ def _(mo):
 
     The moons and rings come with known generating labels, so the clusters can be scored. This lesson uses the **adjusted Rand index**: 1.0 means the partition matches exactly, and about 0 means no better than chance. Cluster numbers are arbitrary, so the score compares groupings, not names.
 
-    One detail matters when reading it here. **Noise points count as disagreements.** A point labelled `-1` is treated as its own group, so marking a real point as noise lowers the score even if every other point is grouped correctly. A run that reports a high index must therefore have both clustered the groups *and* avoided discarding points.
+    One detail matters when reading it here, and it is a trap. **Noise is a label like any other**, so all noise points form one group as far as the index is concerned. Two consequences follow.
+
+    - If an entire real group is labelled noise while the other groups are recovered correctly, **the index can still be 1.0**. The discarded group becomes the "noise cluster", and the partition is still identical to the truth once you accept that relabelling.
+    - If only *some* points of a group become noise, those points are now grouped with noise from other groups, and the index falls.
+
+    So a score of 1.0 does **not** prove that every group was found. It proves the labels are consistent with the truth up to renaming, and renaming a whole group to "noise" is a legal rename. **Always read the cluster count alongside the index**, and check the noise count separately, as this lesson does in every table.
 
     ## Datasets used
 
-    - **Two tight blobs.** 50 points, `random_state=0`, `cluster_std=0.5`. Small and well separated, so the parameters can be swept without confusion.
-    - **Three densities.** 100 points at three centres with standard deviations **0.5, 0.1, and 2.0**. A spread of densities by construction, which is the case DBSCAN cannot handle with one radius.
-    - **Half moons.** 500 points, noise 0.05, `random_state=0`. Two interlocking crescents.
-    - **Concentric circles.** 1,000 points, noise 0.08, factor 0.2, `random_state=0`. A ring around a circle.
+    All four datasets in this lesson are **generated in the notebook**, so nothing is downloaded and the results are reproducible anywhere.
+
+    ### Two tight blobs
+
+    From `sklearn.datasets.make_blobs`, 50 points, `random_state=0`, `cluster_std=0.5`. Small and well separated, so the parameter sweeps change one thing at a time. [Documentation](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_blobs.html).
+
+    ### Three densities
+
+    100 points from `make_blobs` at three centres, with standard deviations **0.5, 0.1, and 2.0**. The uneven spreads are deliberate: they create exactly the situation a single `eps` cannot handle, which is the central point of the lesson.
+
+    ### Half moons
+
+    500 points from `sklearn.datasets.make_moons`, noise 0.05, `random_state=0`. Two interlocking crescents, a standard test case for shapes that a straight boundary cannot separate. [Documentation](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_moons.html).
+
+    ### Concentric circles
+
+    1,000 points from `sklearn.datasets.make_circles`, noise 0.08, `factor=0.2`, `random_state=0`. A ring around a circle, with an empty band between them. Density methods find that band naturally. [Documentation](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_circles.html).
+
+    A note on the synthetic data: because we generate it, we know the true groups and can score the fits. Real data never offers that guarantee, so the scores here measure the algorithm rather than a realistic task. The trade-off is deliberate, since it isolates how `eps` and `min_samples` behave.
 
     Every scatter is a `ClusterVisualizer` Plotly figure, so you can zoom. **Zooming is part of the lesson**: the tight group in the three-density cloud is invisible at full scale, and reading it as "missing" is the mistake the lesson is trying to prevent. The scikit-learn defaults are `eps=0.5` and `min_samples=5`.
     """)
@@ -972,7 +992,7 @@ def _(mo, moon_db_ari, moon_db_groups, moon_db_noise, moon_op_ari, moon_op_group
     mo.md(f"""
     Both methods recover the two crescents completely. DBSCAN reports **{moon_db_groups} clusters and {moon_db_noise} noise points** with an adjusted Rand index of **{moon_db_ari:.3f}**; OPTICS reports **{moon_op_groups} clusters and {moon_op_noise} noise** with **{moon_op_ari:.3f}**.
 
-    A perfect score here means more than it would on the blobs, because of what the score does with noise. Every point was assigned to the correct crescent, and **no point was discarded**, so there are no `-1` labels to count as disagreements. A run that achieved the same partition while dumping 20 points into noise would score lower.
+    A perfect score here needs a caveat. OPTICS and DBSCAN both recovered the two crescents and discarded **no** points, so the partition is unambiguous. But as the background section warns, a score of 1.0 alone would not have proved that: if one entire crescent had been labelled noise and the other clustered correctly, the index would also have been 1.0. It is the combination of **score 1.0, two clusters, and zero noise** that establishes the result.
 
     The point-type plot is worth a second look. Each crescent has a dense core running along its length and a thin halo of border points at the edges. That is what a crescent looks like to a density algorithm: a curve of high density, not a blob.
     """)
@@ -1065,7 +1085,7 @@ student_moon_noise = int((moon_db.labels_ == -1).sum())
 ```
 The index is **1.000** and the noise count is **0**. Both arguments of `adjusted_rand_score` are label vectors over the same 500 points; the order does not matter, because the index is symmetric.
 
-The zero noise is what makes the perfect score meaningful. Had the fit discarded any point, that point would carry a `-1` label, which the index treats as its own group, and the score would drop below 1.
+The noise count is **0**, which matters for interpreting that score. A perfect index on its own would also have been possible with a group entirely labelled noise, because renaming a whole group to `-1` leaves the partition consistent. Here the fit found the two crescents and discarded nothing, so the score reflects the clustering you can see in the plot.
 """)
         },
         expanded=False,
@@ -1101,6 +1121,51 @@ That is why the method succeeds where k-means failed. K-means had to compare eve
 
 
 @app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### The score trap, demonstrated
+
+    The background section claimed that relabelling a whole group as noise can leave the adjusted Rand index at 1.0. That is a strong claim, so here it is as a check you can run yourself.
+
+    Take the correct labels for the moons, then relabel **one entire crescent** as noise and leave the other untouched. Nothing about the clustering has been fixed; half the data has simply been thrown away.
+    """)
+    return
+
+
+@app.cell
+def _(adjusted_rand_score, moon_arms):
+    discarded_demo = moon_arms.copy()
+    discarded_demo[moon_arms == 0] = -1
+    demo_table_ari = adjusted_rand_score(moon_arms, discarded_demo)
+    demo_clusters = len(set(discarded_demo.tolist())) - 1
+    demo_noise = int((discarded_demo == -1).sum())
+    demo_sentence = (
+        f"Discarding one whole crescent: {demo_clusters} cluster(s), "
+        f"{demo_noise} noise points, adjusted Rand index {demo_table_ari:.3f}"
+    )
+    demo_sentence
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    **One cluster, 250 noise points, and an index of 1.000.** No clustering was performed at all, and the score reports perfect agreement.
+
+    That is why this lesson never reads the index on its own. Read three numbers together:
+
+    | What to check | Why |
+    | :--- | :--- |
+    | The adjusted Rand index | Whether the labels agree with the truth up to renaming |
+    | The number of clusters | Whether the groups you expected were actually found |
+    | The noise count | Whether any group was quietly discarded |
+
+    A run that reports a perfect index alongside a suspiciously high noise count has not solved the problem. It has renamed it.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
 def _(
     circle_db_ari,
     circle_db_groups,
@@ -1126,7 +1191,7 @@ def _(
     6. **`min_cluster_size` filters results rather than changing the clustering.** Raising it from 0.1 to 0.4 reduced the reported clusters from 4 to 1 while keeping noise at zero, because small groups are dropped rather than rejected. This is the opposite direction from raising `eps`, which creates noise.
     7. **Standardizing is decisive on the moons.** On the raw coordinates the default DBSCAN produced one cluster and an adjusted Rand index of 0.000; on standardized coordinates, two clusters and 1.000.
     8. **Density methods solve the shapes the earlier methods struggled with.** Moons: {moon_db_groups} clusters, {moon_db_noise} noise, adjusted Rand {moon_db_ari:.3f} for DBSCAN and {moon_op_ari:.3f} for OPTICS. Rings: {circle_db_groups} clusters, {circle_db_noise} noise, adjusted Rand {circle_db_ari:.3f} for DBSCAN and {circle_op_ari:.3f} for OPTICS. The rings separate because of the empty band between them, which no cluster can cross.
-    9. **A perfect score means both things went right.** The adjusted Rand index counts noise as its own group, so a score of 1.0 requires the groups to be recovered *and* no points to be discarded.
+    9. **A perfect score needs the noise count beside it.** Because every noise point shares the same label, a whole group can be relabelled as noise while the adjusted Rand index stays at 1.0. Moons and rings both reach 1.0 here with two clusters *and* zero noise, and the zero is what rules out a silently discarded group.
     """)
     return
 
@@ -1160,7 +1225,7 @@ def _(mo):
 5. **One radius is one definition of dense.** A value small enough for a tight group is too small for a sparse one, and a value large enough for the sparse group swallows the tight one. OPTICS avoids committing to a radius: it orders points by density and records reachability distances, so groups of different densities appear as separate features of one profile.
 6. **A fraction of the sample**, so `0.1` means at least 10% of the points. Raising it removes small groups from the output, and their points are absorbed or simply not reported, which does not make them noise. The profile was already computed; the parameter filters what is reported.
 7. **Because DBSCAN measures distance in the units of the data.** On the raw moons, one column has a wider range, so `eps=0.5` is calibrated to that column and both crescents merge into a single cluster with an index of 0.000. Standardizing puts both columns on the same scale, and the same parameters then find two clusters with an index of 1.000.
-8. **Every point must be in the correct group and no point may be labelled noise.** Noise counts as its own group, so discarding any point would push the score below 1.0 even if the remaining points were grouped perfectly.
+8. **A perfect score requires the groups to be recovered, but not necessarily every point.** Because all noise points share one label, an entire group relabelled as noise still scores 1.0. What proves the result here is the combination: score 1.0, the expected number of clusters, and zero noise.
 """)
         },
         expanded=False,

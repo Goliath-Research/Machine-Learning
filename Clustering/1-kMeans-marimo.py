@@ -133,8 +133,26 @@ def _(mo):
 
     ## Datasets used
 
-    - **Synthetic blobs:** 300 points generated around four centers. We know how these data were generated, but do not use their true labels for fitting.
-    - **USArrests:** murder, assault, and rape arrest rates per 100,000 residents, plus urban population percentage for 50 US states in 1973. Arrest rates are not direct measurements of crime rates.
+    ### Synthetic blobs
+
+    300 points generated around four centres by `sklearn.datasets.make_blobs`. This is not an external dataset: the notebook creates it, so we know how many groups exist and where their centres are. That is useful for teaching, because the true labels let us check whether clustering recovered them. It is also unrealistic, because real data never comes with a guarantee of round, equally sized groups.
+
+    ### USArrests
+
+    **Source.** The `USArrests` dataset, distributed with the R statistical software and documented at the [R datasets reference](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/USArrests.html). A copy, `USArrests.csv`, sits beside this notebook. It is also available from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/dataset/105/us-arrests-data).
+
+    **What it holds.** 50 rows, one per US state, with four columns measured in **1973**:
+
+    | Column | Meaning |
+    | :--- | :--- |
+    | `Murder` | Arrests for murder per 100,000 residents |
+    | `Assault` | Arrests for assault per 100,000 residents |
+    | `UrbanPop` | Percentage of the population living in urban areas |
+    | `Rape` | Arrests for rape per 100,000 residents |
+
+    **Two cautions worth taking seriously.** First, these are **arrest rates, not crime rates**. They record police activity, so a state with more arrests may have more crime, more policing, or both. Reading the numbers as a measure of criminality is a mistake the data cannot support. Second, the data are from 1973 and describe a country that has changed substantially since; nothing here should be read as a statement about the present day.
+
+    The three crime columns are per-capita rates while `UrbanPop` is a percentage, so the four columns have different units and very different spreads. That is exactly why the lesson standardizes them before clustering.
 
     ## 1. Explore the synthetic data
 
@@ -631,7 +649,10 @@ def _(mo):
 
 @app.cell
 def _(Path, pd, px):
+    # USArrests: arrest rates per 100,000 residents for 50 US states, 1973.
     # Source and variable descriptions: https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/USArrests.html
+    # Also available from UCI: https://archive.ics.uci.edu/dataset/105/us-arrests-data
+    # Note: these are ARRESTS, not crimes. They reflect police activity, not only offending.
     # Save USArrests.csv beside this notebook; in browser Marimo, upload it to the notebook's files.
     # CSV columns: State, Murder, Assault, UrbanPop, Rape (50 states, 1973).
     arrests = pd.read_csv(Path(__file__).resolve().parent / "USArrests.csv", index_col="State")

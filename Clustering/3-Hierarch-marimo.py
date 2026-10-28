@@ -145,9 +145,28 @@ def _(mo):
 
     ## Datasets used
 
-    - **Ten blobs.** A tiny cloud from `make_blobs`, `random_state=2`. Small enough that every point can be numbered and you can read the tree by hand.
-    - **Four hundred blobs.** Four centers, `cluster_std=1.8`, `random_state=10`, with the labels that generated them. The spread is wide, so the groups overlap.
-    - **Iris.** Four measurements of 150 flowers from three species, loaded from scikit-learn. Unlike the synthetic clouds, these measurements are real and correlated.
+    ### Ten blobs, and four hundred blobs
+
+    Both come from `sklearn.datasets.make_blobs`, so they are generated in the notebook rather than downloaded. The ten-point cloud (`random_state=2`) is small enough to number every point and read the tree by hand. The 400-point cloud uses four centres with `cluster_std=1.8`, wide enough that the groups overlap, and it keeps the generator labels so the clusterings can be scored.
+
+    ### Iris
+
+    **Source.** The iris dataset, collected by the botanist **Edgar Anderson** and published by **R. A. Fisher** in 1936 in *The use of multiple measurements in taxonomic problems* (*Annals of Eugenics*, 7(2), 179–188). Loaded here with `sklearn.datasets.load_iris`. Also distributed by the [UCI Machine Learning Repository](https://archive.ics.uci.edu/dataset/53/iris).
+
+    **What it holds.** 150 flowers, 50 from each of three species, with four measurements in centimetres:
+
+    | Column | Meaning |
+    | :--- | :--- |
+    | sepal length (cm) | Length of the sepal |
+    | sepal width (cm) | Width of the sepal |
+    | petal length (cm) | Length of the petal |
+    | petal width (cm) | Width of the petal |
+
+    The three species are *Iris setosa*, *Iris versicolor*, and *Iris virginica*.
+
+    **Why it suits this lesson.** One species, setosa, is clearly separable from the other two on these measurements. Versicolor and virginica overlap, and no clustering of four petal and sepal measurements can fully separate them, because some flowers genuinely have intermediate measurements. That asymmetry is the point: it shows what clustering can and cannot recover, and it is why the scores in this lesson land around 0.6 rather than 1.0.
+
+    The dataset is a historical benchmark, used in statistics for nearly ninety years. That makes it easy to compare results with published work, and it also means it is unusually clean: no missing values, balanced classes, and measurements of a single flower type. Real botanical data is rarely this tidy.
     """)
     return
 
@@ -989,6 +1008,10 @@ def _(mo):
 
 @app.cell
 def _(StandardScaler, load_iris, pd):
+    # Iris: 150 flowers, 4 measurements in cm, 3 species.
+    # Collected by Edgar Anderson; published by R. A. Fisher (1936), Annals of Eugenics 7(2), 179-188.
+    # Bundled with scikit-learn, so no download is required: load_iris() reads a local copy.
+    # Original distribution: https://archive.ics.uci.edu/dataset/53/iris
     iris = load_iris()
     iris_frame = pd.DataFrame(iris.data, columns=iris.feature_names)
     iris_frame["species"] = iris.target_names[iris.target]

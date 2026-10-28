@@ -176,10 +176,23 @@ def _(mo):
 
     ## Datasets used
 
-    - **Blobs.** 50 points around three centres, `cluster_std=1.5`, `random_state=10`. Small and well separated, so the method should succeed easily.
-    - **Half moons.** 100 points, noise 0.08, `random_state=10`. Two interlocking crescents, which is the shape that distance-based methods struggle with.
-    - **Seven short sentences** about nature and artificial intelligence. No coordinates, so a similarity matrix has to be built.
-    - **Wine.** Thirteen chemical measurements of 178 wines from three Italian cultivars, loaded from scikit-learn. Real data, with correlated columns and overlapping groups.
+    ### Blobs and half moons
+
+    Both come from scikit-learn's generators, so the notebook creates them rather than downloading anything: `make_blobs` for 50 points around three centres, and `make_moons` for 100 points in two crescents. [make_blobs](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_blobs.html), [make_moons](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_moons.html).
+
+    ### Seven short sentences
+
+    **Source.** Written for this lesson, about nature and artificial intelligence. They are not from an external corpus, so there are no citation or licensing requirements. The two topics share almost no vocabulary, which is what makes the grouping easy to see; the wine data later supplies the harder case.
+
+    ### Wine
+
+    **Source.** The wine recognition dataset, from the **UCI Machine Learning Repository**, contributed by **Stefan Aeberhard** and colleagues at James Cook University and the Institute of Pharmaceutical and Food Analysis in Genoa. Loaded here with `sklearn.datasets.load_wine`. Available at the [UCI repository](https://archive.ics.uci.edu/dataset/109/wine), with the accompanying technical reports by Aeberhard, Coomans, and de Vel (1992).
+
+    **What it holds.** 178 wines grown in the same region of Italy but derived from **three different cultivars** (grape varieties), with thirteen chemical measurements each. Among them: alcohol content, malic acid, ash, magnesium, total phenols, flavanoids, colour intensity, hue, and proline.
+
+    **Why it suits this lesson.** Unlike the synthetic clouds, these measurements are real, correlated, and on wildly different scales: proline runs into the hundreds while hue is below 2. That is why they are standardized before clustering.
+
+    The three cultivars are known, which makes the data scorable, but they are **not** cleanly separated by chemistry alone. Two of the cultivars overlap substantially, so a perfect match is not achievable, and the scores in this lesson sit around 0.6 to 0.75 for that reason rather than because the algorithm failed.
 
     Every scatter below is a `ClusterVisualizer` plot, so you can hover and zoom. `random_state=0` keeps the fits reproducible.
     """)
@@ -624,6 +637,10 @@ def _(mo):
 
 @app.cell
 def _(AffinityPropagation, StandardScaler, load_wine, np, pd):
+    # Wine: 178 wines, 13 chemical measurements, 3 cultivars (grape varieties).
+    # UCI Machine Learning Repository, contributed by S. Aeberhard et al. (1992).
+    # https://archive.ics.uci.edu/dataset/109/wine
+    # Bundled with scikit-learn, so no download is required: load_wine() reads a local copy.
     wine = load_wine()
     wine_frame = pd.DataFrame(wine.data, columns=wine.feature_names)
     wine_frame["cultivar"] = wine.target_names[wine.target]
