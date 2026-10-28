@@ -333,16 +333,9 @@ def _(mo):
 
     ### Try it yourself
 
-    On the half moons, which method recovers both crescents when we ask for **k = 2**? Replace `None` with `"k-means"` or `"spectral"`.
+    On the half moons, which method recovers both crescents when we ask for **k = 2**? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _(moon_labels, moon_scores):
-    student_moons = None
-    student_moons
-    return (student_moons,)
 
 
 @app.cell(hide_code=True)
@@ -350,10 +343,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_moons = "spectral"
-```
-**spectral.** At k = 2, k-means scores about 0.25 because one boundary cuts through both crescents. Spectral clustering with 25 neighbors scores 1.00: each cluster holds exactly one crescent. The cluster numbers are arbitrary, so the index compares groupings, not names.
+**Spectral clustering.** At k = 2, k-means scores about 0.25 because one boundary cuts through both crescents. Spectral clustering with 25 neighbors scores 1.00, because each cluster holds exactly one crescent.
+
+The cluster numbers are arbitrary, so the index compares groupings, not names.
 """)
         },
         expanded=False,
@@ -791,16 +783,9 @@ def _(mo):
 
     ### Try it yourself
 
-    On the spirals, which method follows the arms at **k = 2** instead of cutting across them? Replace `None` with `"k-means"` or `"spectral"`.
+    On the spirals, which method follows the arms at **k = 2** instead of cutting across them? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _(spiral_labels, spiral_scores):
-    student_spirals = None
-    student_spirals
-    return (student_spirals,)
 
 
 @app.cell(hide_code=True)
@@ -808,10 +793,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_spirals = "spectral"
-```
-**spectral.** k-means can only compare a point with a centre, so its boundary is a straight line and each cluster holds parts of both arms; its index is about 0.02. Spectral clustering with 25 neighbors follows connectivity along each arm and scores 1.00. Asking for three clusters splits an arm rather than separating the arms, so the index falls to about 0.34.
+**Spectral clustering.** k-means can only compare a point with a centre, so its boundary is a straight line and each cluster holds parts of both arms; its index is about 0.02. Spectral clustering with 25 neighbors follows connectivity along each arm and scores 1.00.
+
+Asking for three clusters splits an arm rather than separating the arms, so the index falls to about 0.34.
 """)
         },
         expanded=False,
@@ -824,16 +808,9 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Explain in one sentence why a **larger** `n_neighbors` can make the spiral result worse. Replace `None` with a short sentence.
+    Why can a **larger** `n_neighbors` make the spiral result worse, even though more neighbors mean more connections? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _(spiral_scores):
-    student_spiral_reason = None
-    student_spiral_reason
-    return (student_spiral_reason,)
 
 
 @app.cell(hide_code=True)
@@ -841,13 +818,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_spiral_reason = (
-    "Too many neighbors connect points on different arms, so the graph blurs the gap "
-    "between them and the two spirals merge."
-)
-```
-The graph is the model. With 40 neighbors, some points on one arm are joined to points on the other, so the eigenvectors no longer separate the arms and the index falls from 1.00 to about 0.09. Unlike the too-small case, this failure raises no warning, because a densely connected graph is not an error.
+The graph is the model. With 40 neighbors, some points on one arm are joined to points on the other, so the graph blurs the gap between the arms. The eigenvectors then no longer separate them, and the adjusted Rand index falls from 1.00 to about 0.09.
+
+Unlike the too-small case, this failure raises no warning, because a densely connected graph is a perfectly valid graph. The representation is wrong, not broken.
 """)
         },
         expanded=False,
@@ -1128,16 +1101,9 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    The sentence collection is small: only 26 documents. Explain why a **smaller** `n_neighbors` suits it, compared with the 300-point shape datasets. Replace `None` with a short sentence.
+    The sentence collection is small: only 26 documents. Why does a **smaller** `n_neighbors` suit it, compared with the 300-point shape datasets? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _(document_matrix):
-    student_docs_neighbors = None
-    student_docs_neighbors
-    return (student_docs_neighbors,)
 
 
 @app.cell(hide_code=True)
@@ -1145,14 +1111,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_docs_neighbors = (
-    "With only 26 sentences, a large n_neighbors connects almost every pair, so the "
-    "graph blurs the topics; a smaller graph keeps each sentence tied to its closest "
-    "vocabulary neighbors."
-)
-```
-With 26 documents, 25 neighbors would mean almost every sentence is connected to almost every other, and the topics would merge. Ten neighbors keeps each sentence tied to the few sentences that share its vocabulary. On the 300-point shapes the same reasoning gives a larger number, so the setting follows the size and density of the data.
+With 26 documents, 25 neighbors would connect almost every sentence to almost every other, and the topics would merge into one dense graph. Ten neighbors keeps each sentence tied to the few sentences that share its vocabulary.
+
+The setting follows the size and density of the data. On the 300-point shapes the same reasoning gives a larger number, which is why the shape sections use 25 and this section uses 10.
 """)
         },
         expanded=False,

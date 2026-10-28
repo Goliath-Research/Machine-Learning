@@ -349,16 +349,9 @@ def _(mo):
 
     ### Try it yourself
 
-    What does the **height** of a join in a dendrogram represent? Replace `None` with a short sentence.
+    What does the **height** of a join in a dendrogram represent? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _(tiny_merges):
-    student_join_height = None
-    print(student_join_height)
-    return (student_join_height,)
 
 
 @app.cell(hide_code=True)
@@ -366,13 +359,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_join_height = (
-    "The distance between the two groups that were merged at that join. Larger "
-    "heights mean the groups were farther apart when they finally combined."
-)
-```
-In the tiny cloud the first join sits at 0.479 and the last at 15.976. The bottom of the tree is where points are close; the top is the final merge across the whole cloud.
+The height is the **distance between the two groups that were merged** at that join. A taller join means the groups were farther apart when they finally combined.
+
+Check it against the merge table above: the first join sits at 0.479 and the last at 15.976. The bottom of the tree is where points are close, and the top is the single merge that covers the whole cloud.
 """)
         },
         expanded=False,
@@ -459,19 +448,55 @@ def _(wide_view):
     return
 
 
-@app.cell
-def _(agg_labels, wide_view):
-    wide_view.plot_clusters(
-        agg_labels["Ward-4"], title="Agglomerative Clustering - Ward Linkage, 4 clusters"
-    )
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    The plot above colours the points by the group that **generated** them. That is the answer key, and it is the reference every fit below is measured against. Four groups of exactly 100 points each, visibly overlapping in the middle of the cloud.
+
+    ### Ward linkage, asking for four clusters
+
+    Ward merges whatever increases the within-group variance least, so it prefers compact groups. Compare this plot with the answer key: the four colours should land in roughly the same four places, though the boundary between the two central groups will not be identical because the groups genuinely overlap there.
+
+    The cluster sizes confirm it: **105, 103, 97, and 95** against the true 100 each. Nothing chained and nothing was stranded.
+    """)
     return
 
 
 @app.cell
 def _(agg_labels, wide_view):
     wide_view.plot_clusters(
-        agg_labels["Ward-3"], title="Agglomerative Clustering - Ward Linkage, 3 clusters"
+        agg_labels["Ward-4"], title="Ward linkage, 4 clusters (the correct number)"
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Now the same data and the same linkage, but we ask for **three** clusters. Ward has no choice but to merge two of the four real groups, so one cluster doubles in size to about **200** while the others stay near 100.
+
+    Look for the oversized cluster in the plot: it is the one that spans two of the answer-key colours. Asking for one group too few does not produce "a cleaner version" of the answer; it forces a real distinction to be discarded.
+    """)
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_clusters(
+        agg_labels["Ward-3"], title="Ward linkage, 3 clusters (one group too few)"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Single linkage, the same two questions
+
+    Single linkage measures the distance between two groups as their **closest pair** of points. Before looking at the plot, predict what that should do on overlapping data: if any single pair of points from two groups happens to be close, those groups become mergeable, even when the groups as a whole are far apart.
+
+    That is chaining, and it is what you should look for here.
+    """)
     return
 
 
@@ -479,8 +504,20 @@ def _(agg_labels, wide_view):
 def _(agg_labels, wide_view):
     wide_view.plot_clusters(
         agg_labels["Single-4"],
-        title="Agglomerative Clustering - Single Linkage, 4 clusters",
+        title="Single linkage, 4 clusters (chaining)",
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    This is the failure, and it is worth reading carefully. Asked for four clusters, single linkage returns **199, 199, 1, and 1**: two enormous halves and two isolated points.
+
+    The two single-point clusters are the giveaway. A thin trail of points across the overlapping middle was enough to bridge two real groups into one, and the bridge cannot be undone further up the tree. The two points left on their own are simply the ones farthest from everything else, absorbed last.
+
+    Note what the plot does *not* show: a slightly-wrong four-way split. It shows a qualitatively different structure, one where the requested number of clusters was met by producing two singletons.
+    """)
     return
 
 
@@ -488,8 +525,28 @@ def _(agg_labels, wide_view):
 def _(agg_labels, wide_view):
     wide_view.plot_clusters(
         agg_labels["Single-3"],
-        title="Agglomerative Clustering - Single Linkage, 3 clusters",
+        title="Single linkage, 3 clusters (the chaining persists)",
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Asking for three does not repair it. The sizes become **200, 199, and 1**: the same two halves, still merged across the middle, with one point stranded. Chaining is a property of how the tree was built, not of how many clusters you request.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Complete linkage, the opposite rule
+
+    Complete linkage measures the distance between two groups as their **farthest pair**. It is the strictest of the four rules: two groups cannot merge until *every* pair of points between them is reasonably close.
+
+    Predict what that does to the chaining you just saw. A single close pair is no longer enough to force a merge, so the thin bridge across the middle should not be able to pull two groups together.
+    """)
     return
 
 
@@ -497,59 +554,215 @@ def _(agg_labels, wide_view):
 def _(agg_labels, wide_view):
     wide_view.plot_clusters(
         agg_labels["Complete-4"],
-        title="Agglomerative Clustering - Complete Linkage, 4 clusters",
+        title="Complete linkage, 4 clusters (no chaining)",
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    The prediction holds. The sizes are **102, 100, 100, and 98**, the closest any linkage comes to the true 100 each, and there are no singletons. The plot shows four groups where the ward plot did, with the same unavoidable fuzziness in the middle.
+
+    This is the best fit in the whole comparison, and the next two plots are its k = 3 counterpart.
+    """)
     return
 
 
 @app.cell
 def _(agg_labels, wide_view):
     wide_view.plot_clusters(
-        agg_labels["Complete-3"],
-        title="Agglomerative Clustering - Complete Linkage, 3 clusters",
+        agg_labels["Complete-3"], title="Complete linkage, 3 clusters"
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Under complete linkage, forcing three clusters produces **200, 102, and 98**: one genuine merge of two real groups, and the other two left intact. That is the honest failure mode when you ask for too few groups, and it is exactly what ward did as well.
+
+    Contrast this with single linkage at three clusters, where the sizes were 200, 199, and 1. Both answers have a cluster of about 200, but only complete linkage's other clusters are real groups rather than leftovers.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Average linkage, the middle ground
+
+    Average linkage measures the **mean** distance across all pairs between two groups. It sits between the two extremes: sensitive to overall separation like complete, but not as easily blocked by one far-flung point.
+
+    Expect it to look a lot like complete linkage here, and to stay well clear of the chaining you saw under single linkage.
+    """)
     return
 
 
 @app.cell
 def _(agg_labels, wide_view):
     wide_view.plot_clusters(
-        agg_labels["Average-4"],
-        title="Agglomerative Clustering - Average Linkage, 4 clusters",
+        agg_labels["Average-4"], title="Average linkage, 4 clusters"
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Sizes are **105, 102, 98, and 95**, essentially the same four groups as complete linkage, with no singletons and no chaining.
+
+    Now the same linkage with one group too few.
+    """)
     return
 
 
 @app.cell
 def _(agg_labels, wide_view):
     wide_view.plot_clusters(
-        agg_labels["Average-3"],
-        title="Agglomerative Clustering - Average Linkage, 3 clusters",
+        agg_labels["Average-3"], title="Average linkage, 3 clusters"
     )
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Sizes are **105, 102, 98, and 95** at four clusters and **200, 102, and 98** at three, which are almost the same as complete linkage's. The plot is barely distinguishable from it, and that is the point: average and complete agree closely on well-behaved data, while single is the odd one out.
+
+    ### All eight fits in one table
+
+    Eight plots are hard to compare by eye. This table reduces each one to the two numbers that reveal its structure: the cluster sizes, and how well those clusters match the answer key.
+    """)
+    return
+
+
 @app.cell
-def _(agg_labels, wide_view):
-    wide_view.plot_adjusted_rand(agg_labels, title="Agglomerative Clustering")
+def _(agg_labels, adjusted_rand_score, np, pd, wide_labels):
+    _rows = []
+    for _name in agg_labels.columns:
+        _sizes = sorted(np.bincount(agg_labels[_name]), reverse=True)
+        _rows.append(
+            {
+                "Fit": _name,
+                "Sizes": " / ".join(str(int(_size)) for _size in _sizes),
+                "Smallest cluster": int(min(_sizes)),
+                "Adjusted Rand": adjusted_rand_score(wide_labels, agg_labels[_name]),
+            }
+        )
+    fit_summary = pd.DataFrame(_rows).set_index("Fit")
+    fit_summary.round(3)
+    return (fit_summary,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Read the table one linkage at a time, comparing the 4-row with the 3-row above or below it.
+
+    - **The `Smallest cluster` column is the fastest diagnostic.** For ward, complete, and average it never falls below 95. For single linkage it drops to **1** on both rows: that single number is the chaining, and you cannot see it in a bar chart of ARI.
+    - **At four clusters**, complete (0.974), average (0.954), and ward (0.947) all recover the answer closely. Single linkage scores 0.496 because its 199/199 halves cut across two real groups.
+    - **At three clusters**, the three sound linkages all lose about 0.25, because each must discard one real distinction. Single linkage barely moves (0.496 to 0.497), which is not resilience: it had already merged everything, so one fewer group changes nothing.
+    - **The 3-row is never better than its 4-row for ward, complete, and average.** When you ask for the wrong number of groups, the fit degrades; it does not improvise a better answer.
+
+    The four bar charts that follow score exactly these eight fits. Now that you know what each fit looks like, the bars should read as a summary rather than as the whole story. The highlighted bar in each chart is the best score among the eight.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Adjusted Rand index
+
+    This is the score to read first, because it is corrected for chance and handles fits with different numbers of clusters fairly.
+    """)
     return
 
 
 @app.cell
 def _(agg_labels, wide_view):
-    wide_view.plot_adjusted_mutual_info(agg_labels, title="Agglomerative Clustering")
+    wide_view.plot_adjusted_rand(agg_labels, title="Adjusted Rand index, all eight fits")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    **Complete-4** is highlighted at **0.974**, with Average-4 at 0.954 and Ward-4 at 0.947 close behind. Those three are the fits that recovered the four real groups.
+
+    The two lowest bars are **Single-4** and **Single-3**, at 0.496 and 0.497. Note that they are almost identical despite asking for different numbers of clusters, which is the chaining signature again: the tree was already wrong before the cut, so the cut makes no difference.
+
+    Also notice that the three k = 3 bars sit in a middle band around 0.69 to 0.70. Asking for one group too few is penalised, but far less than chaining is.
+
+    ### Adjusted mutual information
+
+    The same eight fits, scored by shared information rather than by pairwise agreement. It should tell the same story in a different currency.
+    """)
     return
 
 
 @app.cell
 def _(agg_labels, wide_view):
-    wide_view.plot_normalized_mutual_info(agg_labels, title="Agglomerative Clustering")
+    wide_view.plot_adjusted_mutual_info(
+        agg_labels, title="Adjusted mutual information, all eight fits"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    The ordering is nearly identical: **Complete-4** leads at **0.965**, ward and average are just behind at 0.939 and 0.946, and the single-linkage bars sink to 0.657 and 0.661.
+
+    One difference is worth noticing. The gap between the good fits and the bad ones is small for this score in absolute terms, because mutual information is measured on a different scale from pairwise agreement. Compare *rankings* across scores, not the size of the gaps.
+
+    ### Normalized mutual information
+
+    Now an **unadjusted** score, kept here for comparison. Watch how the single-linkage bars look more respectable than they did under the adjusted scores.
+    """)
     return
 
 
 @app.cell
 def _(agg_labels, wide_view):
-    wide_view.plot_fowlkes_mallows(agg_labels, title="Agglomerative Clustering")
+    wide_view.plot_normalized_mutual_info(
+        agg_labels, title="Normalized mutual information, all eight fits"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Normalized mutual information gives the single-linkage fits **0.660** and **0.663**, which is noticeably closer to the good fits than the adjusted scores suggested. That is the unadjusted score being generous: it has no chance correction, so a structurally broken partition still shares some information with the truth by accident.
+
+    This is the practical reason the lesson distinguishes the two groups of scores.
+
+    ### Fowlkes–Mallows
+
+    The last chart, and the one to read most carefully. It is also unadjusted, and its floor is the highest of the four.
+    """)
+    return
+
+
+@app.cell
+def _(agg_labels, wide_view):
+    wide_view.plot_fowlkes_mallows(
+        agg_labels, title="Fowlkes–Mallows, all eight fits"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Every bar here is high. **Complete-4** leads at **0.980**, but **Single-4** still scores **0.702**, which looks like a respectable result for a fit that produced two singletons and cut across two real groups.
+
+    Remember the shuffled-label baseline of about **0.25**: a meaningless clustering already scores a quarter of the maximum. So the usable range of this score on this data is roughly 0.25 to 1.00, not 0 to 1.00, and a value of 0.70 is far less impressive than it appears.
+
+    Use this chart to rank fits that asked for the **same** number of clusters, where the comparison is fair. For anything else, go back to the adjusted Rand chart.
+    """)
     return
 
 
@@ -658,16 +871,9 @@ def _(mo):
 
     ### Try it yourself
 
-    Which external score is **not** corrected for chance, and therefore keeps a value well above zero even when the clustering is meaningless? Replace `None` with its name.
+    Which external score is **not** corrected for chance, and therefore keeps a value well above zero even when the clustering is meaningless? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _(chance_scores):
-    student_score_baseline = None
-    print(student_score_baseline)
-    return (student_score_baseline,)
 
 
 @app.cell(hide_code=True)
@@ -675,10 +881,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_score_baseline = "Fowlkes-Mallows"
-```
-The Fowlkes–Mallows score is not adjusted for chance, so shuffled labels still score about 0.25 at four clusters. The two adjusted scores fall to about 0.00. NMI is also unadjusted, but its chance value is small enough that it is much less misleading than Fowlkes–Mallows.
+The **Fowlkes–Mallows** score is not adjusted for chance, so shuffled labels still score about 0.25 at four clusters. Adjusted Rand and adjusted mutual information both fall to about 0.00.
+
+Normalized mutual information is also unadjusted, but its chance value is small enough that it is far less misleading than Fowlkes–Mallows. That is why the lesson treats the two adjusted scores as the ones to rely on when comparing different numbers of clusters.
 """)
         },
         expanded=False,
@@ -691,36 +896,15 @@ def _(mo):
     mo.md(r"""
     ### Which linkage agrees with the generator
 
-    The table also answers the practical question: which linkage recovered the four groups?
-    """)
-    return
+    The table's last column answers the practical question. Complete linkage is best at **0.974**, ward and average follow at **0.947** and **0.954**, and single linkage trails at **0.496**.
 
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### What single linkage actually did
-
-    The scores alone do not explain the failure, so look at the group sizes. Complete linkage recovers groups of 102, 100, 100, and 98 against true groups of 100 each, and it scores the highest adjusted Rand index at **0.974**. Single linkage scores **0.496**, and its four groups are **199, 199, 1, and 1**.
-
-    Two points are stranded as clusters of one while the other 398 split into two large halves. That is chaining in its purest form: single linkage merges by the closest pair, so a thin trail of points between two blobs is enough to bridge them. Once bridged, the two blobs can never be separated further up the tree. The two isolated points are the ones that happened to be farthest from everything else, so they are the last to be absorbed.
-
-    Ward and average linkage finish close behind complete linkage (0.947 and 0.954), so the practical lesson is not "complete is the right choice" but "single linkage is the risky one when groups are close or noisy". On well-separated data it would do fine.
+    That ranking is worth stating carefully. It does not mean complete linkage is the right choice in general; on well-separated data single linkage would do fine, and its speed is an advantage. What the ranking shows is that on *this* data, where groups overlap and a thin bridge exists between them, the closest-pair rule is the risky one. The lesson is to know which failure each rule invites, not to memorise a winner.
 
     ### Try it yourself
 
-    Which linkage measures the distance between two groups as the distance between their **closest pair** of points? Replace `None` with its name.
+    Which linkage measures the distance between two groups as the distance between their **closest pair** of points, and which uses their **farthest pair**? Reveal the answer when you have decided.
     """)
     return
-
-
-@app.cell
-def _(agg_labels, np):
-    student_linkage = None
-    student_single_sizes = None
-    print("Linkage:", student_linkage)
-    print("Single-4 cluster sizes:", student_single_sizes)
-    return student_linkage, student_single_sizes
 
 
 @app.cell(hide_code=True)
@@ -728,11 +912,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_linkage = "single"
-student_single_sizes = np.bincount(agg_labels["Single-4"])
-```
-The linkage is **single**, and the sizes are **199, 199, 1, and 1**. Single linkage takes the minimum distance between groups, so it follows a chain of near neighbors and bridges blobs that a farthest-pair rule such as complete linkage keeps apart.
+**Single** linkage uses the closest pair; **complete** linkage uses the farthest pair.
+
+Think about what that difference does. Single linkage asks only whether *any* two points are close, so one thin bridge of points is enough to join two groups. Complete linkage asks whether *every* pair is reasonably close, so a single close pair cannot force a merge. That is why single linkage chained the blobs into 199/199/1/1 while complete linkage kept them at 102/100/100/98.
 """)
         },
         expanded=False,
@@ -745,16 +927,18 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Replace `None` so that `student_single_ari` holds the adjusted Rand index of the `Single-4` fit against the true labels `wide_labels`.
+    Replace `None` so that `student_single_sizes` holds the four cluster sizes of the `Single-4` fit, using `np.bincount`. Then set `student_single_ari` to the adjusted Rand index of that same fit against `wide_labels`.
     """)
     return
 
 
 @app.cell
-def _(adjusted_rand_score, agg_labels, wide_labels):
+def _(adjusted_rand_score, agg_labels, np, wide_labels):
+    student_single_sizes = None
     student_single_ari = None
-    print(student_single_ari)
-    return (student_single_ari,)
+    print("Single-4 cluster sizes:", student_single_sizes)
+    print("Single-4 ARI:", student_single_ari)
+    return student_single_ari, student_single_sizes
 
 
 @app.cell(hide_code=True)
@@ -763,9 +947,10 @@ def _(mo):
         {
             "Show answers": mo.md(r"""
 ```python
+student_single_sizes = np.bincount(agg_labels["Single-4"])
 student_single_ari = adjusted_rand_score(wide_labels, agg_labels["Single-4"])
 ```
-The value is about **0.496**, against **0.974** for complete linkage. Compare it with the 199/199/1/1 sizes: the score is low for a concrete reason, not an abstract one. The first argument is the truth and the second is the fit, though the adjusted Rand index is symmetric, so the order does not change the value.
+The sizes are **199, 199, 1, and 1**, and the adjusted Rand index is about **0.496**, against **0.974** for complete linkage. `np.bincount` counts how many times each label appears, which is the quickest way to spot a chained result: two enormous groups and two singletons is the signature.
 """)
         },
         expanded=False,
@@ -932,16 +1117,9 @@ def _(mo):
 
     ### Try it yourself
 
-    Which species separates cleanly into its own cluster, and which two are mixed together? Replace `None` with a short sentence.
+    Which species separates cleanly into its own cluster, and which two are mixed together? Read `iris_table` above, then reveal the answer.
     """)
     return
-
-
-@app.cell
-def _(iris_table):
-    student_iris_mix = None
-    print(student_iris_mix)
-    return (student_iris_mix,)
 
 
 @app.cell(hide_code=True)
@@ -949,13 +1127,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_iris_mix = (
-    "Setosa separates cleanly, with 49 of its 50 flowers alone in one cluster, "
-    "while versicolor and virginica are mixed across the other two clusters."
-)
-```
-Look up the largest entry in each row of `iris_table`. Setosa's row is concentrated in one cluster; versicolor's and virginica's rows are spread over two. The measurements separate one species well and the other two only partly, which no amount of clustering can fix, because the flowers themselves overlap.
+**Setosa** separates cleanly: 49 of its 50 flowers sit alone in one cluster. **Versicolor and virginica** are mixed across the other two clusters.
+
+Look at the largest entry in each row of the table. Setosa's row is concentrated in a single cluster, while versicolor's and virginica's rows are spread over two. The measurements separate one species well and the other two only partly, which no amount of clustering can fix, because the flowers themselves overlap.
 """)
         },
         expanded=False,
@@ -968,16 +1142,9 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which linkage chooses the merge that increases the **within-group variance** the least? Replace `None` with its name.
+    Which linkage chooses the merge that increases the **within-group variance** the least? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _(link_scores):
-    student_variance_linkage = None
-    print(student_variance_linkage)
-    return (student_variance_linkage,)
 
 
 @app.cell(hide_code=True)
@@ -985,10 +1152,9 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_variance_linkage = "ward"
-```
-**Ward.** Single, complete, and average linkage all measure a distance between pairs of points. Ward measures the increase in within-group variance that the merge would cause, and merges whichever adds least. That is why ward produced even groups of 102, 100, 100, and 98 on the blobs, while single linkage produced 199, 199, 1, and 1.
+**Ward.** Single, complete, and average linkage all measure a distance between pairs of points. Ward measures the increase in within-group variance that the merge would cause, and merges whichever adds least.
+
+That is why ward produced even groups of 102, 100, 100, and 98 on the blobs, while single linkage produced 199, 199, 1, and 1.
 """)
         },
         expanded=False,
