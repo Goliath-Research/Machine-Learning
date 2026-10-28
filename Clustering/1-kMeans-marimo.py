@@ -467,68 +467,36 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### Try it yourself
-
-    Which attribute of a fitted `KMeans` model stores the sum of squared distances from the points to their assigned cluster centers?
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-    The attribute is **`inertia_`**. It stores the sum of squared distances from the points to their assigned cluster centers, called **inertia**.
-    """)
-        },
-        expanded=False,
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### Try it yourself
-
-    The provided code generates 300 observations around four centers. Complete the missing code to fit k-means and display **one plot** showing the assigned clusters and their centers.
-
-    1. Start with `seed = 42` and `k = 4`.
-    2. Keep `seed = 42` and compare k = 2, 3, 4, and 5.
-    3. Keep `k = 4` and compare seeds 42, 30, and 17.
-
-    Replace each `None` with the appropriate expression. Use `KMeans` with `n_clusters=k`, `random_state=10`, and `n_init="auto"`. Use `ClusterVisualizer` 
-    to plot the fitted labels and centers.
-
-    Change only `seed` and `k` between runs; keep the data-generation setting `centers=4`. Rerun the cell to update the same plot.
-
-    **Write a conclusion:** Explain how changing k affects the grouping when the data remain fixed, and how changing the seed affects the data and the resulting clusters. 
-    Support your explanation with observations from your plots. Does generating data around four centers guarantee that k-means will recover those four groups?
-    """)
-    return
-
-
-@app.cell
 def _(KMeans, cv, make_blobs, pd):
-    seed = 42
-    k = 4
+    # Provided: the practice dataset used by the next two exercises. No student work here.
+    practice_points, _ = make_blobs(
+        n_samples=200, centers=3, cluster_std=0.6, random_state=7
+    )
+    practice_frame = pd.DataFrame(practice_points, columns=["x", "y"])
+    practice_view = cv.ClusterVisualizer(practice_frame)
+    practice_models = {
+        _k: KMeans(n_clusters=_k, random_state=10, n_init="auto").fit(practice_points)
+        for _k in range(2, 7)
+    }
+    practice_view.plot_data(title="Practice dataset: 200 new points, no labels yet")
+    return practice_models, practice_points, practice_view
 
-    # Provided data generation: keep centers=4 while changing seed and k.
-    student_points = make_blobs(
-        n_samples=300, centers=4, cluster_std=0.5, random_state=seed
-    )[0]
-    student_frame = pd.DataFrame(student_points, columns=["x", "y"])
 
-    student_model = KMeans(n_clusters=k, random_state=10, n_init="auto").fit(student_points)
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
 
-    student_view = cv.ClusterVisualizer(student_frame)
-    
-    student_cluster_plot = student_view.plot_clusters(student_model.labels_, student_model.cluster_centers_,title=f"Generated data: seed = {seed}, k = {k}")
-    student_cluster_plot
-    return seed, k, student_points, student_frame, student_model, student_view, student_cluster_plot
+    Which attribute of a fitted `KMeans` model stores the sum of squared distances from the points to their assigned cluster centers? `practice_models` holds a fit for each k from 2 to 6. Replace `None` with the inertia of the **k = 3** model.
+    """)
+    return
+
+
+@app.cell
+def _(practice_models):
+    student_inertia_k3 = None
+    student_inertia_k3
+    return (student_inertia_k3,)
 
 
 @app.cell(hide_code=True)
@@ -536,11 +504,11 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-
-
-**Conclusion:** With seed 42, requesting fewer than four clusters combines visible blobs, while requesting five clusters subdivides a blob. Changing k changes the fitted partition without changing the observations. Changing the data-generation seed changes the observations and their arrangement, even though four generating centers are retained. The k-means initialization seed stays fixed at 10 so that these comparisons focus on the data and the requested number of clusters.
-
-Generating data around four centers does not guarantee recovery of the four generating groups. Groups may overlap, and the fitted solution also depends on initialization. Compare your plots for seeds 42, 10, and 20 and describe how clearly the groups are separated; a plausible clustering needs support from the data, rather than just matching the requested number of clusters.
+```python
+student_inertia_k3 = practice_models[3].inertia_
+student_inertia_k3
+```
+The attribute is **`inertia_`**. It stores the sum of squared distances from the points to their assigned cluster centers, called **inertia**. For this practice dataset the k = 3 value is about 138.4. Inertia falls as k grows, so a smaller value is not automatically a better solution.
     """)
         },
         expanded=False,
@@ -553,40 +521,80 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Use the datasets generated around **four centers** with seeds **42, 30, and 17**, as in the previous exercise. The code below recreates those same datasets so you can compare them together.
+    The practice dataset above is new: 200 points that we did not use earlier. Count the visible groups, then replace each `None`.
 
-    1. Fit k-means for **k = 2 through 6** on each dataset, keeping `random_state=10` and `n_init="auto"`.
-    2. Compute the silhouette score for every solution.
-    3. Plot silhouette score against k in **one graph**, with a separate line for each seed.
-    4. Select the k with the highest silhouette score for each dataset and display the selected values with their scores.
+    1. `practice_k`: the number of visible groups.
+    2. `practice_model`: fit `KMeans` on `practice_points` with `n_clusters=practice_k`, `random_state=10`, and `n_init="auto"`.
+    3. `practice_plot`: call `practice_view.plot_clusters(...)`, passing the fitted model's labels and centers. The helper draws the axes, colors, legend, and title for you.
 
-    Replace each `None` with your code. `silhouette_datasets` contains the provided data.
-
-    **Write a conclusion:** Does the silhouette score select four clusters for every dataset? Compare your selections with the cluster plots from the previous exercise. Explain why the number of generating centers and the number favored by silhouette may differ.
+    Run the cell. Then change `practice_k` to 4 and run it again. Does the extra center split a real group, or does it cut one group in two?
     """)
     return
 
 
 @app.cell
-def _(KMeans, make_blobs, pd, px, silhouette_score):
-    # Provided: recreate the same datasets used in the preceding exercise.
-    silhouette_datasets = {
-        _seed: make_blobs(
-            n_samples=300, centers=4, cluster_std=0.5, random_state=_seed
-        )[0]
-        for _seed in (42, 30, 17)
-    }
+def _(KMeans, practice_points, practice_view):
+    practice_k = None
+    practice_model = None
+    practice_plot = None
+    practice_plot
+    return practice_k, practice_model, practice_plot
 
-    student_silhouette_scores = None
-    student_silhouette_plot = None
-    student_selected_k = None
-    student_silhouette_plot
-    return silhouette_datasets, student_silhouette_scores, student_silhouette_plot, student_selected_k
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+practice_k = 3
+practice_model = KMeans(
+    n_clusters=practice_k, random_state=10, n_init="auto"
+).fit(practice_points)
+practice_plot = practice_view.plot_clusters(
+    practice_model.labels_,
+    practice_model.cluster_centers_,
+    title="Practice data, k = 3",
+)
+practice_plot
+```
+There are three visible groups, and the fitted centers sit in the middle of them. With `practice_k = 4` one group is split in two: the extra center does not describe a new group that we can see in the scatter plot, so a lower inertia has not made the solution more useful. `plot_clusters` supplies both axes, the colors, the legend, and the title, so the plotting code stays at one line.
+    """)
+        },
+        expanded=False,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    For the same practice dataset, replace each `None` to score every value of k from 2 to 6. The fits are already stored in `practice_models`.
+
+    1. `practice_scores`: a `pd.Series` holding `silhouette_score(practice_points, <labels>)` for each k, indexed by k. A dictionary comprehension over `practice_models` is enough.
+    2. `practice_best_k`: the k with the highest score, as an `int`.
+
+    The bar chart below is drawn for you. Does the best-scoring k match the number of groups you counted in the previous exercise?
+    """)
+    return
 
 
 @app.cell
-def _(student_selected_k):
-    student_selected_k
+def _(pd, practice_models, practice_points, silhouette_score):
+    practice_scores = None
+    practice_best_k = None
+    (practice_scores, practice_best_k)
+    return practice_best_k, practice_scores
+
+
+@app.cell(hide_code=True)
+def _(pd, practice_models, practice_view):
+    practice_view.plot_silhouette(
+        pd.DataFrame({f"k={_k}": _m.labels_ for _k, _m in practice_models.items()}),
+        title="Silhouette scores: practice dataset",
+    )
     return
 
 
@@ -596,52 +604,16 @@ def _(mo):
         {
             "Show answers": mo.md(r"""
 ```python
-student_silhouette_scores = pd.DataFrame([
+practice_scores = pd.Series(
     {
-        "Seed": _seed,
-        "k": _k,
-        "Silhouette": silhouette_score(
-            _points,
-            KMeans(
-                n_clusters=_k, random_state=10, n_init="auto"
-            ).fit_predict(_points),
-        ),
+        _k: silhouette_score(practice_points, _model.labels_)
+        for _k, _model in practice_models.items()
     }
-    for _seed, _points in silhouette_datasets.items()
-    for _k in range(2, 7)
-])
-
-student_silhouette_plot = px.line(
-    student_silhouette_scores.assign(
-        Seed=student_silhouette_scores["Seed"].astype(str)
-    ),
-    x="k", y="Silhouette", color="Seed", markers=True,
-    title="Silhouette scores for the three generated datasets",
-    labels={"k": "Number of clusters (k)", "Silhouette": "Silhouette score"},
-    color_discrete_sequence=px.colors.qualitative.G10,
 )
-student_silhouette_plot.update_layout(
-    template="plotly_white", width=800, height=450,
-    legend=dict(orientation="h", x=0.5, xanchor="center", y=1.15),
-)
-student_silhouette_plot.update_xaxes(dtick=1)
-
-student_selected_k = student_silhouette_scores.loc[
-    student_silhouette_scores.groupby("Seed", sort=False)["Silhouette"].idxmax()
-].set_index("Seed").round(4)
+practice_best_k = int(practice_scores.idxmax())
+(practice_scores.round(4), practice_best_k)
 ```
-
-The plot and selection table are displayed by the exercise cells. Select the highest score before rounding the displayed results.
-
-| Seed | Selected k | Silhouette score |
-| :--- | ---: | ---: |
-| 42 | 4 | 0.8966 |
-| 30 | 3 | 0.7723 |
-| 17 | 3 | 0.8143 |
-
-**Conclusion:** Silhouette favors four clusters for seed 42, but three for seeds 30 and 17. Generating observations around four centers does not guarantee that four clusters will maximize silhouette: the score evaluates within-cluster closeness relative to separation from the nearest other cluster, rather than recovering the generating centers.
-
-Compare these results with the earlier cluster plots. When two generating groups are close, combining them can improve the average silhouette. For seed 17, the scores for three and four clusters are particularly close (0.8143 and 0.8125), so the numerical maximum alone provides little basis for strongly preferring one solution. Justify your selection using both the score curve and the visible separation of the groups.
+The scores are 0.7802 (k = 2), **0.8725 (k = 3)**, 0.6965 (k = 4), 0.4944 (k = 5), and 0.5105 (k = 6), so `practice_best_k` is 3. That matches the three visible groups and the `practice_k` you chose in the previous exercise, so here the score and your eye agree. They need not agree: on data generated around four centers earlier, silhouette preferred three clusters, because combining two close groups can raise the average silhouette. A score supports a choice; it does not overrule what the plot shows.
     """)
         },
         expanded=False,
