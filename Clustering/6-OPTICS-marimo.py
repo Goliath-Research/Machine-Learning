@@ -438,7 +438,7 @@ def _(cluster_census, cluster_optics_dbscan, pd, wide_optics):
 
 @app.cell
 def _(wide_optics, wide_view):
-    wide_view.plot_optics_dbscan(wide_optics, eps=0.5)
+    wide_view.plot_optics_dbscan(wide_optics, eps=0.5, height=230)
     return
 
 
@@ -454,25 +454,25 @@ def _(mo):
 
 @app.cell
 def _(wide_optics, wide_view):
-    wide_view.plot_optics_dbscan(wide_optics, eps=1)
+    wide_view.plot_optics_dbscan(wide_optics, eps=1, height=230)
     return
 
 
 @app.cell
 def _(wide_optics, wide_view):
-    wide_view.plot_optics_dbscan(wide_optics, eps=3)
+    wide_view.plot_optics_dbscan(wide_optics, eps=3, height=230)
     return
 
 
 @app.cell
 def _(wide_optics, wide_view):
-    wide_view.plot_optics_dbscan(wide_optics, eps=4)
+    wide_view.plot_optics_dbscan(wide_optics, eps=4, height=230)
     return
 
 
 @app.cell
 def _(wide_optics, wide_view):
-    wide_view.plot_optics_dbscan(wide_optics, eps=5)
+    wide_view.plot_optics_dbscan(wide_optics, eps=5, height=230)
     return
 
 
@@ -675,31 +675,31 @@ def _(mo, four_groups, four_noise):
 
 @app.cell
 def _(four_optics, four_view):
-    four_view.plot_optics_dbscan(four_optics, eps=0.5)
+    four_view.plot_optics_dbscan(four_optics, eps=0.5, height=230)
     return
 
 
 @app.cell
 def _(four_optics, four_view):
-    four_view.plot_optics_dbscan(four_optics, eps=1)
+    four_view.plot_optics_dbscan(four_optics, eps=1, height=230)
     return
 
 
 @app.cell
 def _(four_optics, four_view):
-    four_view.plot_optics_dbscan(four_optics, eps=1.5)
+    four_view.plot_optics_dbscan(four_optics, eps=1.5, height=230)
     return
 
 
 @app.cell
 def _(four_optics, four_view):
-    four_view.plot_optics_dbscan(four_optics, eps=2)
+    four_view.plot_optics_dbscan(four_optics, eps=2, height=230)
     return
 
 
 @app.cell
 def _(four_optics, four_view):
-    four_view.plot_optics_dbscan(four_optics, eps=4)
+    four_view.plot_optics_dbscan(four_optics, eps=4, height=230)
     return
 
 

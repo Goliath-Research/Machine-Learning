@@ -460,12 +460,19 @@ class ClusterVisualizer:
         fig.update_traces(marker=dict(size=8, opacity=0.8))
         return fig
 
-    def plot_optics_dbscan(self, optics, eps=0.05):
+    def plot_optics_dbscan(self, optics, eps=0.05, height=350):
         '''
         This function plots the results of the OPTICS clustering algorithm and its 
         DBSCAN-style clustering for a given epsilon (eps). It generates two plots: 
         a scatter plot showing the clusters in the dataset, and a reachability plot 
         indicating the reachability distances of each point, colored by cluster.
+
+        optics: a fitted sklearn OPTICS instance, which supplies reachability_,
+            core_distances_ and ordering_.
+        eps: the threshold passed to cluster_optics_dbscan.
+        height: pixel height of each of the two figures. The default of 350 matches
+            the original behaviour. Lower it in notebooks that stack several of
+            these cells, where two figures at full height cause a scrollbar.
         '''
         labels = cluster_optics_dbscan(
             reachability=optics.reachability_,
@@ -493,7 +500,7 @@ class ClusterVisualizer:
         fig.update_layout(
             coloraxis_showscale=False,
             width=self.width,
-            height=350,
+            height=height,
             title=f'OPTICS Clustering (eps = {eps:.2f})',
             legend_title_text='Cluster'
         )
@@ -519,7 +526,7 @@ class ClusterVisualizer:
             )
         fig.update_layout(
             width=self.width,
-            height=350,
+            height=height,
             title=f'Reachability Plot (eps = {eps:.2f})',
             legend_title_text='Cluster'
         )
