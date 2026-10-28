@@ -492,7 +492,7 @@ class ClusterVisualizer:
 
         fig = make_subplots(
             rows=1, cols=2,
-            column_widths=[0.58, 0.58],
+            column_widths=[0.7, 0.7],
             subplot_titles=(
                 f'Clusters (eps = {eps:.2f})',
                 f'Reachability (eps = {eps:.2f})',
