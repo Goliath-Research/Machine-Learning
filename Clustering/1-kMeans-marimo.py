@@ -548,15 +548,12 @@ def _(mo):
             "Show answers": mo.md(r"""
 ```python
 practice_k = 3
-practice_model = KMeans(
-    n_clusters=practice_k, random_state=10, n_init="auto"
-).fit(practice_points)
+practice_model = KMeans(n_clusters=practice_k, random_state=10, n_init="auto").fit(practice_points)
 practice_plot = practice_view.plot_clusters(
     practice_model.labels_,
     practice_model.cluster_centers_,
     title="Practice data, k = 3",
 )
-practice_plot
 ```
 There are three visible groups, and the fitted centers sit in the middle of them. With `practice_k = 4` one group is split in two: the extra center does not describe a new group that we can see in the scatter plot, so a lower inertia has not made the solution more useful. `plot_clusters` supplies both axes, the colors, the legend, and the title, so the plotting code stays at one line.
     """)
@@ -585,7 +582,8 @@ def _(mo):
 def _(pd, practice_models, practice_points, silhouette_score):
     practice_scores = None
     practice_best_k = None
-    (practice_scores, practice_best_k)
+    print(practice_scores)
+    print("Best k: ", practice_best_k)
     return practice_best_k, practice_scores
 
 
@@ -604,14 +602,8 @@ def _(mo):
         {
             "Show answers": mo.md(r"""
 ```python
-practice_scores = pd.Series(
-    {
-        _k: silhouette_score(practice_points, _model.labels_)
-        for _k, _model in practice_models.items()
-    }
-)
+practice_scores = pd.Series({_k: silhouette_score(practice_points, _model.labels_) for _k, _model in practice_models.items()})
 practice_best_k = int(practice_scores.idxmax())
-(practice_scores.round(4), practice_best_k)
 ```
 The scores are 0.7802 (k = 2), **0.8725 (k = 3)**, 0.6965 (k = 4), 0.4944 (k = 5), and 0.5105 (k = 6), so `practice_best_k` is 3. That matches the three visible groups and the `practice_k` you chose in the previous exercise, so here the score and your eye agree. They need not agree: on data generated around four centers earlier, silhouette preferred three clusters, because combining two close groups can raise the average silhouette. A score supports a choice; it does not overrule what the plot shows.
     """)
@@ -655,7 +647,7 @@ def _(Path, pd, px):
 
 @app.cell
 def _(arrests):
-    arrests.head().round(4)
+    mo.Html(arrests.head().round(4).to_html())
     return
 
 
@@ -708,7 +700,8 @@ def _(mo):
 def _(arrests_z):
     student_standardized_means = None
     student_standardized_stds = None
-    (student_standardized_means, student_standardized_stds)
+    print("Means:\n", student_standardized_means)
+    print("\nStds:\n",student_standardized_stds)    
     return (student_standardized_means, student_standardized_stds)
 
 
@@ -718,7 +711,6 @@ def _(mo):
 ```python
 student_standardized_means = arrests_z.mean().round(4)
 student_standardized_stds = arrests_z.std(ddof=0).round(4)
-(student_standardized_means, student_standardized_stds)
 ```
 The means are approximately 0 and the standard deviations are 1. `StandardScaler` uses the population standard deviation (`ddof=0`); pandas defaults to the sample version (`ddof=1`).
 """)}, expanded=False)
@@ -871,7 +863,7 @@ def _(arrest_columns, arrest_models, arrests):
         arrests[arrest_columns].assign(Cluster=arrest_models[2].labels_)
         .groupby("Cluster").mean()
     )
-    arrest_cluster_means.round(4)
+    mo.Html(arrest_cluster_means.round(4).to_html())
     return (arrest_cluster_means,)
 
 
@@ -888,7 +880,7 @@ def _(mo):
 @app.cell
 def _(arrest_cluster_means):
     student_high_assault_cluster = None
-    student_high_assault_cluster
+    print("High assault cluster: ", student_high_assault_cluster)
     return (student_high_assault_cluster,)
 
 
@@ -897,7 +889,6 @@ def _(mo):
     mo.accordion({"Show answers": mo.md(r"""
 ```python
 student_high_assault_cluster = int(arrest_cluster_means["Assault"].idxmax())
-student_high_assault_cluster
 ```
 Read that row of the table to describe its other variables. Cluster labels are arbitrary identifiers and may swap between fitted solutions. The label itself has no substantive meaning.
 """)}, expanded=False)
