@@ -5,6 +5,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from plotly.subplots import make_subplots
+
 from sklearn.cluster import cluster_optics_dbscan
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
 from sklearn.metrics import adjusted_rand_score, adjusted_mutual_info_score
@@ -460,19 +462,17 @@ class ClusterVisualizer:
         fig.update_traces(marker=dict(size=8, opacity=0.8))
         return fig
 
-    def plot_optics_dbscan(self, optics, eps=0.05, height=350):
+    def plot_optics_dbscan(self, optics, eps=0.05):
         '''
         This function plots the results of the OPTICS clustering algorithm and its 
         DBSCAN-style clustering for a given epsilon (eps). It generates two plots: 
         a scatter plot showing the clusters in the dataset, and a reachability plot 
         indicating the reachability distances of each point, colored by cluster.
 
-        optics: a fitted sklearn OPTICS instance, which supplies reachability_,
-            core_distances_ and ordering_.
-        eps: the threshold passed to cluster_optics_dbscan.
-        height: pixel height of each of the two figures. The default of 350 matches
-            the original behaviour. Lower it in notebooks that stack several of
-            these cells, where two figures at full height cause a scrollbar.
+        Both plots are placed side by side in a single figure, and that figure is
+        returned. Returning the figure lets the notebook display it as normal cell
+        output. Calling fig.show() instead would send it to the console panel,
+        which is a fixed-height scrollable area.
         '''
         labels = cluster_optics_dbscan(
             reachability=optics.reachability_,
@@ -490,28 +490,32 @@ class ClusterVisualizer:
                   for cluster, color in zip(unique_clusters, px.colors.qualitative.G10)]
         color_map = dict(zip(unique_clusters, colors))
 
-        # Scatter plot
-        fig = px.scatter(
-            x=self.data.iloc[:, 0],
-            y=self.data.iloc[:, 1],
-            color=labels,
-            color_discrete_map=color_map
+        fig = make_subplots(
+            rows=1, cols=2,
+            column_widths=[0.42, 0.58],
+            subplot_titles=(
+                f'Clusters (eps = {eps:.2f})',
+                f'Reachability (eps = {eps:.2f})',
+            ),
+            horizontal_spacing=0.09,
         )
-        fig.update_layout(
-            coloraxis_showscale=False,
-            width=self.width,
-            height=height,
-            title=f'OPTICS Clustering (eps = {eps:.2f})',
-            legend_title_text='Cluster'
-        )
-        fig.update_traces(marker=dict(size=8, opacity=0.8))
-        fig.show()
 
-        # Reachability plot
+        # Scatter plot of the clusters
+        for cluster in unique_clusters:
+            in_cluster = labels == cluster
+            fig.add_trace(
+                go.Scatter(
+                    x=self.data.iloc[:, 0][in_cluster],
+                    y=self.data.iloc[:, 1][in_cluster],
+                    mode='markers',
+                    marker=dict(color=color_map[cluster], size=7, opacity=0.8),
+                    name=cluster
+                ),
+                row=1, col=1
+            )
+
+        # Reachability plot, in visit order
         space = np.arange(self.data.shape[0])
-        fig = go.Figure()
-
-        # Create a line for each cluster
         for cluster in unique_clusters:
             cluster_indices = np.where(labels[optics.ordering_] == cluster)[0]
             fig.add_trace(
@@ -519,17 +523,27 @@ class ClusterVisualizer:
                     x=space[cluster_indices],
                     y=optics.reachability_[optics.ordering_][cluster_indices],
                     mode='markers',
-                    marker_size=5,
-                    marker_color=color_map[cluster],
-                    name=cluster
-                )
+                    marker=dict(color=color_map[cluster], size=4),
+                    name=cluster,
+                    showlegend=False
+                ),
+                row=1, col=2
             )
+
+        fig.update_xaxes(title_text=self.data.columns[0], row=1, col=1)
+        fig.update_yaxes(title_text=self.data.columns[1], row=1, col=1)
+        fig.update_xaxes(title_text='Visit order', row=1, col=2)
+        fig.update_yaxes(title_text='Reachability', row=1, col=2)
+
+        # The cut height, drawn only across the reachability panel.
+        fig.add_hline(
+            y=eps, line_dash="dash", line_color="black", row=1, col=2
+        )
+
         fig.update_layout(
             width=self.width,
-            height=height,
-            title=f'Reachability Plot (eps = {eps:.2f})',
-            legend_title_text='Cluster'
+            height=self.height,
+            legend_title_text='Cluster',
+            margin=dict(t=60, b=45, l=50, r=20),
         )
-        fig.update_yaxes(title_text='Reachability')
-        fig.add_hline(y=eps, line_dash="dash", line_color="black")
-        fig.show()
+        return fig
