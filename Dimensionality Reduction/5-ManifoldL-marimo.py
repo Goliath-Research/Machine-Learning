@@ -2,11 +2,10 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo",
-#     "matplotlib",
 #     "numpy",
 #     "pandas",
-#     "scikit-learn",
-#     "seaborn",
+#     "plotly",
+#     "scikit-learn>=1.2",
 # ]
 # ///
 
@@ -17,27 +16,60 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
-    import marimo as mo
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
-    import seaborn as sns
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
 
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-    return mo, np, pd, plt, sns
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "plotly": "plotly",
+        "sklearn": "scikit-learn>=1.2",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            # Browser Python uses micropip; it cannot launch subprocesses.
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    # The imports below wait until package installation has completed.
+    packages_ready = True
+    return (packages_ready,)
 
 
 @app.cell
-def _():
+def _(packages_ready):
+    import sys
     from pathlib import Path
 
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+    import marimo as mo
+    import numpy as np
+    import pandas as pd
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    import PlotBuilder as pb
+    from plotly.subplots import make_subplots
     from sklearn.datasets import load_digits
     from sklearn.decomposition import PCA
     from sklearn.manifold import Isomap, LocallyLinearEmbedding, TSNE
     from sklearn.model_selection import cross_val_score
     from sklearn.neighbors import KNeighborsClassifier
+
+    pio.templates.default = "plotly_white"
+    px.defaults.color_discrete_sequence = px.colors.qualitative.G10
+    builder = pb.PlotBuilder(width=780, height=380)
 
     return (
         Isomap,
@@ -46,44 +78,112 @@ def _():
         PCA,
         Path,
         TSNE,
+        builder,
         cross_val_score,
+        go,
         load_digits,
+        make_subplots,
+        mo,
+        np,
+        pd,
+        px,
     )
 
 
 @app.cell
-def _(np, pd, plt, sns):
+def _(builder, go, make_subplots, np, pd):
     def along_word(position, embedded):
+        """Absolute correlation between the word order and an embedding axis.
+
+        Parameters
+        ----------
+        position : array-like
+            The original row order, which is the word order.
+        embedded : array-like
+            Two coordinates per point.
+
+        Returns
+        -------
+        float
+            Absolute correlation with the longest axis, so a flipped axis is not
+            penalised.
+        """
         embedded = np.asarray(embedded)
         axis = embedded[:, int(np.argmax(np.var(embedded, axis=0)))]
         return abs(float(np.corrcoef(position, axis)[0, 1]))
 
-    def draw_letters(axes, frame, title):
-        sns.scatterplot(
-            data=frame,
-            x="x0",
-            y="x1",
-            hue="labels",
-            hue_order=list("GOLIATH"),
-            s=12,
-            ax=axes,
-            linewidth=0,
-        )
-        axes.set_title(title)
-        axes.set_aspect("equal", adjustable="datalim")
-        axes.legend(fontsize=7, markerscale=0.6)
+    def letters_panel(frames, captions, title="", rows=1, cols=None, width=1150):
+        """Place several letter embeddings side by side for comparison.
 
-    def plot_digits(images):
-        figure, axes = plt.subplots(
-            4, 10, figsize=(8, 3.4), gridspec_kw={"hspace": 0.15, "wspace": 0.05}
+        Parameters
+        ----------
+        frames : list of pandas.DataFrame
+            One layout per panel, each with `x0`, `x1`, and `labels`.
+        captions : list of str
+            Panel titles, in reading order.
+        title : str, default ""
+            Figure title.
+        rows, cols : int
+            Grid shape.
+        width : int, default 1150
+            Figure width in pixels.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            The assembled figure, sharing one legend.
+        """
+        cols = cols or len(frames)
+        figure = make_subplots(
+            rows=rows,
+            cols=cols,
+            subplot_titles=captions,
+            horizontal_spacing=0.04,
+            vertical_spacing=0.14,
         )
-        for ax, image in zip(np.ravel(axes), images[:40]):
-            ax.imshow(np.asarray(image).reshape(8, 8), cmap="binary", interpolation="nearest", vmin=0, vmax=16)
-            ax.set_xticks([])
-            ax.set_yticks([])
+        for index, frame in enumerate(frames):
+            row = index // cols + 1
+            col = index % cols + 1
+            for letter in "GOLIATH":
+                mask = frame["labels"].to_numpy() == letter
+                figure.add_trace(
+                    go.Scatter(
+                        x=frame["x0"].to_numpy()[mask],
+                        y=frame["x1"].to_numpy()[mask],
+                        mode="markers",
+                        name=letter,
+                        legendgroup=letter,
+                        showlegend=index == 0,
+                        marker=dict(size=4, opacity=0.8),
+                    ),
+                    row=row,
+                    col=col,
+                )
+        figure.update_layout(
+            width=width,
+            height=340 if rows == 1 else 720,
+            title=title,
+            margin=dict(t=70, b=35, l=45, r=20),
+            legend=dict(orientation="h", itemsizing="constant"),
+        )
         return figure
 
-    return along_word, draw_letters, plot_digits
+    def plot_digits(images):
+        """Draw the first 40 digit images as a 4 by 10 Plotly grid.
+
+        Parameters
+        ----------
+        images : array-like
+            One row of 64 pixel values per image.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            The grid, with axes hidden.
+        """
+        return builder.digit_grid(images, 4, 10, "The first 40 digits")
+
+    return along_word, letters_panel, plot_digits
 
 
 @app.cell(hide_code=True)
@@ -105,34 +205,42 @@ def _(mo):
 
     ## Datasets Used
 
-    - **S-shaped GOLIATH.** `GOLIATH_S_curve.csv`, the cloud the notebook saved. `Goliath.png`, which was sampled to build it, is not in this folder.
+    - **S-shaped GOLIATH.** `GOLIATH_S_curve.csv`, the saved cloud: 1,000 points sampled from the rendered word and wrapped onto an S-shaped surface. `Goliath.png`, the image those points were sampled from, is also in this folder. The cloud is read from the CSV rather than regenerated, so the row order that the word-order score depends on is exactly the saved order.
     - **Digits.** 1,797 images, 64 pixels each, from `load_digits`.
     """)
     return
 
 
 @app.cell
-def _(Path, np, pd, plt):
+def _(Path, np, pd, px):
     curve_path = Path(__file__).with_name("GOLIATH_S_curve.csv")
     curve = pd.read_csv(curve_path)
     word_position = np.arange(len(curve))
-    print(f"{len(curve)} points from {curve_path.name}")
-    print(curve.labels.value_counts().reindex(list("GOLIATH")).to_string())
-    _figure = plt.figure(figsize=(6, 4.5))
-    _axes = _figure.add_subplot(111, projection="3d")
-    for _letter in "GOLIATH":
-        _rows = curve.labels.to_numpy() == _letter
-        _axes.scatter(curve.loc[_rows, "x0"], curve.loc[_rows, "x1"], curve.loc[_rows, "x2"], s=8, label=_letter)
-    _axes.set_title("S-shaped GOLIATH")
-    _axes.legend(fontsize=7, markerscale=0.6)
-    return _figure
+    letter_counts = curve.labels.value_counts().reindex(list("GOLIATH"))
+    _figure = px.scatter_3d(
+        curve,
+        x="x0",
+        y="x1",
+        z="x2",
+        color="labels",
+        title="The S-shaped GOLIATH cloud, in three dimensions",
+        category_orders={"labels": list("GOLIATH")},
+    )
+    _figure.update_traces(marker=dict(size=2, opacity=0.85))
+    _figure.update_layout(
+        width=760, height=520, margin=dict(t=55, b=20, l=20, r=20),
+        legend=dict(itemsizing="constant"),
+    )
+    _figure
+    return curve, letter_counts, word_position
 
 
 @app.cell
-def _(LocallyLinearEmbedding, along_word, curve, draw_letters, pd, plt, word_position):
+def _(LocallyLinearEmbedding, along_word, curve, letters_panel, pd, word_position):
     lle_agreement = {}
-    _figure, _axes = plt.subplots(1, 3, figsize=(11, 3.5))
-    for _ax, _neighbors in zip(_axes, (82, 97, 101)):
+    _layouts = []
+    _captions = []
+    for _neighbors in (82, 97, 101):
         _embedded = LocallyLinearEmbedding(
             n_neighbors=_neighbors,
             n_components=2,
@@ -141,53 +249,64 @@ def _(LocallyLinearEmbedding, along_word, curve, draw_letters, pd, plt, word_pos
             eigen_solver="dense",
         ).fit_transform(curve[["x0", "x1", "x2"]])
         lle_agreement[_neighbors] = along_word(word_position, _embedded)
-        _layout = pd.DataFrame({"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels})
-        draw_letters(_ax, _layout, f"LLE, {_neighbors} neighbors")
-        print(f"LLE {_neighbors} neighbors: along-word correlation {lle_agreement[_neighbors]:.3f}")
-    _figure.tight_layout()
-    return _figure
-
-
-@app.cell
-def _(Isomap, along_word, curve, draw_letters, pd, plt, word_position):
-    isomap_agreement = {}
-    _figure, _axes = plt.subplots(1, 2, figsize=(8, 3.6))
-    for _ax, _neighbors, _solver in zip(_axes, (62, 100), ("dense", "auto")):
-        _embedded = Isomap(n_neighbors=_neighbors, n_components=2, eigen_solver=_solver).fit_transform(
-            curve[["x0", "x1", "x2"]]
+        _layouts.append(
+            pd.DataFrame(
+                {"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels}
+            )
         )
-        isomap_agreement[_neighbors] = along_word(word_position, _embedded)
-        _layout = pd.DataFrame({"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels})
-        draw_letters(_ax, _layout, f"Isomap, {_neighbors} neighbors")
-        print(f"Isomap {_neighbors} neighbors: along-word correlation {isomap_agreement[_neighbors]:.3f}")
-    _figure.tight_layout()
-    return _figure
+        _captions.append(f"LLE, {_neighbors} neighbours")
+    letters_panel(
+        _layouts, _captions, title="Locally linear embedding at three neighbourhood sizes"
+    )
+    return (lle_agreement,)
 
 
 @app.cell
-def _(TSNE, along_word, curve, draw_letters, pd, plt, word_position):
+def _(Isomap, along_word, curve, letters_panel, pd, word_position):
+    isomap_agreement = {}
+    _layouts = []
+    _captions = []
+    for _neighbors, _solver in ((62, "dense"), (100, "auto")):
+        _embedded = Isomap(
+            n_neighbors=_neighbors, n_components=2, eigen_solver=_solver
+        ).fit_transform(curve[["x0", "x1", "x2"]])
+        isomap_agreement[_neighbors] = along_word(word_position, _embedded)
+        _layouts.append(
+            pd.DataFrame(
+                {"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels}
+            )
+        )
+        _captions.append(f"Isomap, {_neighbors} neighbours")
+    letters_panel(_layouts, _captions, title="Isomap at two neighbourhood sizes", width=900)
+    return (isomap_agreement,)
+
+
+@app.cell
+def _(TSNE, along_word, curve, letters_panel, pd, word_position):
     tsne_agreement = {}
-    _settings = (
-        (30, "auto"),
-        (5, 50),
-        (50, "auto"),
-        (120, 100),
-    )
-    _figure, _axes = plt.subplots(2, 2, figsize=(8, 7))
-    for _ax, (_perplexity, _learning) in zip(_axes.ravel(), _settings):
+    _layouts = []
+    _captions = []
+    for _perplexity, _learning in ((30, "auto"), (5, 50), (50, "auto"), (120, 100)):
         _model = TSNE(
-            random_state=20,
-            init="pca",
-            perplexity=_perplexity,
-            learning_rate=_learning,
+            random_state=20, init="pca", perplexity=_perplexity, learning_rate=_learning
         )
         _embedded = _model.fit_transform(curve[["x0", "x1", "x2"]])
         tsne_agreement[_perplexity] = along_word(word_position, _embedded)
-        _layout = pd.DataFrame({"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels})
-        draw_letters(_ax, _layout, f"t-SNE, perplexity {_perplexity}")
-        print(f"Perplexity {_perplexity}: along-word correlation {tsne_agreement[_perplexity]:.3f}")
-    _figure.tight_layout()
-    return _figure
+        _layouts.append(
+            pd.DataFrame(
+                {"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels}
+            )
+        )
+        _captions.append(f"t-SNE, perplexity {_perplexity}")
+    letters_panel(
+        _layouts,
+        _captions,
+        title="t-SNE at four perplexities",
+        rows=2,
+        cols=2,
+        width=900,
+    )
+    return (tsne_agreement,)
 
 
 @app.cell(hide_code=True)
@@ -205,35 +324,50 @@ def _(
     KNeighborsClassifier,
     PCA,
     TSNE,
+    builder,
     cross_val_score,
     load_digits,
     pd,
     plot_digits,
-    plt,
-    sns,
 ):
     digits = load_digits()
     digit_pca = PCA(n_components=2).fit_transform(digits.data)
     digit_tsne = TSNE(random_state=42, init="pca").fit_transform(digits.data)
     _checker = KNeighborsClassifier(n_neighbors=5)
-    pca_neighbor_score = float(cross_val_score(_checker, digit_pca, digits.target, cv=5, n_jobs=1).mean())
-    tsne_neighbor_score = float(cross_val_score(_checker, digit_tsne, digits.target, cv=5, n_jobs=1).mean())
-    print(f"5-neighbor accuracy on the PCA plane: {pca_neighbor_score:.3f}")
-    print(f"5-neighbor accuracy on the t-SNE plane: {tsne_neighbor_score:.3f}")
-    _grids = plot_digits(digits.data)
-    _grids.suptitle("First 40 digits")
-    _figure, _axes = plt.subplots(1, 2, figsize=(10, 4.4))
-    for _ax, _embedded, _title in (
-        (_axes[0], digit_pca, "PCA"),
-        (_axes[1], digit_tsne, "t-SNE"),
-    ):
-        _frame = pd.DataFrame(
-            {"x": _embedded[:, 0], "y": _embedded[:, 1], "digit": digits.target.astype(str)}
-        )
-        sns.scatterplot(data=_frame, x="x", y="y", hue="digit", s=12, ax=_ax, linewidth=0)
-        _ax.set_title(_title)
-        _ax.legend(title="", fontsize=6, markerscale=0.6, ncol=2)
-    return _grids, _figure
+    pca_neighbor_score = float(
+        cross_val_score(_checker, digit_pca, digits.target, cv=5, n_jobs=1).mean()
+    )
+    tsne_neighbor_score = float(
+        cross_val_score(_checker, digit_tsne, digits.target, cv=5, n_jobs=1).mean()
+    )
+    plot_digits(digits.data)
+    return digit_pca, digit_tsne, digits, pca_neighbor_score, tsne_neighbor_score
+
+
+@app.cell
+def _(builder, digit_pca, digit_tsne, digits, pd):
+    _labels = digits.target.astype(str)
+    _left = pd.DataFrame(
+        {"c1": digit_pca[:, 0], "c2": digit_pca[:, 1], "digit": _labels}
+    )
+    _right = pd.DataFrame(
+        {"c1": digit_tsne[:, 0], "c2": digit_tsne[:, 1], "digit": _labels}
+    )
+    builder.scatter_by_group(
+        _left, "c1", "c2", "digit", "Digits in the plane of two principal components", size=4, equal=False
+    )
+    return
+
+
+@app.cell
+def _(builder, digit_tsne, digits, pd):
+    _right = pd.DataFrame(
+        {"c1": digit_tsne[:, 0], "c2": digit_tsne[:, 1], "digit": digits.target.astype(str)}
+    )
+    builder.scatter_by_group(
+        _right, "c1", "c2", "digit", "The same digits placed by t-SNE", size=4, equal=False
+    )
+    return
 
 
 @app.cell(hide_code=True)

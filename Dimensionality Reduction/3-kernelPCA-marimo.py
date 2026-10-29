@@ -2,11 +2,10 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo",
-#     "matplotlib",
 #     "numpy",
 #     "pandas",
-#     "scikit-learn",
-#     "seaborn",
+#     "plotly",
+#     "scikit-learn>=1.2",
 # ]
 # ///
 
@@ -17,47 +16,161 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "plotly": "plotly",
+        "sklearn": "scikit-learn>=1.2",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            # Browser Python uses micropip; it cannot launch subprocesses.
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    # The imports below wait until package installation has completed.
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
     import marimo as mo
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    import PlotBuilder as pb
+    from plotly.subplots import make_subplots
     from sklearn.datasets import make_blobs, make_circles, make_moons
-    from sklearn.decomposition import PCA, KernelPCA
+    from sklearn.decomposition import KernelPCA, PCA
 
-    return KernelPCA, PCA, make_blobs, make_circles, make_moons
+    pio.templates.default = "plotly_white"
+    px.defaults.color_discrete_sequence = px.colors.qualitative.G10
+    builder = pb.PlotBuilder(width=1150, height=330)
+
+    return (
+        KernelPCA,
+        PCA,
+        builder,
+        go,
+        make_blobs,
+        make_circles,
+        make_moons,
+        make_subplots,
+        mo,
+        np,
+        pd,
+        px,
+    )
 
 
 @app.cell
-def _(np, pd, sns):
+def _(go, make_subplots, np, pd):
     def ranges_overlap(values, labels):
+        """True when the two groups' ranges on one axis overlap.
+
+        Used as a blunt test of separation: if the ranges overlap, at least one
+        value from each group interleaves, so that single axis cannot separate
+        them.
+
+        Parameters
+        ----------
+        values : array-like
+            One-dimensional scores, such as the first component.
+        labels : array-like
+            Group label per value, with two distinct values.
+
+        Returns
+        -------
+        bool
+            Whether the two ranges share any interval.
+        """
         values = np.asarray(values)
         labels = np.asarray(labels)
         left = values[labels == 0]
         right = values[labels == 1]
         return bool(left.max() >= right.min() and right.max() >= left.min())
 
-    def draw_groups(axes, x, y, labels, title, equal=True):
-        frame = pd.DataFrame(
-            {"x": np.asarray(x), "y": np.asarray(y), "group": np.asarray(labels).astype(str)}
-        )
-        sns.scatterplot(
-            data=frame, x="x", y="y", hue="group", hue_order=["0", "1"], s=22, ax=axes, linewidth=0, legend=False
-        )
-        axes.set_title(title)
-        if equal:
-            axes.set_aspect("equal", adjustable="datalim")
+    def panel_of_scatters(specs, title="", height=330):
+        """Draw several two-dimensional scatters side by side in one figure.
 
-    return draw_groups, ranges_overlap
+        Each spec is one panel: the two coordinate arrays, the group labels, and
+        a caption. Panels share a legend, since the group colours are the same
+        throughout.
+
+        Parameters
+        ----------
+        specs : list of dict
+            Each entry has `x`, `y`, `labels`, and `caption`. Add `flat=True` to
+            draw the panel as a one-dimensional strip, which is how a single
+            component is shown.
+        title : str, default ""
+            Figure title.
+        height : int, default 330
+            Figure height in pixels.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            The assembled figure.
+        """
+        count = len(specs)
+        figure = make_subplots(
+            rows=1,
+            cols=count,
+            subplot_titles=[spec["caption"] for spec in specs],
+            horizontal_spacing=0.05,
+        )
+        for index, spec in enumerate(specs, start=1):
+            x = np.asarray(spec["x"])
+            labels = np.asarray(spec["labels"]).astype(str)
+            y = np.zeros(len(x)) if spec.get("flat") else np.asarray(spec["y"])
+            for group in ("0", "1"):
+                mask = labels == group
+                figure.add_trace(
+                    go.Scatter(
+                        x=x[mask],
+                        y=y[mask],
+                        mode="markers",
+                        name=f"group {group}",
+                        legendgroup=group,
+                        showlegend=index == 1,
+                        marker=dict(size=6, opacity=0.75),
+                    ),
+                    row=1,
+                    col=index,
+                )
+            if not spec.get("flat"):
+                figure.update_xaxes(scaleanchor=f"y{index if index > 1 else ''}", row=1, col=index)
+        figure.update_layout(
+            width=1150,
+            height=height,
+            title=title,
+            margin=dict(t=70, b=40, l=50, r=20),
+        )
+        return figure
+
+    return panel_of_scatters, ranges_overlap
 
 
 @app.cell(hide_code=True)
@@ -88,80 +201,119 @@ def _(mo):
 
 
 @app.cell
-def _(PCA, draw_groups, make_blobs, np, plt, ranges_overlap):
-    blobs, blob_labels = make_blobs(n_samples=200, centers=2, cluster_std=0.5, random_state=0)
+def _(PCA, make_blobs, panel_of_scatters, ranges_overlap):
+    blobs, blob_labels = make_blobs(
+        n_samples=200, centers=2, cluster_std=0.5, random_state=0
+    )
     blob_pca = PCA(n_components=2).fit(blobs)
     blob_plane = blob_pca.transform(blobs)
     blob_overlap = ranges_overlap(blob_plane[:, 0], blob_labels)
-    print(f"Explained variance: {blob_pca.explained_variance_.round(3)}")
-    print(f"Explained variance ratio: {blob_pca.explained_variance_ratio_.round(3)}")
-    print(f"First linear component overlaps: {blob_overlap}")
-    _figure, _axes = plt.subplots(1, 3, figsize=(10, 3.2))
-    draw_groups(_axes[0], blobs[:, 0], blobs[:, 1], blob_labels, "Blobs")
-    draw_groups(_axes[1], blob_plane[:, 0], blob_plane[:, 1], blob_labels, "PCA, two components")
-    draw_groups(
-        _axes[2], blob_plane[:, 0], np.zeros(len(blob_plane)), blob_labels, "PCA, first component", equal=False
+    blob_ratio = blob_pca.explained_variance_ratio_
+    panel_of_scatters(
+        [
+            {"x": blobs[:, 0], "y": blobs[:, 1], "labels": blob_labels, "caption": "Blobs"},
+            {
+                "x": blob_plane[:, 0],
+                "y": blob_plane[:, 1],
+                "labels": blob_labels,
+                "caption": "PCA, two components",
+            },
+            {
+                "x": blob_plane[:, 0],
+                "labels": blob_labels,
+                "caption": "PCA, first component only",
+                "flat": True,
+            },
+        ],
+        title="Blobs: a linear component is enough",
     )
-    _figure.tight_layout()
-    return _figure
+    return blob_overlap, blob_ratio
 
 
 @app.cell
-def _(
-    KernelPCA,
-    PCA,
-    draw_groups,
-    make_moons,
-    np,
-    plt,
-    ranges_overlap,
-):
+def _(KernelPCA, PCA, make_moons, panel_of_scatters, ranges_overlap):
     moons, moon_labels = make_moons(100, noise=0.015, random_state=0)
     moon_plane = PCA(n_components=2).fit_transform(moons)
     moon_kernel = KernelPCA(n_components=2, kernel="rbf", gamma=15).fit_transform(moons)
     moon_pca_overlap = ranges_overlap(moon_plane[:, 0], moon_labels)
     moon_kernel_overlap = ranges_overlap(moon_kernel[:, 0], moon_labels)
-    print(f"PCA first component overlaps: {moon_pca_overlap}")
-    print(f"RBF first component overlaps: {moon_kernel_overlap}")
-    _figure, _axes = plt.subplots(1, 5, figsize=(14, 3.1))
-    draw_groups(_axes[0], moons[:, 0], moons[:, 1], moon_labels, "Moons")
-    draw_groups(_axes[1], moon_plane[:, 0], moon_plane[:, 1], moon_labels, "PCA, two")
-    draw_groups(_axes[2], moon_plane[:, 0], np.zeros(len(moons)), moon_labels, "PCA, first", equal=False)
-    draw_groups(_axes[3], moon_kernel[:, 0], moon_kernel[:, 1], moon_labels, "RBF, two")
-    draw_groups(_axes[4], moon_kernel[:, 0], np.zeros(len(moons)), moon_labels, "RBF, first", equal=False)
-    _figure.tight_layout()
-    return _figure
+    panel_of_scatters(
+        [
+            {"x": moons[:, 0], "y": moons[:, 1], "labels": moon_labels, "caption": "Moons"},
+            {
+                "x": moon_plane[:, 0],
+                "y": moon_plane[:, 1],
+                "labels": moon_labels,
+                "caption": "PCA, two components",
+            },
+            {
+                "x": moon_plane[:, 0],
+                "labels": moon_labels,
+                "caption": "PCA, first component",
+                "flat": True,
+            },
+            {
+                "x": moon_kernel[:, 0],
+                "y": moon_kernel[:, 1],
+                "labels": moon_labels,
+                "caption": "RBF, two components",
+            },
+            {
+                "x": moon_kernel[:, 0],
+                "labels": moon_labels,
+                "caption": "RBF, first component",
+                "flat": True,
+            },
+        ],
+        title="Moons: the linear component mixes the arms",
+    )
+    return moon_kernel_overlap, moon_pca_overlap
 
 
 @app.cell
-def _(
-    KernelPCA,
-    PCA,
-    draw_groups,
-    make_circles,
-    np,
-    plt,
-    ranges_overlap,
-):
-    rings, ring_labels = make_circles(n_samples=400, random_state=123, noise=0.1, factor=0.2)
+def _(KernelPCA, PCA, make_circles, panel_of_scatters, ranges_overlap):
+    rings, ring_labels = make_circles(
+        n_samples=400, random_state=123, noise=0.1, factor=0.2
+    )
     ring_plane = PCA(n_components=2).fit_transform(rings)
     ring_kernel = KernelPCA(n_components=2, kernel="rbf", gamma=15).fit_transform(rings)
     ring_pca_overlap = ranges_overlap(ring_plane[:, 0], ring_labels)
     ring_kernel_overlap = ranges_overlap(ring_kernel[:, 0], ring_labels)
-    print(f"PCA first component overlaps: {ring_pca_overlap}")
-    print(f"RBF first component overlaps: {ring_kernel_overlap}")
-    _figure, _axes = plt.subplots(1, 5, figsize=(14, 3.1))
-    draw_groups(_axes[0], rings[:, 0], rings[:, 1], ring_labels, "Rings")
-    draw_groups(_axes[1], ring_plane[:, 0], ring_plane[:, 1], ring_labels, "PCA, two")
-    draw_groups(_axes[2], ring_plane[:, 0], np.zeros(len(rings)), ring_labels, "PCA, first", equal=False)
-    draw_groups(_axes[3], ring_kernel[:, 0], ring_kernel[:, 1], ring_labels, "RBF, two")
-    draw_groups(_axes[4], ring_kernel[:, 0], np.zeros(len(rings)), ring_labels, "RBF, first", equal=False)
-    _figure.tight_layout()
-    return _figure
+    panel_of_scatters(
+        [
+            {"x": rings[:, 0], "y": rings[:, 1], "labels": ring_labels, "caption": "Rings"},
+            {
+                "x": ring_plane[:, 0],
+                "y": ring_plane[:, 1],
+                "labels": ring_labels,
+                "caption": "PCA, two components",
+            },
+            {
+                "x": ring_plane[:, 0],
+                "labels": ring_labels,
+                "caption": "PCA, first component",
+                "flat": True,
+            },
+            {
+                "x": ring_kernel[:, 0],
+                "y": ring_kernel[:, 1],
+                "labels": ring_labels,
+                "caption": "RBF, two components",
+            },
+            {
+                "x": ring_kernel[:, 0],
+                "labels": ring_labels,
+                "caption": "RBF, first component",
+                "flat": True,
+            },
+        ],
+        title="Rings: a ring is not a linear direction",
+    )
+    return ring_kernel_overlap, ring_pca_overlap
 
 
 @app.cell
-def _(KernelPCA, PCA, draw_groups, np, plt, ranges_overlap):
+def _(KernelPCA, PCA, np, panel_of_scatters, ranges_overlap):
     def _heart(a, b):
         _t = np.linspace(0, 2 * np.pi, 100)
         _x = 16 * np.sin(_t) ** 3
@@ -173,19 +325,42 @@ def _(KernelPCA, PCA, draw_groups, np, plt, ranges_overlap):
     hearts = np.column_stack((np.hstack((_x1, _x2)), np.hstack((_y1, _y2))))
     heart_labels = np.array([0] * len(_x1) + [1] * len(_x2))
     heart_plane = PCA(n_components=2).fit_transform(hearts)
-    heart_kernel = KernelPCA(n_components=2, kernel="rbf", gamma=15).fit_transform(hearts)
+    heart_kernel = KernelPCA(n_components=2, kernel="rbf", gamma=15).fit_transform(
+        hearts
+    )
     heart_pca_overlap = ranges_overlap(heart_plane[:, 0], heart_labels)
     heart_kernel_overlap = ranges_overlap(heart_kernel[:, 0], heart_labels)
-    print(f"PCA first component overlaps: {heart_pca_overlap}")
-    print(f"RBF first component overlaps: {heart_kernel_overlap}")
-    _figure, _axes = plt.subplots(1, 5, figsize=(14, 3.1))
-    draw_groups(_axes[0], hearts[:, 0], hearts[:, 1], heart_labels, "Hearts")
-    draw_groups(_axes[1], heart_plane[:, 0], heart_plane[:, 1], heart_labels, "PCA, two")
-    draw_groups(_axes[2], heart_plane[:, 0], np.zeros(len(hearts)), heart_labels, "PCA, first", equal=False)
-    draw_groups(_axes[3], heart_kernel[:, 0], heart_kernel[:, 1], heart_labels, "RBF, two")
-    draw_groups(_axes[4], heart_kernel[:, 0], np.zeros(len(hearts)), heart_labels, "RBF, first", equal=False)
-    _figure.tight_layout()
-    return _figure
+    panel_of_scatters(
+        [
+            {"x": hearts[:, 0], "y": hearts[:, 1], "labels": heart_labels, "caption": "Two hearts"},
+            {
+                "x": heart_plane[:, 0],
+                "y": heart_plane[:, 1],
+                "labels": heart_labels,
+                "caption": "PCA, two components",
+            },
+            {
+                "x": heart_plane[:, 0],
+                "labels": heart_labels,
+                "caption": "PCA, first component",
+                "flat": True,
+            },
+            {
+                "x": heart_kernel[:, 0],
+                "y": heart_kernel[:, 1],
+                "labels": heart_labels,
+                "caption": "RBF, two components",
+            },
+            {
+                "x": heart_kernel[:, 0],
+                "labels": heart_labels,
+                "caption": "RBF, first component",
+                "flat": True,
+            },
+        ],
+        title="Two hearts: separated in space, so a linear component works",
+    )
+    return heart_kernel_overlap, heart_pca_overlap
 
 
 @app.cell(hide_code=True)

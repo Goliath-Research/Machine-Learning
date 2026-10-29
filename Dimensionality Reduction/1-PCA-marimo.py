@@ -2,11 +2,10 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo",
-#     "matplotlib",
 #     "numpy",
 #     "pandas",
+#     "plotly",
 #     "scikit-learn>=1.2",
-#     "seaborn",
 # ]
 # ///
 
@@ -26,8 +25,7 @@ async def _():
     _packages = {
         "numpy": "numpy",
         "pandas": "pandas",
-        "matplotlib": "matplotlib",
-        "seaborn": "seaborn",
+        "plotly": "plotly",
         "sklearn": "scikit-learn>=1.2",
     }
     _missing = [
@@ -56,17 +54,19 @@ def _(packages_ready):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
     import marimo as mo
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    import seaborn as sns
+    import plotly.express as px
+    import plotly.io as pio
+    import PlotBuilder as pb
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
 
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
+    pio.templates.default = "plotly_white"
+    px.defaults.color_discrete_sequence = px.colors.qualitative.G10
+    builder = pb.PlotBuilder(width=620, height=470)
 
-    return PCA, Path, StandardScaler, mo, np, pd, plt, sns
+    return PCA, Path, StandardScaler, builder, mo, np, pd, px
 
 
 @app.cell(hide_code=True)
@@ -192,15 +192,23 @@ def _(mo):
 
 
 @app.cell
-def _(mileage, plt, sns):
-    _figure, _axes = plt.subplots(figsize=(5.5, 5))
-    sns.scatterplot(
-        data=mileage, x="city_mpg", y="highway_mpg", s=28, ax=_axes, legend=False
+def _(builder, mileage, px):
+    _figure = px.scatter(
+        mileage,
+        x="city_mpg",
+        y="highway_mpg",
+        title="City and highway miles per gallon",
+        labels={
+            "city_mpg": "City (miles per gallon)",
+            "highway_mpg": "Highway (miles per gallon)",
+        },
     )
-    _axes.set_aspect("equal", adjustable="datalim")
-    _axes.set_title("City and highway miles per gallon")
-    _axes.set_xlabel("City (miles per gallon)")
-    _axes.set_ylabel("Highway (miles per gallon)")
+    _figure.update_traces(marker=dict(size=7, opacity=0.75))
+    _figure.update_yaxes(scaleanchor="x", scaleratio=1)
+    _figure.update_layout(
+        width=builder.width, height=builder.height, showlegend=False,
+        margin=dict(t=55, b=50, l=60, r=20),
+    )
     _figure
     return
 
@@ -268,26 +276,30 @@ def _(mileage_variance, mileage_share, mo):
 
 
 @app.cell
-def _(mileage, mileage_pca, np, plt, sns):
-    _figure, _axes = plt.subplots(figsize=(5.5, 5))
-    sns.scatterplot(
-        data=mileage, x="city_mpg", y="highway_mpg", s=24, ax=_axes, legend=False
+def _(builder, mileage, mileage_pca, px):
+    _figure = px.scatter(
+        mileage,
+        x="city_mpg",
+        y="highway_mpg",
+        title="The two component directions",
+        labels={
+            "city_mpg": "City (miles per gallon)",
+            "highway_mpg": "Highway (miles per gallon)",
+        },
     )
-    for _length, _vector in zip(
-        mileage_pca.explained_variance_, mileage_pca.components_
-    ):
-        _start = mileage_pca.mean_
-        _end = _start + 3 * _vector * np.sqrt(_length)
-        _axes.annotate(
-            "",
-            xy=_end,
-            xytext=_start,
-            arrowprops={"arrowstyle": "->", "lw": 1.6, "color": "black"},
-        )
-    _axes.set_aspect("equal", adjustable="datalim")
-    _axes.set_title("The two component directions")
-    _axes.set_xlabel("City (miles per gallon)")
-    _axes.set_ylabel("Highway (miles per gallon)")
+    _figure.update_traces(marker=dict(size=7, opacity=0.6))
+    _figure.update_yaxes(scaleanchor="x", scaleratio=1)
+    _figure.update_layout(
+        width=builder.width, height=builder.height, showlegend=False,
+        margin=dict(t=55, b=50, l=60, r=20),
+    )
+    builder.component_arrows(
+        _figure,
+        mileage_pca.mean_,
+        mileage_pca.explained_variance_,
+        mileage_pca.components_,
+        scale=3,
+    )
     _figure
     return
 
@@ -307,23 +319,24 @@ def _(mo):
 
 
 @app.cell
-def _(mileage, mileage_pca, pd, plt, sns):
+def _(builder, mileage, mileage_pca, pd, px):
     mileage_plane = pd.DataFrame(
         mileage_pca.transform(mileage), columns=["Component 1", "Component 2"]
     )
-    _figure, _axes = plt.subplots(figsize=(5.5, 5))
-    sns.scatterplot(
-        data=mileage_plane,
+    _figure = px.scatter(
+        mileage_plane,
         x="Component 1",
         y="Component 2",
-        s=24,
-        ax=_axes,
-        legend=False,
+        title="The same cars, viewed from the component axes",
     )
-    _axes.axhline(0, color="0.7", lw=0.8)
-    _axes.axvline(0, color="0.7", lw=0.8)
-    _axes.set_aspect("equal", adjustable="datalim")
-    _axes.set_title("The same cars, viewed from the component axes")
+    _figure.update_traces(marker=dict(size=7, opacity=0.6))
+    _figure.update_yaxes(scaleanchor="x", scaleratio=1)
+    _figure.add_hline(y=0, line_color="lightgrey", line_width=1)
+    _figure.add_vline(x=0, line_color="lightgrey", line_width=1)
+    _figure.update_layout(
+        width=builder.width, height=builder.height, showlegend=False,
+        margin=dict(t=55, b=50, l=60, r=20),
+    )
     _figure
     return
 
@@ -446,30 +459,25 @@ def _(mileage_one_share, mileage_shapes, mo):
 
 
 @app.cell
-def _(mileage, mileage_restored, plt, sns):
-    _figure, _axes = plt.subplots(figsize=(5.5, 5))
-    sns.scatterplot(
-        data=mileage,
-        x="city_mpg",
-        y="highway_mpg",
-        s=24,
-        ax=_axes,
-        label="Original",
-        legend=True,
+def _(builder, mileage, mileage_restored, pd, px):
+    _combined = pd.DataFrame(
+        {
+            "city_mpg": mileage["city_mpg"].to_numpy(),
+            "highway_mpg": mileage["highway_mpg"].to_numpy(),
+            "x_reference": mileage_restored[:, 0],
+            "y_reference": mileage_restored[:, 1],
+        }
     )
-    _axes.scatter(
-        mileage_restored[:, 0],
-        mileage_restored[:, 1],
-        s=24,
-        c="darkorange",
-        label="Rebuilt from one component",
-        zorder=3,
+    _figure = builder.scatter_with_reference(
+        _combined,
+        "city_mpg",
+        "highway_mpg",
+        title="One component drawn back in the original plane",
+        label_points="Original",
+        label_reference="Rebuilt from one component",
     )
-    _axes.set_aspect("equal", adjustable="datalim")
-    _axes.set_title("One component drawn back in the original plane")
-    _axes.set_xlabel("City (miles per gallon)")
-    _axes.set_ylabel("Highway (miles per gallon)")
-    _axes.legend(fontsize=8)
+    _figure.update_xaxes(title_text="City (miles per gallon)")
+    _figure.update_yaxes(title_text="Highway (miles per gallon)")
     _figure
     return
 
@@ -585,20 +593,35 @@ def _(measure_ranges, measures_complete, measures_dropped, mo):
 
 
 @app.cell
-def _(StandardScaler, measure_columns, measures_complete, pd, plt, sns):
+def _(StandardScaler, measure_columns, measures_complete, pd, px):
+    from plotly.subplots import make_subplots
+    import plotly.graph_objects as go
+
     measures_z = pd.DataFrame(
         StandardScaler().fit_transform(measures_complete), columns=measure_columns
     )
-    _long_raw = measures_complete.melt(var_name="measure", value_name="value")
-    _long_z = measures_z.melt(var_name="measure", value_name="value")
-    _figure, _axes = plt.subplots(2, 1, figsize=(8.5, 6))
-    sns.boxplot(data=_long_raw, x="measure", y="value", ax=_axes[0], color="C0")
-    sns.boxplot(data=_long_z, x="measure", y="value", ax=_axes[1], color="C1")
-    _axes[0].set_title("Original units")
-    _axes[1].set_title("After standardization")
-    _axes[0].tick_params(axis="x", rotation=30)
-    _axes[1].tick_params(axis="x", rotation=30)
-    _figure.tight_layout()
+    _figure = make_subplots(
+        rows=2,
+        cols=1,
+        subplot_titles=("Original units", "After standardization"),
+        vertical_spacing=0.18,
+    )
+    for _row, _frame, _colour in (
+        (1, measures_complete, "#2E86C1"),
+        (2, measures_z, "#D35400"),
+    ):
+        for _name in measure_columns:
+            _figure.add_trace(
+                go.Box(y=_frame[_name], name=_name, marker_color=_colour, showlegend=False),
+                row=_row,
+                col=1,
+            )
+    _figure.update_layout(
+        width=820,
+        height=620,
+        margin=dict(t=70, b=80, l=60, r=20),
+    )
+    _figure.update_xaxes(tickangle=-25)
     _figure
     return (measures_z,)
 

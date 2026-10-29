@@ -2,11 +2,9 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo",
-#     "matplotlib",
 #     "numpy",
 #     "pandas",
 #     "scikit-learn>=1.2",
-#     "seaborn",
 # ]
 # ///
 
@@ -26,8 +24,6 @@ async def _():
     _packages = {
         "numpy": "numpy",
         "pandas": "pandas",
-        "matplotlib": "matplotlib",
-        "seaborn": "seaborn",
         "sklearn": "scikit-learn>=1.2",
     }
     _missing = [
@@ -51,23 +47,25 @@ async def _():
 @app.cell
 def _(packages_ready):
     import marimo as mo
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    import seaborn as sns
+    import plotly.express as px
+    import plotly.io as pio
+    import PlotBuilder as pb
     from sklearn.datasets import load_digits
     from sklearn.decomposition import PCA
 
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
+    pio.templates.default = "plotly_white"
+    px.defaults.color_discrete_sequence = px.colors.qualitative.G10
+    builder = pb.PlotBuilder(width=780, height=540)
 
-    return PCA, load_digits, mo, np, pd, plt, sns
+    return PCA, builder, load_digits, mo, np, pd, px
 
 
 @app.cell
-def _(np, plt):
+def _(builder):
     def plot_digits(images, rows, cols, title=None):
-        """Draw a grid of 8 by 8 digit images.
+        """Draw a grid of 8 by 8 digit images with Plotly.
 
         Parameters
         ----------
@@ -80,29 +78,11 @@ def _(np, plt):
 
         Returns
         -------
-        matplotlib.figure.Figure
-            The grid. Axes are hidden, because pixel coordinates carry no
-            meaning for a reader.
+        plotly.graph_objects.Figure
+            The grid, with one heatmap trace per cell and axes hidden because
+            pixel coordinates carry no meaning for a reader.
         """
-        figure, axes = plt.subplots(
-            rows,
-            cols,
-            figsize=(8, 0.72 * rows + 0.4),
-            gridspec_kw={"hspace": 0.15, "wspace": 0.05},
-        )
-        for ax, image in zip(np.ravel(axes), images):
-            ax.imshow(
-                np.asarray(image).reshape(8, 8),
-                cmap="binary",
-                interpolation="nearest",
-                vmin=0,
-                vmax=16,
-            )
-            ax.set_xticks([])
-            ax.set_yticks([])
-        if title:
-            figure.suptitle(title)
-        return figure
+        return builder.digit_grid(images, rows, cols, title or "")
 
     return (plot_digits,)
 
@@ -235,19 +215,15 @@ def _(PCA, digits, pd, plt, sns):
             "digit": digits.target.astype(str),
         }
     )
-    _figure, _axes = plt.subplots(figsize=(8, 5.5))
-    sns.scatterplot(
-        data=_frame,
-        x="Component 1",
-        y="Component 2",
-        hue="digit",
-        s=16,
-        ax=_axes,
-        linewidth=0,
+    _figure = builder.scatter_by_group(
+        _frame,
+        "Component 1",
+        "Component 2",
+        "digit",
+        "All 1,797 digits on the first two components",
+        size=5,
+        equal=False,
     )
-    _axes.set_title("All 1,797 digits on the first two components")
-    _axes.legend(title="Digit", fontsize=7, markerscale=0.8, ncol=2)
-    _figure.tight_layout()
     _figure
     return digit_plane, digit_plane_share
 
@@ -282,27 +258,18 @@ def _(mo):
 
 
 @app.cell
-def _(PCA, digits, np, plt):
+def _(PCA, builder, digits, np):
     digit_pca = PCA().fit(digits.data)
     digit_ratio = digit_pca.explained_variance_ratio_
     digit_cumulative = np.cumsum(digit_ratio)
     components_for_80 = int(np.searchsorted(digit_cumulative, 0.80) + 1)
     components_for_90 = int(np.searchsorted(digit_cumulative, 0.90) + 1)
     tiny_components = int(np.sum(digit_ratio < 0.0005))
-    _components = np.arange(1, len(digit_ratio) + 1)
-    _figure, _axes = plt.subplots(1, 2, figsize=(10, 3.8))
-    _axes[0].plot(_components, digit_ratio, color="crimson", lw=1.4)
-    _axes[0].set_title("Share of one component")
-    _axes[0].set_ylabel("Share of variance")
-    _axes[1].plot(_components, digit_cumulative, color="C0", lw=1.4)
-    _axes[1].axhline(0.80, color="0.5", lw=0.8, ls="--")
-    _axes[1].axhline(0.90, color="0.5", lw=0.8, ls="--")
-    _axes[1].set_title("Running total")
-    _axes[1].set_ylabel("Cumulative share")
-    for _ax in _axes:
-        _ax.set_xlabel("Number of components")
-    _figure.tight_layout()
-    _figure
+    builder.variance_curves(
+        digit_ratio,
+        digit_cumulative,
+        title="How much variance each component keeps on the digits",
+    )
     return (
         components_for_80,
         components_for_90,

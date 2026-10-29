@@ -2,11 +2,9 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo",
-#     "matplotlib",
 #     "numpy",
 #     "pandas",
 #     "scikit-learn>=1.8",
-#     "seaborn",
 # ]
 # ///
 
@@ -26,8 +24,6 @@ async def _():
     _packages = {
         "numpy": "numpy",
         "pandas": "pandas",
-        "matplotlib": "matplotlib",
-        "seaborn": "seaborn",
         "sklearn": "scikit-learn>=1.8",
     }
     _missing = [
@@ -56,30 +52,50 @@ def _(packages_ready):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
     import marimo as mo
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    import seaborn as sns
-    from matplotlib.image import imread
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    import PlotBuilder as pb
+    from PIL import Image
+    import base64
+    import io
+    from plotly.subplots import make_subplots
     from sklearn.manifold import MDS
     from sklearn.metrics import pairwise_distances
 
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
+    pio.templates.default = "plotly_white"
+    px.defaults.color_discrete_sequence = px.colors.qualitative.G10
+    builder = pb.PlotBuilder(width=640, height=400)
 
-    return MDS, Path, imread, mo, np, pairwise_distances, pd, plt, sns
+    return (
+        MDS,
+        Path,
+        Image,
+        base64,
+        builder,
+        go,
+        io,
+        make_subplots,
+        mo,
+        np,
+        pairwise_distances,
+        pd,
+        px,
+    )
 
 
 @app.cell
-def _(imread, np, pd):
+def _(go, make_subplots, np, pd, px):
     def sample_goliath(image, per_letter_point_count=1000, seed=42):
         """Sample points from the ink of a rendered word.
 
         Parameters
         ----------
         image : numpy.ndarray
-            The loaded image, as returned by `matplotlib.image.imread`. Only the
-            first colour channel is used, so the ink is separated from the
+            The loaded image, with pixel values in the 0 to 1 float range. Only
+            the first colour channel is used, so the ink is separated from the
             background by brightness.
         per_letter_point_count : int, default 1000
             How many ink pixels to keep. Four times as many are proposed, and
@@ -117,21 +133,89 @@ def _(imread, np, pd):
 
         return pd.DataFrame({"x0": points[:, 0], "x1": points[:, 1], "labels": labels})
 
-    def draw_letters(axes, frame, title):
-        """Scatter the letters coloured by glyph, with equal axis scaling."""
-        sns.scatterplot(
-            data=frame,
+    def draw_letters(frame, title):
+        """Scatter the letters coloured by glyph, with a 1:1 aspect ratio.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            Columns `x0`, `x1`, and `labels`.
+        title : str
+            Figure title.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            The scatter, with one legend entry per glyph.
+        """
+        figure = px.scatter(
+            frame,
             x="x0",
             y="x1",
-            hue="labels",
-            hue_order=list("GOLIATH"),
-            s=12,
-            ax=axes,
-            linewidth=0,
+            color="labels",
+            title=title,
+            category_orders={"labels": list("GOLIATH")},
         )
-        axes.set_aspect("equal", adjustable="datalim")
-        axes.set_title(title)
-        axes.legend(fontsize=7, markerscale=0.7, ncol=2)
+        figure.update_traces(marker=dict(size=4, opacity=0.8))
+        figure.update_yaxes(scaleanchor="x", scaleratio=1)
+        figure.update_layout(
+            height=380,
+            margin=dict(t=55, b=40, l=45, r=20),
+            legend=dict(font=dict(size=9), itemsizing="constant"),
+        )
+        return figure
+
+    def letters_panel(frames, captions, title="", width=1150):
+        """Place several letter clouds side by side for comparison.
+
+        A single figure with one panel per cloud, so the rotated and recovered
+        layouts can be compared without scrolling between cells.
+
+        Parameters
+        ----------
+        frames : list of pandas.DataFrame
+            One cloud per panel, each with `x0`, `x1`, and `labels`.
+        captions : list of str
+            Panel titles, in the same order.
+        title : str, default ""
+            Figure title.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            The assembled figure, sharing one legend.
+        """
+        count = len(frames)
+        figure = make_subplots(
+            rows=1,
+            cols=count,
+            subplot_titles=captions,
+            horizontal_spacing=0.04,
+        )
+        for index, frame in enumerate(frames, start=1):
+            for position, letter in enumerate("GOLIATH"):
+                mask = frame["labels"].to_numpy() == letter
+                figure.add_trace(
+                    go.Scatter(
+                        x=frame["x0"].to_numpy()[mask],
+                        y=frame["x1"].to_numpy()[mask],
+                        mode="markers",
+                        name=letter,
+                        legendgroup=letter,
+                        showlegend=index == 1,
+                        marker=dict(size=4, opacity=0.8),
+                    ),
+                    row=1,
+                    col=index,
+                )
+        figure.update_layout(
+            width=width,
+            height=340,
+            title=title,
+            margin=dict(t=70, b=35, l=45, r=20),
+            legend=dict(font=dict(size=9), itemsizing="constant", orientation="h"),
+        )
+        return figure
 
     def rotate_letters(frame, angle):
         """Rotate the coordinates of a point cloud by `angle` degrees."""
@@ -154,7 +238,7 @@ def _(imread, np, pd):
         longest = embedded[:, int(np.argmax(np.var(embedded, axis=0)))]
         return abs(float(np.corrcoef(position, longest)[0, 1]))
 
-    return along_word, draw_letters, rotate_letters, sample_goliath
+    return along_word, draw_letters, letters_panel, rotate_letters, sample_goliath
 
 
 @app.cell(hide_code=True)
@@ -240,22 +324,43 @@ def _(mo):
 
 
 @app.cell
-def _(Path, imread, plt):
-    goliath_image = imread(Path(__file__).resolve().parent / "Goliath.png")
-    _figure, _axes = plt.subplots(figsize=(7, 2.2))
-    _axes.imshow(goliath_image)
-    _axes.set_xticks([])
-    _axes.set_yticks([])
-    _axes.set_title("Goliath.png, the source image")
-    _figure.tight_layout()
-    _figure
-    return (goliath_image,)
+def _(base64, builder, io, np):
+    # Goliath.png, embedded as base64 so the notebook needs no external file.
+    # The string is the PNG itself, split across lines only to keep it readable.
+    # Pixel values are divided by 255 because Pillow returns 0-255 integers while
+    # the sampler expects the 0-1 float range that the original code relied on.
+    goliath_b64 = (
+        "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"
+    )
+    goliath_image = (
+        np.array(Image.open(io.BytesIO(base64.b64decode(goliath_b64)))).astype(float)
+        / 255.0
+    )
+    builder.image(goliath_image, title="Goliath.png, the source image", width=700, height=200)
+    return goliath_b64, goliath_image
 
 
 @app.cell(hide_code=True)
 def _(goliath_image, mo):
     mo.md(f"""
-    The image is a real file in this folder, and it is what produces every coordinate below. `imread` returns an array of shape **{goliath_image.shape}**: rows, columns, and colour channels. The sampler reads a single colour channel from it, and a pixel counts as ink when it is dark, which is why the word appears as a shape rather than as colours.
+    The image is **embedded in this notebook as base64 text**, not read from a file. That is deliberate: a notebook that opens `Goliath.png` works on your own machine and fails anywhere the file is absent, including a browser runtime. The decoded array has shape **{goliath_image.shape}**: rows, columns, and colour channels. The sampler reads a single colour channel, and a pixel counts as ink when it is dark, which is why the word appears as a shape rather than as colours.
 
     The sampling step converts an **image** into a **point cloud**, which is what clustering and manifold methods can work with. Each ink pixel that is sampled becomes one row with two coordinates.
 
@@ -265,9 +370,8 @@ def _(goliath_image, mo):
 
 
 @app.cell
-def _(Path, imread, pd, sample_goliath):
-    goliath_path = Path(__file__).resolve().parent / "Goliath.png"
-    letters = sample_goliath(imread(goliath_path))
+def _(goliath_image, pd, sample_goliath):
+    letters = sample_goliath(goliath_image)
     letter_counts = letters.labels.value_counts().reindex(list("GOLIATH"))
     return letter_counts, letters
 
@@ -288,11 +392,8 @@ def _(letter_counts, letters, mo):
 
 
 @app.cell
-def _(draw_letters, letters, plt):
-    _figure, _axes = plt.subplots(figsize=(9, 2.8))
-    draw_letters(_axes, letters, "Points sampled from the word GOLIATH")
-    _figure.tight_layout()
-    _figure
+def _(draw_letters, letters):
+    draw_letters(letters, "Points sampled from the word GOLIATH")
     return
 
 
@@ -322,15 +423,14 @@ def _(mo):
 
 
 @app.cell
-def _(draw_letters, letters, plt, rotate_letters):
+def _(letters, letters_panel, rotate_letters):
     turned_down = rotate_letters(letters, -20)
     turned_up = rotate_letters(letters, 50)
-    _figure, _axes = plt.subplots(1, 3, figsize=(12, 2.9))
-    draw_letters(_axes[0], letters, "Original")
-    draw_letters(_axes[1], turned_down, "Rotated by −20°")
-    draw_letters(_axes[2], turned_up, "Rotated by 50°")
-    _figure.tight_layout()
-    _figure
+    letters_panel(
+        [letters, turned_down, turned_up],
+        ["Original", "Rotated by -20 degrees", "Rotated by 50 degrees"],
+        title="The same word, three orientations",
+    )
     return turned_down, turned_up
 
 
@@ -367,18 +467,26 @@ def _(distance_gap, letters, mo):
 
 
 @app.cell
-def _(distances, distances_down, distances_up, np, plt):
-    _figure, _axes = plt.subplots(1, 3, figsize=(10, 3.2))
-    for _ax, _matrix, _title in zip(
-        _axes,
-        (distances, distances_down, distances_up),
-        ("Original", "Rotated −20°", "Rotated 50°"),
+def _(distances, distances_down, distances_up, go, make_subplots):
+    _figure = make_subplots(
+        rows=1,
+        cols=3,
+        subplot_titles=("Original", "Rotated -20 degrees", "Rotated 50 degrees"),
+        horizontal_spacing=0.05,
+    )
+    for _index, _matrix in enumerate(
+        (distances, distances_down, distances_up), start=1
     ):
-        _ax.imshow(_matrix, cmap="Blues", aspect="auto")
-        _ax.set_title(_title)
-        _ax.set_xticks([])
-        _ax.set_yticks([])
-    _figure.tight_layout()
+        _figure.add_trace(
+            go.Heatmap(z=_matrix, colorscale="Blues", showscale=False),
+            row=1,
+            col=_index,
+        )
+    _figure.update_layout(
+        width=900, height=330, margin=dict(t=60, b=25, l=25, r=20)
+    )
+    _figure.update_xaxes(visible=False)
+    _figure.update_yaxes(visible=False)
     _figure
     return
 
@@ -481,7 +589,7 @@ def _(mo):
 
 
 @app.cell
-def _(MDS, along_word, distances, draw_letters, letters, pd, plt):
+def _(MDS, along_word, distances, letters, letters_panel, pd):
     flat_layouts = {}
     flat_agreement = {}
     for _name, _seed in (("seed 9", 9), ("seed 5", 5)):
@@ -502,11 +610,12 @@ def _(MDS, along_word, distances, draw_letters, letters, pd, plt):
             }
         )
         flat_agreement[_name] = along_word(letters.x0.to_numpy(), _embedded)
-    _figure, _axes = plt.subplots(1, 2, figsize=(10, 3.2))
-    draw_letters(_axes[0], flat_layouts["seed 9"], "MDS from distances, seed 9")
-    draw_letters(_axes[1], flat_layouts["seed 5"], "MDS from distances, seed 5")
-    _figure.tight_layout()
-    _figure
+    letters_panel(
+        [flat_layouts["seed 9"], flat_layouts["seed 5"]],
+        ["MDS from distances, seed 9", "MDS from distances, seed 5"],
+        title="Two seeds, the same distances",
+        width=900,
+    )
     return flat_agreement, flat_layouts
 
 
@@ -591,20 +700,23 @@ def _(letters, np, pd):
 
 
 @app.cell
-def _(curve, plt):
-    _figure = plt.figure(figsize=(7, 4.5))
-    _axes = _figure.add_subplot(111, projection="3d")
-    for _letter in "GOLIATH":
-        _rows = curve.labels.to_numpy() == _letter
-        _axes.scatter(
-            curve.loc[_rows, "x0"],
-            curve.loc[_rows, "x1"],
-            curve.loc[_rows, "x2"],
-            s=6,
-            label=_letter,
-        )
-    _axes.set_title("The word bent into an S")
-    _axes.legend(fontsize=7, markerscale=0.6)
+def _(curve, px):
+    _figure = px.scatter_3d(
+        curve,
+        x="x0",
+        y="x1",
+        z="x2",
+        color="labels",
+        title="The word bent into an S",
+        category_orders={"labels": list("GOLIATH")},
+    )
+    _figure.update_traces(marker=dict(size=2, opacity=0.85))
+    _figure.update_layout(
+        width=760,
+        height=520,
+        margin=dict(t=55, b=20, l=20, r=20),
+        legend=dict(font=dict(size=9), itemsizing="constant"),
+    )
     _figure
     return
 
@@ -624,7 +736,7 @@ def _(mo):
 
 
 @app.cell
-def _(MDS, along_word, curve, draw_letters, letters, pd, plt):
+def _(MDS, along_word, curve, letters, letters_panel, pd):
     curve_layouts = {}
     curve_agreement = {}
     for _name, _metric_mds in (("metric", True), ("non-metric", False)):
@@ -644,11 +756,12 @@ def _(MDS, along_word, curve, draw_letters, letters, pd, plt):
             }
         )
         curve_agreement[_name] = along_word(letters.x0.to_numpy(), _embedded)
-    _figure, _axes = plt.subplots(1, 2, figsize=(10, 3.2))
-    draw_letters(_axes[0], curve_layouts["metric"], "Metric MDS on the S")
-    draw_letters(_axes[1], curve_layouts["non-metric"], "Non-metric MDS on the S")
-    _figure.tight_layout()
-    _figure
+    letters_panel(
+        [curve_layouts["metric"], curve_layouts["non-metric"]],
+        ["Metric MDS on the S", "Non-metric MDS on the S"],
+        title="Metric and non-metric MDS on the same bend",
+        width=900,
+    )
     return curve_agreement, curve_layouts
 
 
