@@ -614,7 +614,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(np):
     # Two photographs, embedded so the notebook needs no external files.
     # Each block below is base64-encoded image data, split across lines only to
