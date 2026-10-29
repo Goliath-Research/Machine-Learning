@@ -168,15 +168,11 @@ def _(mo):
 
     400 points around four centres, `cluster_std=0.5`, `random_state=0`. Same generator, more groups, and a scale where the estimated bandwidth is noticeably above 1.
 
-    ### A built image
-
-    Four coloured squares, 80 by 80 pixels, with a little noise. Constructed in the notebook so the correct answer is known in advance: exactly four colours, one per quadrant. This is the case to reason about, because you can check the segmentation against the truth.
-
     ### Two photographs
 
-    **`toy.jpg`** and **`Lake_Tahoe.png`**, both in this folder. They are teaching copies of ordinary photographs, used here only to show the method on real colour variation. They are not a benchmark and carry no particular licence beyond the course material.
+    **`toy.JPG`** and **`Lake_Tahoe.png`**, both in this folder. They are teaching copies of ordinary photographs, used here only to show the method on real colour variation. They are not a benchmark and carry no particular licence beyond the course material.
 
-    - `toy.jpg` is 696 by 297 pixels: about 207,000 pixels.
+    - `toy.JPG` is 696 by 297 pixels: about 207,000 pixels. Note the **uppercase extension**; the file on disk is `toy.JPG`, not `toy.jpg`, and file names are case-sensitive in a browser.
     - `Lake_Tahoe.png` is 596 by 916 with an alpha channel, so it is first reduced to three colour channels.
 
     **A practical note.** Mean shift is slow on many points, because it runs a window from every seed. The Lake Tahoe image is therefore **downsampled by taking every second pixel**, which quarters the number of points and keeps the fit to a few seconds. The toy image is used at full size.
@@ -589,7 +585,6 @@ def _(mo):
 student_sweep = pd.DataFrame(
     {"clusters": {name: len(m.cluster_centers_) for name, m in wide_fits.items()}}
 )
-student_sweep
 ```
 The counts are **4** (quantile 0.1), **3** (quantile 0.3), **5** (bandwidth 0.6), and **3** (bandwidth 2.5).
 
@@ -604,119 +599,11 @@ Building the dictionary with the fit names as keys makes them the DataFrame inde
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. A built image, where the answer is known
+    ## 4. Real photographs
 
     Now the method is applied to pixels instead of \(x, y\) coordinates. Each pixel is a point with three features: red, green, and blue. Clustering those points groups **colours**, not locations.
 
-    This first image is built in the notebook, so the right answer is known: four coloured squares, one per quadrant, 80 by 80 pixels, with a little noise added.
-    """)
-    return
-
-
-@app.cell
-def _(MeanShift, estimate_bandwidth, np, px):
-    rng = np.random.default_rng(0)
-    image = np.zeros((80, 80, 3), dtype=float)
-    image[:40, :40] = (210, 40, 40)
-    image[:40, 40:] = (40, 160, 70)
-    image[40:, :40] = (40, 80, 200)
-    image[40:, 40:] = (230, 190, 40)
-    image = np.clip(image + rng.normal(0, 8, image.shape), 0, 255)
-    built_pixels = image.reshape(-1, 3)
-    image_bandwidth = float(
-        estimate_bandwidth(built_pixels, quantile=0.2, n_samples=500, random_state=0)
-    )
-    image_model = MeanShift(
-        bandwidth=image_bandwidth, bin_seeding=True
-    ).fit(built_pixels)
-    image_clusters = len(image_model.cluster_centers_)
-    image_labels = image_model.labels_.reshape(80, 80)
-    _fig = px.imshow(image.astype(np.uint8), title="Built image: four colour quadrants")
-    _fig.update_layout(width=420, height=420)
-    _fig
-    return (
-        built_pixels,
-        image_bandwidth,
-        image_clusters,
-        image_labels,
-        image_model,
-    )
-
-
-@app.cell(hide_code=True)
-def _(image_bandwidth, mo):
-    mo.md(f"""
-    The image is 80 by 80, which is **6,400 pixels**, and each becomes one row of three numbers. `estimate_bandwidth` returns **{image_bandwidth:.2f}**.
-
-    Compare that with the blobs sections, where the bandwidths were between 0.55 and 2.75. Here it is an order of magnitude larger, because colour values run from 0 to 255 while blob coordinates ran over a handful of units. **The bandwidth always has the units of the data**, and that is why it cannot be reused across datasets.
-
-    The next plot shows the segmentation: each pixel recoloured by the cluster it was assigned to.
-    """)
-    return
-
-
-@app.cell
-def _(image_clusters, image_labels, px):
-    _fig = px.imshow(image_labels, title=f"Segmentation: {image_clusters} colour clusters")
-    _fig.update_layout(width=420, height=420)
-    _fig
-    return
-
-
-@app.cell(hide_code=True)
-def _(image_clusters, image_model, mo):
-    mo.md(f"""
-    **{image_clusters} colour clusters**, which is exactly the four colours that were painted. Mean shift recovered the segmentation without being told there were four.
-
-    The fitted centres land on the four pure colours:
-    {", ".join(str(tuple(int(_v) for _v in _row)) for _row in image_model.cluster_centers_.round(0).tolist())}
-    That is the ideal case. The colours are far apart relative to the noise, so every pixel climbs to the peak of its own quadrant.
-
-    ### Why `bin_seeding` matters here
-
-    Without `bin_seeding`, mean shift starts a window at **every one of the 6,400 pixels** and shifts each one. With it, starting positions snap to a coarse grid of the colour space, so many pixels share one starting point. On an image this small both are fast, but the difference becomes decisive at photo resolution, which is the next section.
-
-    ### Try it yourself
-
-    Replace `None` so that `student_image_centers` holds the four fitted colour centres as integers, and `student_image_count` holds how many there are.
-    """)
-    return
-
-
-@app.cell
-def _(image_model, np):
-    student_image_centers = None
-    student_image_count = None
-    print(student_image_count)
-    print(student_image_centers)
-    return student_image_centers, student_image_count
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-```python
-student_image_centers = image_model.cluster_centers_.round(0).astype(int)
-student_image_count = len(student_image_centers)
-```
-The count is **4**, and the centres are approximately (210, 40, 40), (40, 80, 200), (230, 190, 40), and (40, 160, 70), the four colours used to paint the quadrants.
-
-`.round(0).astype(int)` converts the floating-point means back into pixel values, which is what you would use to reconstruct the image. This is the same `cluster_centers_` attribute used on the blobs; the only difference is that each row has three numbers instead of two.
-""")
-        },
-        expanded=False,
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 5. Real photographs
-
-    The built image was designed to be easy. These are ordinary photographs, with gradients, texture, and thousands of subtly different colours. Both files sit in this folder and are loaded directly.
+    These are ordinary photographs, with gradients, texture, and thousands of subtly different colours. Both files sit in this folder and are loaded directly.
 
     ### A toy photograph, at full size
 
@@ -727,7 +614,7 @@ def _(mo):
 
 @app.cell
 def _(Image, Path, np, px):
-    toy_array = np.array(Image.open(Path(__file__).resolve().parent / "toy.jpg"))
+    toy_array = np.array(Image.open(Path(__file__).resolve().parent / "toy.JPG"))
     _fig = px.imshow(toy_array, title="Original photograph")
     _fig.update_layout(width=460, height=380)
     _fig
@@ -788,7 +675,7 @@ def _(mo, toy_bandwidth, toy_clusters):
 
     Two observations worth making.
 
-    - **The bandwidth is large in absolute terms** ({toy_bandwidth:.1f}), because colour space spans 0 to 255. This is the same lesson from the built image, at a scale where a bandwidth of 1 would produce tens of thousands of clusters.
+    - **The bandwidth is large in absolute terms** ({toy_bandwidth:.1f}), because colour space spans 0 to 255. This is exactly the point made in the blobs sections, at a scale where a bandwidth of 1 would produce tens of thousands of clusters.
     - **Fewer clusters does not mean less information about shape.** The segmented image still shows the outline clearly. The lost information is *tonal*: the number of distinct colours, not the boundaries between objects.
 
     ### Try it yourself
@@ -947,8 +834,6 @@ def _(
     default_count,
     estimated,
     fine,
-    image_bandwidth,
-    image_clusters,
     lake_bandwidth,
     lake_clusters,
     mo,
@@ -961,14 +846,14 @@ def _(
 
     1. **A mean-shift window walks to a peak.** It repeatedly moves to the mean of the points inside it and stops where that mean no longer moves. That stopping point is a cluster centre, and every point climbing to the same peak shares a cluster.
     2. **There is no `n_clusters` argument, because the peaks are the output.** On the three-centre cloud the method found {blob_counts['estimate']} clusters matching the {blob_counts['estimate']} visible groups, and the fitted centres landed within a few hundredths of the generating centres (1, 1), (3, 3), and (5, 1).
-    3. **`bandwidth` is the window radius, and it is not a universal number.** It carries the units of the data: 0.55 to 2.75 were the useful range for blob coordinates, {image_bandwidth:.2f} for 0-to-255 colours in the built image, {toy_bandwidth:.1f} for the photograph, and {lake_bandwidth:.1f} for the downsampled lake.
+    3. **`bandwidth` is the window radius, and it is not a universal number.** It carries the units of the data: 0.55 to 2.75 were the useful range for blob coordinates, {toy_bandwidth:.1f} for the photograph whose colours run from 0 to 255, and {lake_bandwidth:.1f} for the downsampled lake. A bandwidth of 1 would shatter an image into thousands of colour groups.
     4. **The default is not 1.** `MeanShift()` with no bandwidth calls `estimate_bandwidth` internally, which uses a quantile of 0.3. On the three-centre cloud that gives {estimated:.2f}, and both that value and an explicit 1 produce {default_count} clusters. They agree by coincidence at this scale, not because 1 is the default.
     5. **Too small a bandwidth fragments; too large merges.** On the three-centre cloud, 0.55 produced {blob_counts['bandwidth 0.55']} clusters by splitting blobs from the inside, while 2 produced {blob_counts['bandwidth 2']} by merging two of them. The two failures look different in the plot and neither raises a warning.
     6. **`estimate_bandwidth` depends on choices you make.** A quantile of 0.1 gave {fine:.2f} and found {wide_counts['quantile 0.1']} clusters, the correct count for four blobs. A quantile of 0.3 on 100 sampled rows gave {coarse:.2f} and found {wide_counts['quantile 0.3']}. The estimator is not neutral, so always inspect the value it returns.
     7. **Pixels are points in colour space.** Each pixel contributes one row of red, green, and blue, so the same algorithm groups colours rather than positions. Folding the labels back into the original grid turns the result into an image.
     8. **`bin_seeding=True` makes image segmentation practical.** It snaps starting windows to a coarse grid instead of placing one at every pixel. The toy photograph had over 200,000 pixels; starting a window at each would be far slower.
     9. **Downsampling buys speed at the cost of detail.** The lake image was reduced to every second pixel, cutting the point count to about 136,000 and the runtime to a few seconds, which is acceptable because the question concerns large colour regions.
-    10. **Three different simplifications gave the answers above**: {image_clusters} colours for the built image with known truth, {toy_clusters} for the toy photograph, and {lake_clusters} for the lake. Reading how much was thrown away is part of interpreting the result.
+    10. **Two different simplifications gave the answers above**: {toy_clusters} colour clusters for the toy photograph and {lake_clusters} for the lake. Reading how much was thrown away is part of interpreting the result.
     """)
     return
 
