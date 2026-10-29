@@ -349,8 +349,8 @@ def _(mo):
 def _(mileage_pca):
     student_component_1 = None
     student_first_share = None
-    print("first component weights:", student_component_1)
-    print("its share of the variance:", student_first_share)
+    print("First component weights:   ", student_component_1)
+    print("Its share of the variance: ", student_first_share)
     return student_component_1, student_first_share
 
 
@@ -591,7 +591,7 @@ def _(StandardScaler, measure_columns, measures_complete, pd, plt, sns):
     )
     _long_raw = measures_complete.melt(var_name="measure", value_name="value")
     _long_z = measures_z.melt(var_name="measure", value_name="value")
-    _figure, _axes = plt.subplots(2, 1, figsize=(8.5, 6.5))
+    _figure, _axes = plt.subplots(2, 1, figsize=(8.5, 6))
     sns.boxplot(data=_long_raw, x="measure", y="value", ax=_axes[0], color="C0")
     sns.boxplot(data=_long_z, x="measure", y="value", ax=_axes[1], color="C1")
     _axes[0].set_title("Original units")
@@ -654,7 +654,7 @@ def _(auto_loadings, measure_columns, mo, np):
             f"`{measure_columns[_i]}` ({auto_loadings[_component, _i]:+.2f})"
             for _i in _ranked[:3]
         )
-        _rows.append(f"    - **Component {_component + 1}** is dominated by {_top}")
+        _rows.append(f"    - Component {_component + 1} is dominated by {_top}")
     mo.md("\n".join([
         "What each component actually describes — the three largest weights in each:",
         "",
