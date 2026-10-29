@@ -4,6 +4,8 @@
 #     "marimo",
 #     "numpy",
 #     "pandas",
+#     "pillow",
+#     "plotly",
 #     "scikit-learn>=1.8",
 # ]
 # ///
@@ -24,6 +26,8 @@ async def _():
     _packages = {
         "numpy": "numpy",
         "pandas": "pandas",
+        "PIL": "pillow",
+        "plotly": "plotly",
         "sklearn": "scikit-learn>=1.8",
     }
     _missing = [
