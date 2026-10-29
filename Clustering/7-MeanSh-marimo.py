@@ -609,7 +609,7 @@ def _(mo):
 
     These are ordinary photographs, with gradients, texture, and thousands of subtly different colours.
 
-    **The images are embedded in this notebook as base64 text**, not read from files. That is deliberate: a notebook that reads `toy.jpg` works on your own machine and fails anywhere the file is absent, including a browser runtime. Embedding the bytes makes the notebook self-contained and identical everywhere it runs. The cost is the blocks of text in the next cell, which you do not need to read.
+    **The images are embedded in this notebook as base64 text**, not read from files. 
     """)
     return
 
