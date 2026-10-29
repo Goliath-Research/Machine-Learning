@@ -809,7 +809,11 @@ def _(MeanShift, estimate_bandwidth, toy_flat):
 
 @app.cell
 def _(px, toy_clusters, toy_labels):
-    _fig = px.imshow(toy_labels, title=f"Segmented into {toy_clusters} colour clusters")
+    _fig = px.imshow(
+        toy_labels, 
+        color_continuous_scale="Greens",
+        title=f"Segmented into {toy_clusters} colour clusters"
+    )
     _fig.update_layout(width=460, height=380)
     _fig
     return
