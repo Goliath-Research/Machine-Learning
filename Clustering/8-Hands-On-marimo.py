@@ -343,7 +343,7 @@ def _(money):
     student_ranges = None
     student_ratio = None
     print("ranges:\n", student_ranges)
-    print(f"\nbill range / tip range = {student_ratio:.2f}")
+    print("\nbill range / tip range:\n", student_ratio)
     return student_ranges, student_ratio
 
 
@@ -977,16 +977,9 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which of the three internal scores is the one you would prefer to be **small**? Replace `None` with its name as scikit-learn spells it.
+    Which of the three internal scores is the one you would prefer to be **small**? Work out your answer, then reveal it.
     """)
     return
-
-
-@app.cell
-def _():
-    student_small_score = None
-    print(student_small_score)
-    return (student_small_score,)
 
 
 @app.cell(hide_code=True)
@@ -994,9 +987,6 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-```python
-student_small_score = "davies_bouldin"
-```
 **Davies–Bouldin** is the one to minimise, because it measures how similar each cluster is to its most similar neighbour. A small value means the clusters look different from each other.
 
 Silhouette and Calinski–Harabasz are the other way round: larger is better. In the tables above, that is why the winners are found with `idxmax` for those two and `idxmin` for Davies–Bouldin.
