@@ -871,11 +871,16 @@ def _(mo):
     mo.md(r"""
     ### A lake photograph, downsampled
 
-    The second photograph is 596 by 916 with an alpha channel, about 546,000 pixels. Mean shift on that many points takes close to half a minute, which is too slow for a lesson that reruns.
+    The second photograph is 596 by 916 with an alpha channel, about 546,000 pixels. Mean shift 
+    on that many points takes close to half a minute, which is too slow for a lesson that reruns.
 
-    So it is **downsampled by taking every third pixel in both directions**, which cuts the count to about 61,000. The picture is softer, and the fit takes a couple of seconds.
+    So it is **downsampled by taking every third pixel in both directions**, which cuts the count 
+    to about 61,000. The picture is softer, and the fit takes a couple of seconds.
 
-    This is a real trade-off you will meet in practice: the algorithm's cost grows with the number of points, and downsampling is the usual way to make image segmentation tractable. The embedded copy of this image was saved after downsampling, so the notebook carries the smaller version rather than the original.
+    This is a real trade-off you will meet in practice: the algorithm's cost grows with the number 
+    of points, and downsampling is the usual way to make image segmentation tractable. The embedded 
+    copy of this image was saved after downsampling, so the notebook carries the smaller version 
+    rather than the original.
     """)
     return
 
@@ -920,8 +925,10 @@ def _(lake_model, lake_small):
 @app.cell
 def _(lake_clusters, lake_labels, px):
     _fig = px.imshow(
-        lake_labels, title=f"Lake photograph segmented into {lake_clusters} colour clusters"
-    )
+        lake_labels, 
+        color_continuous_scale="Viridis",
+        title=f"Lake photograph segmented into {lake_clusters} colour clusters"
+)
     _fig.update_layout(width=520, height=360)
     _fig
     return
