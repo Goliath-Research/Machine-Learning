@@ -342,8 +342,8 @@ def _(mo):
 def _(money):
     student_ranges = None
     student_ratio = None
-    print("ranges:", student_ranges)
-    print("bill range / tip range:", student_ratio)
+    print("ranges:\n", student_ranges)
+    print(f"\nbill range / tip range = {student_ratio:.2f}")
     return student_ranges, student_ratio
 
 
