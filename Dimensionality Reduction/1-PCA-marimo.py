@@ -498,7 +498,10 @@ def _(mileage_pca, mo, np, student_component_1, student_first_share):
     if student_component_1 is None or student_first_share is None:
         _message = "Replace both `None` values above, then this cell will check them."
     elif (
-        np.allclose(np.abs(student_component_1), np.abs(mileage_pca.components_[0]))
+        (
+            np.allclose(student_component_1, mileage_pca.components_[0])
+            or np.allclose(student_component_1, -mileage_pca.components_[0])
+        )
         and np.isclose(student_first_share, mileage_pca.explained_variance_ratio_[0])
     ):
         _message = "✓ Correct: those are the first component's weights and its share."
@@ -971,7 +974,7 @@ def _(PCA, measures_z):
     auto_share = auto_pca.explained_variance_ratio_
     auto_total = float(auto_share.sum())
     auto_loadings = auto_pca.components_
-    return auto_loadings, auto_share, auto_total, auto_variance
+    return auto_loadings, auto_pca, auto_share, auto_total, auto_variance
 
 
 @app.cell(hide_code=True)
