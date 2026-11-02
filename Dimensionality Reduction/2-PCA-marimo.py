@@ -70,7 +70,7 @@ def _(packages_ready):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # PCA for Pictures and Noise
+    # PCA for Image Visualization and Noise Filtering
 
     ## Objectives
 
@@ -212,7 +212,9 @@ def _(np, plt):
         images : array-like
             One row of 64 pixel values per image, or an (n, 8, 8) array.
         rows, cols : int
-            Grid shape for the panel.
+            Requested grid shape. At most **four** rows are drawn; extra
+            requested rows are ignored so the figure stays compact. Only the
+            first ``min(len(images), display_rows * cols)`` images appear.
         title : str or None
             Optional heading above the grid.
         labels : array-like or None, default None
@@ -236,16 +238,21 @@ def _(np, plt):
         data = np.asarray(images)
         if data.ndim == 3:
             data = data.reshape(len(data), -1)
+        display_rows = min(rows, 4)
+        _capacity = display_rows * cols
+        data = data[:_capacity]
+        if labels is not None:
+            labels = np.asarray(labels)[: len(data)]
         figure, axes = plt.subplots(
-            rows,
+            display_rows,
             cols,
-            figsize=(8, rows),
+            figsize=(8, display_rows),
             subplot_kw={"xticks": [], "yticks": []},
             gridspec_kw=dict(hspace=0.1, wspace=0.1),
         )
-        if rows == 1 and cols == 1:
+        if display_rows == 1 and cols == 1:
             axes = np.array([[axes]])
-        elif rows == 1:
+        elif display_rows == 1:
             axes = axes.reshape(1, -1)
         elif cols == 1:
             axes = axes.reshape(-1, 1)
@@ -278,7 +285,7 @@ def _(np, plt):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    `plot_digits` accepts either an `(n, 8, 8)` stack of grids or an `(n, 64)` table of flattened rows. When the input is three-dimensional it reshapes each slice to 8 by 8 before `imshow`. Optional labels are drawn in **axes** coordinates near the bottom-left of each cell, so they stay readable regardless of pixel values. Extra grid slots are hidden rather than left blank. Every panel shares the same grey-level range `(0, 16)` so noisy and rebuilt images are comparable.
+    `plot_digits` accepts either an `(n, 8, 8)` stack of grids or an `(n, 64)` table of flattened rows. When the input is three-dimensional it reshapes each slice to 8 by 8 before `imshow`. The grid uses at most **four rows**, even if you pass a larger `rows` value; only the first `4 × cols` images are shown. Optional labels are drawn in **axes** coordinates near the bottom-left of each cell, so they stay readable regardless of pixel values. Extra grid slots are hidden rather than left blank. Every panel shares the same grey-level range `(0, 16)` so noisy and rebuilt images are comparable.
     """)
     return
 
@@ -286,11 +293,11 @@ def _(mo):
 @app.cell
 def _(digits, plot_digits):
     _figure = plot_digits(
-        digits.images[:100],
+        digits.images,
+        4,
         10,
-        10,
-        "The first 100 images, with the true digit written in each cell",
-        labels=digits.target[:100],
+        "The first 40 images, with the true digit written in each cell",
+        labels=digits.target,
     )
     _figure
     return
@@ -606,12 +613,24 @@ def _(digit_cumulative, digit_ratio, mo, np, pd):
             "share": digit_ratio,
             "cumulative share": digit_cumulative,
         }
-    )
+    ).round(4)
+    _n = len(_variance_table)
+    _chunk = _n // 4
+    _breaks = [_chunk, 2 * _chunk, 3 * _chunk]
     mo.accordion(
         {
-            "Show full variance table (all 64 components)": mo.Html(
-                _variance_table.round(4).to_html(index=False)
-            )
+            f"Components 1–{_breaks[0]}": mo.Html(
+                _variance_table.iloc[: _breaks[0]].to_html(index=False)
+            ),
+            f"Components {_breaks[0] + 1}–{_breaks[1]}": mo.Html(
+                _variance_table.iloc[_breaks[0] : _breaks[1]].to_html(index=False)
+            ),
+            f"Components {_breaks[1] + 1}–{_breaks[2]}": mo.Html(
+                _variance_table.iloc[_breaks[1] : _breaks[2]].to_html(index=False)
+            ),
+            f"Components {_breaks[2] + 1}–{_n}": mo.Html(
+                _variance_table.iloc[_breaks[2] :].to_html(index=False)
+            ),
         },
         expanded=False,
     )
@@ -733,11 +752,11 @@ def _(digits, np, plot_digits):
     noise_draw = np.random.RandomState(42).normal(0, 1, digits.data.shape)
     noisy_digits = digits.data + 4 * noise_draw
     _figure = plot_digits(
-        noisy_digits[:100],
+        noisy_digits,
+        4,
         10,
-        10,
-        "The same 100 images with pixel noise added, labelled with their true digit",
-        labels=digits.target[:100],
+        "The same 40 images with pixel noise added, labelled with their true digit",
+        labels=digits.target,
     )
     _figure
     return noise_draw, noisy_digits
