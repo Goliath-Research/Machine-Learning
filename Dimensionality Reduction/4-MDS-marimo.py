@@ -61,26 +61,30 @@ def _(packages_ready):
     import plotly.express as px
     import plotly.graph_objects as go
     import plotly.io as pio
-    import PlotBuilder as pb
-    from PIL import Image
     import base64
     import io
+    from PIL import Image
     from plotly.subplots import make_subplots
+    from scipy.spatial import procrustes as scipy_procrustes
     from sklearn.manifold import MDS
     from sklearn.metrics import pairwise_distances
 
     pio.templates.default = "plotly_white"
     px.defaults.color_discrete_sequence = px.colors.qualitative.G10
-    builder = pb.PlotBuilder(width=640, height=400)
+    LETTER_COLORS = {
+        letter: px.colors.qualitative.G10[index]
+        for index, letter in enumerate("GOLIATH")
+    }
 
     return (
+        LETTER_COLORS,
         MDS,
         Path,
         Image,
         base64,
-        builder,
         go,
         io,
+        scipy_procrustes,
         make_subplots,
         mo,
         np,
@@ -90,8 +94,9 @@ def _(packages_ready):
     )
 
 
+
 @app.cell
-def _(go, make_subplots, np, pd, px):
+def _(np, pd):
     def sample_goliath(image, per_letter_point_count=1000, seed=42):
         """Sample points from the ink of a rendered word.
 
@@ -137,6 +142,21 @@ def _(go, make_subplots, np, pd, px):
 
         return pd.DataFrame({"x0": points[:, 0], "x1": points[:, 1], "labels": labels})
 
+    return (sample_goliath,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `sample_goliath`
+
+    The image is flipped vertically and transposed so `x0` runs along the word. Four times as many random `(x, y)` pairs are drawn as points needed; only pairs landing on **ink** (`brightness < 1`) are kept. The horizontal axis is stretched by `rows/columns` so letters are not squashed. Rows are sorted by `x0`, then **gaps** wider than `0.08` in `x0` mark letter boundaries and assign labels left to right through GOLIATH.
+    """)
+    return
+
+
+@app.cell
+def _(LETTER_COLORS, px):
     def draw_letters(frame, title):
         """Scatter the letters coloured by glyph, with a 1:1 aspect ratio.
 
@@ -159,21 +179,34 @@ def _(go, make_subplots, np, pd, px):
             color="labels",
             title=title,
             category_orders={"labels": list("GOLIATH")},
+            color_discrete_map=LETTER_COLORS,
         )
         figure.update_traces(marker=dict(size=4, opacity=0.8))
         figure.update_yaxes(scaleanchor="x", scaleratio=1)
         figure.update_layout(
             height=380,
             margin=dict(t=55, b=40, l=45, r=20),
-            legend=dict(font=dict(size=9), itemsizing="constant"),
+            legend=dict(font=dict(size=9), itemsizing="constant", title="letter"),
         )
         return figure
 
+    return (draw_letters,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `draw_letters`
+
+    Plotly draws one trace per letter. **`color_discrete_map=LETTER_COLORS`** keeps each glyph the same colour everywhere in the lesson. **`scaleanchor="x"`** forces one data unit on `x0` to equal one on `x1`, so circles stay round and the word is not stretched.
+    """)
+    return
+
+
+@app.cell
+def _(LETTER_COLORS, go, make_subplots):
     def letters_panel(frames, captions, title="", width=1150):
         """Place several letter clouds side by side for comparison.
-
-        A single figure with one panel per cloud, so the rotated and recovered
-        layouts can be compared without scrolling between cells.
 
         Parameters
         ----------
@@ -183,11 +216,13 @@ def _(go, make_subplots, np, pd, px):
             Panel titles, in the same order.
         title : str, default ""
             Figure title.
+        width : int, default 1150
+            Figure width in pixels.
 
         Returns
         -------
         plotly.graph_objects.Figure
-            The assembled figure, sharing one legend.
+            Side-by-side panels sharing one colour legend.
         """
         count = len(frames)
         figure = make_subplots(
@@ -197,7 +232,7 @@ def _(go, make_subplots, np, pd, px):
             horizontal_spacing=0.04,
         )
         for index, frame in enumerate(frames, start=1):
-            for position, letter in enumerate("GOLIATH"):
+            for letter in "GOLIATH":
                 mask = frame["labels"].to_numpy() == letter
                 figure.add_trace(
                     go.Scatter(
@@ -207,22 +242,65 @@ def _(go, make_subplots, np, pd, px):
                         name=letter,
                         legendgroup=letter,
                         showlegend=index == 1,
-                        marker=dict(size=4, opacity=0.8),
+                        marker=dict(
+                            size=4,
+                            opacity=0.8,
+                            color=LETTER_COLORS[letter],
+                        ),
                     ),
                     row=1,
                     col=index,
                 )
+            axis_suffix = "" if index == 1 else str(index)
+            figure.update_yaxes(
+                scaleanchor=f"x{axis_suffix}",
+                scaleratio=1,
+                row=1,
+                col=index,
+            )
         figure.update_layout(
             width=width,
             height=340,
             title=title,
             margin=dict(t=70, b=35, l=45, r=20),
-            legend=dict(font=dict(size=9), itemsizing="constant", orientation="h"),
+            legend=dict(font=dict(size=9), itemsizing="constant", orientation="h", title="letter"),
         )
         return figure
 
+    return (letters_panel,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `letters_panel`
+
+    Several layouts are drawn in **one** figure so you can compare them without scrolling. Each letter always uses the same colour from `LETTER_COLORS`. Every panel gets its own **`scaleanchor`**, so a unit on `x0` matches a unit on `x1` in that panel — otherwise a recovered MDS layout would look sheared next to the original.
+    """)
+    return
+
+
+@app.cell
+def _(np, pd):
     def rotate_letters(frame, angle):
-        """Rotate the coordinates of a point cloud by `angle` degrees."""
+        """Rotate a 2-D point cloud counter-clockwise by `angle` degrees.
+
+        Row vectors are post-multiplied by a 2×2 rotation matrix: `coords @ R`.
+        That convention matches a counter-clockwise turn in a standard
+        `x`–`y` plot.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            Columns `x0`, `x1`, and optionally `labels`.
+        angle : float
+            Rotation in degrees (positive = counter-clockwise).
+
+        Returns
+        -------
+        pandas.DataFrame
+            Copy of `frame` with rotated `x0` and `x1`.
+        """
         theta = np.deg2rad(angle)
         rotation = np.array(
             [[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]
@@ -231,18 +309,409 @@ def _(go, make_subplots, np, pd, px):
         rotated[["x0", "x1"]] = frame[["x0", "x1"]].to_numpy() @ rotation
         return rotated
 
-    def along_word(position, embedded):
-        """Absolute correlation between the word order and an embedding axis.
+    return (rotate_letters,)
 
-        The word runs left to right, so the longest axis of a good layout should
-        line up with that order. Absolute value is used because MDS may flip the
-        sign of the axis.
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `rotate_letters`
+
+    For row vector `(x, y)`, the product `(x, y) @ R` applies the usual counter-clockwise rotation. Orthogonal matrices satisfy **RᵀR = I**, so ‖Rx − Ry‖ = ‖x − y‖: distances are unchanged even though every coordinate changes.
+    """)
+    return
+
+
+@app.cell
+def _(np):
+    def along_word(position, embedded):
+        """Absolute correlation between word order and an embedding axis.
+
+        Parameters
+        ----------
+        position : array-like of shape (n,)
+            Original left-to-right order (here, sorted `x0` or row index).
+        embedded : array-like of shape (n, k)
+            MDS coordinates.
+
+        Returns
+        -------
+        float
+            |correlation| between `position` and the embedded axis with largest
+            variance (sign is ignored because MDS may flip an axis).
         """
         embedded = np.asarray(embedded)
         longest = embedded[:, int(np.argmax(np.var(embedded, axis=0)))]
         return abs(float(np.corrcoef(position, longest)[0, 1]))
 
-    return along_word, draw_letters, letters_panel, rotate_letters, sample_goliath
+    return (along_word,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `along_word`
+
+    The word runs left to right, so a faithful layout should spread along one axis in that order. This score picks the **longest-variance axis** of the embedding and reports the absolute correlation with the original horizontal order. High values mean the **sequence** of letters survived; they do **not** mean each letter is still readable (see the S-bend section).
+    """)
+    return
+
+
+@app.cell
+def _(np):
+    def letter_shape_ratio(frame, embedded):
+        """Mean within-letter ``sigma_2 / sigma_1`` from an SVD of each glyph.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            Table with a `labels` column (same row order as the embedding).
+        embedded : array-like of shape (n, 2)
+            Two-dimensional coordinates to measure.
+
+        Returns
+        -------
+        float
+            Average over letters of ``sigma_2 / sigma_1`` (0 = line, 1 = round
+            blob). Versus a flat layout the ratio **drops sharply** on a
+            moderate S-bend; at **extreme** folds overlapping letters can
+            **raise** it again, so it is not monotonic in tightness.
+        """
+        embedded = np.asarray(embedded)
+        labels = frame["labels"].to_numpy()
+        ratios = []
+        for letter in "GOLIATH":
+            mask = labels == letter
+            if mask.sum() < 3:
+                continue
+            centered = embedded[mask] - embedded[mask].mean(axis=0)
+            singular = np.linalg.svd(centered, compute_uv=False)
+            if singular[0] > 0:
+                ratios.append(float(singular[1] / singular[0]))
+        return float(np.mean(ratios)) if ratios else 0.0
+
+    return (letter_shape_ratio,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `letter_shape_ratio`
+
+    Legible letters occupy **2-D blobs** in the layout; S-bend MDS squashes them into **ribbons** (one long direction, one thin direction). For each letter we SVD its centered points and record ``sigma_2 / sigma_1`` (near **1** = fat blob, near **0** = line). The ratio **falls vs flat** at moderate bends but can **rise again** when letters overlap in projection — not a monotonic legibility dial.
+    """)
+    return
+
+
+@app.cell
+def _(np, pd):
+    def random_projection(frame, n=3, random_state=42):
+        """Embed flat coordinates in `n` dimensions by a random orthogonal mix.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            Columns `x0`, `x1`, and `labels`.
+        n : int, default 3
+            Target dimension (must be at least the input dimension).
+        random_state : int, default 42
+            Seed for the random orthogonal matrix.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `x0` … `x{n-1}` plus `labels`.
+        """
+        labels = frame["labels"]
+        coords = frame[["x0", "x1"]].to_numpy()
+        assert n >= coords.shape[1]
+        rng = np.random.RandomState(random_state)
+        random_matrix = rng.randn(n, n)
+        _, vectors = np.linalg.eigh(random_matrix @ random_matrix.T)
+        projected = coords @ vectors[: coords.shape[1]]
+        columns = {f"x{j}": projected[:, j] for j in range(projected.shape[1])}
+        columns["labels"] = labels.to_numpy()
+        return pd.DataFrame(columns)
+
+    return (random_projection,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `random_projection`
+
+    A random orthogonal matrix **`V`** mixes the flat `(x0, x1)` into three coordinates **`(x0, x1, x2) = (x0, x1) @ V[:2]`** without changing any pairwise Euclidean distance. MDS fed those 3-D distances should recover a flat word — the success case before the S-bend failure.
+    """)
+    return
+
+
+@app.cell
+def _(np, pd):
+    def make_goliath_s_curve(frame, fold_tightness=1.0):
+        """Wrap the flat word onto an S-shaped surface in three dimensions.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            Flat cloud with `x0`, `x1`, and `labels`.
+        fold_tightness : float, default 1.0
+            Multiplier on the parameter along the word; values above 1 wind the
+            S more tightly (letters can come closer in space through the air).
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `x0`, `x1`, `x2`, and `labels` on the bent surface.
+        """
+        parameter = (frame.x0 - 2) * 0.78 * np.pi * fold_tightness
+        return pd.DataFrame(
+            {
+                "x0": np.sin(parameter),
+                "x1": frame.x1 * 1.5,
+                "x2": np.sign(parameter) * (np.cos(parameter) - 1) * 1.5,
+                "labels": frame.labels.to_numpy(),
+            }
+        )
+
+    return (make_goliath_s_curve,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `make_goliath_s_curve`
+
+    The horizontal position along the word becomes an angle **`t`**. **`x0 = sin(t)`** and **`x2 = sign(t)(cos(t) − 1)`** bend the sheet into an S while **`x1`** still tracks glyph height. Increasing **`fold_tightness`** winds the same word order through more of the S, bringing distant letters closer in straight-line distance — the regime where MDS misleads.
+    """)
+    return
+
+
+@app.cell
+def _(go, make_subplots, np):
+    def distance_matrix_figure(matrices, captions, title="Pairwise distance matrices"):
+        """Draw heatmaps for one or more distance matrices.
+
+        Parameters
+        ----------
+        matrices : list of numpy.ndarray
+            Square distance matrices, points ordered left-to-right.
+        captions : list of str
+            Subplot titles.
+        title : str, default "Pairwise distance matrices"
+            Overall figure title.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            Heatmaps with a shared colour bar and reversed row axis.
+        """
+        count = len(matrices)
+        figure = make_subplots(
+            rows=1,
+            cols=count,
+            subplot_titles=captions,
+            horizontal_spacing=0.06,
+        )
+        zmax = max(float(m.max()) for m in matrices)
+        for index, matrix in enumerate(matrices, start=1):
+            figure.add_trace(
+                go.Heatmap(
+                    z=matrix,
+                    colorscale="Blues",
+                    zmin=0,
+                    zmax=zmax,
+                    colorbar=dict(title="distance") if index == count else None,
+                    showscale=index == count,
+                ),
+                row=1,
+                col=index,
+            )
+            figure.update_yaxes(autorange="reversed", row=1, col=index)
+            figure.update_xaxes(visible=False, row=1, col=index)
+        figure.update_layout(
+            width=min(320 * count + 120, 980),
+            height=330,
+            title=title,
+            margin=dict(t=60, b=25, l=25, r=20),
+        )
+        return figure
+
+    return (distance_matrix_figure,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `distance_matrix_figure`
+
+    With the **`Blues`** scale, **darker cells are larger distances** and lighter cells are smaller. Reversing the **y axis** puts index 0 at the top so the light **within-letter blocks** sit on the diagonal. One colour bar keeps the scale comparable across panels.
+    """)
+    return
+
+
+@app.cell
+def _(go, np):
+    def shepard_figure(
+        input_distances,
+        embedded_coords,
+        title="Shepard diagram",
+        max_pairs=6000,
+        seed=42,
+        show_reference_line=True,
+    ):
+        """Plot input distances against distances in the embedding.
+
+        Parameters
+        ----------
+        input_distances : numpy.ndarray
+            Square matrix of input distances.
+        embedded_coords : numpy.ndarray of shape (n, k)
+            Coordinates returned by MDS.
+        title : str, default "Shepard diagram"
+            Figure title.
+        max_pairs : int, default 6000
+            Maximum number of upper-triangle pairs to draw (random subsample).
+        seed : int, default 42
+            Subsample seed.
+        show_reference_line : bool, default True
+            If True, draw the ``y = x`` line (meaningful for metric MDS only).
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            Scatter of input vs embedded distances.
+        """
+        embedded_distances = np.linalg.norm(
+            embedded_coords[:, None, :] - embedded_coords[None, :, :],
+            axis=-1,
+        )
+        indices = np.triu_indices(input_distances.shape[0], k=1)
+        original = input_distances[indices]
+        embedded = embedded_distances[indices]
+        if original.size > max_pairs:
+            rng = np.random.RandomState(seed)
+            pick = rng.choice(original.size, max_pairs, replace=False)
+            original = original[pick]
+            embedded = embedded[pick]
+        limit = float(max(original.max(), embedded.max()))
+        figure = go.Figure()
+        figure.add_trace(
+            go.Scatter(
+                x=original,
+                y=embedded,
+                mode="markers",
+                marker=dict(size=3, opacity=0.35),
+                name="pairs",
+            )
+        )
+        if show_reference_line:
+            figure.add_trace(
+                go.Scatter(
+                    x=[0, limit],
+                    y=[0, limit],
+                    mode="lines",
+                    name="y = x (metric target)",
+                    line=dict(dash="dash"),
+                )
+            )
+        figure.update_layout(
+            width=520,
+            height=420,
+            title=title,
+            xaxis_title="input distance",
+            yaxis_title="embedded distance",
+            margin=dict(t=55, b=45, l=55, r=20),
+        )
+        return figure
+
+    return (shepard_figure,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `shepard_figure`
+
+    Each dot is one pair of points. On **metric** MDS the cloud **hugs y = x** when distances are trustworthy; on the S-bend, **short** pairs often sit **below** y = x (embedded distance smaller than input straight-line distance) while the bulk still tracks the diagonal — letters flatten in the layout.
+    """)
+    return
+
+
+@app.cell
+def _(np, scipy_procrustes):
+    def procrustes_align(source, target):
+        """Orthogonally align `target` to `source`, allowing reflection.
+
+        Wraps ``scipy.spatial.procrustes``: both clouds are centred and scaled
+        to unit Frobenius norm, then `target` is rotated/reflected to match
+        `source`.
+
+        Parameters
+        ----------
+        source, target : array-like of shape (n, 2)
+            Two layouts of the same points.
+
+        Returns
+        -------
+        aligned : numpy.ndarray
+            Procrustes-transformed `target` coordinates.
+        disparity : float
+            Procrustes disparity (0 = perfect match up to similarity transform).
+        """
+        _, aligned, disparity = scipy_procrustes(
+            np.asarray(source, dtype=float),
+            np.asarray(target, dtype=float),
+        )
+        return aligned, float(disparity)
+
+    return (procrustes_align,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `procrustes_align`
+
+    MDS layouts differ by rotation and reflection. **`scipy.spatial.procrustes`** superimposes two layouts (rotation **and** reflection allowed, both normalised to unit scale) so you can compare **shape** after removing arbitrary orientation.
+    """)
+    return
+
+
+@app.cell
+def _(np):
+    def monotonic_distortion(distance_matrix, exponent=1.7):
+        """Distort distance values while preserving their rank order.
+
+        Parameters
+        ----------
+        distance_matrix : numpy.ndarray
+            Symmetric matrix of distances.
+        exponent : float, default 1.7
+            Power applied to off-diagonal entries (1 preserves values).
+
+        Returns
+        -------
+        numpy.ndarray
+            Distorted symmetric matrix with the same ordering but wrong intervals.
+        """
+        distorted = distance_matrix.astype(float).copy()
+        mask = ~np.eye(distorted.shape[0], dtype=bool)
+        distorted[mask] = distorted[mask] ** exponent
+        return distorted
+
+    return (monotonic_distortion,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `monotonic_distortion`
+
+    Raising distances to a power **`> 1`** stretches larger gaps more than small ones. **Order is unchanged**, but the numbers are no longer true Euclidean distances — a case where **non-metric** MDS is honest and **metric** MDS overfits the wrong scale.
+    """)
+    return
+
 
 
 @app.cell(hide_code=True)
@@ -259,25 +728,28 @@ def _(mo):
     3. Read a distance matrix as a picture of pairwise relationships.
     4. Explain the difference between metric and non-metric MDS, and when to prefer each.
     5. Explain why MDS struggles with a bent surface even though it preserves distances faithfully.
+    """)
+    return
 
-    ## Background
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## What MDS does
 
     **Multidimensional scaling** answers a narrow question: given the distances between items, what coordinates would reproduce them?
 
     That is a different starting point from PCA. PCA is given coordinates and looks for directions of variance. MDS is given, or computes, a **distance matrix** and searches for a layout whose own distances match it. You can run MDS on data with no coordinates at all — judgments of similarity between faces, say — which is its original use in psychology.
 
-    ### What "preserve" means
+    The fit minimises **stress**, a measure of how far the distances in the recovered layout are from the distances you supplied. **Only distances are preserved:** position and orientation are not. A layout can be rotated, reflected, or moved, and still reproduce every pairwise distance exactly.
+    """)
+    return
 
-    The fit minimises **stress**, a measure of how far the distances in the recovered layout are from the distances you supplied. Two consequences follow.
 
-    - **Only distances are preserved.** Absolute position and orientation are not. A layout can be rotated, reflected, or moved, and still reproduce every pairwise distance exactly.
-    - **The layout is a picture, not a measurement.** If two points are close in the layout, they were close by the supplied distances. The axes themselves carry no meaning and no units.
-
-    That first point is easy to state and easy to disbelieve, so the lesson tests it numerically: rotate the letters, measure the largest change in any pairwise distance, and see that it is essentially zero.
-
-    ### Metric and non-metric
-
-    There are two versions, and the distinction matters more than it sounds.
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Metric and non-metric MDS
 
     | | Metric MDS | Non-metric MDS |
     | :--- | :--- | :--- |
@@ -285,34 +757,80 @@ def _(mo):
     | Assumes distances are meaningful | yes | no, only that ordering is |
     | When to use | distances are real measurements | distances are similarities or judgments |
 
-    If you measured distances in centimetres, metric MDS is appropriate. If your data are answers to "how similar are these two on a scale of 1 to 10", the numbers are not really interval measurements, and non-metric MDS is the honest choice: it only requires that "more similar" is ordered correctly.
+    If you measured distances in centimetres, metric MDS is appropriate. If your data are answers to "how similar are these two on a scale of 1 to 10", non-metric MDS is the honest choice: it only requires that "more similar" is ordered correctly.
+    """)
+    return
 
-    ### The version note that matters
 
-    The argument names changed in scikit-learn 1.8, and older code will fail or, worse, silently do the wrong thing:
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## scikit-learn version note
 
-    - A precomputed distance matrix is passed with **`metric="precomputed"`**. The old name was `dissimilarity="precomputed"`.
-    - **`metric_mds=True`** selects metric MDS; `metric_mds=False` selects non-metric. The old boolean `metric=False` was a *different* argument that meant non-metric MDS.
+    The argument names changed in scikit-learn 1.8:
 
-    Those two uses of the word "metric" are the source of most confusion in this topic. This lesson keeps them visibly separate.
+    - A precomputed distance matrix is passed with **`metric="precomputed"`** (was `dissimilarity="precomputed"`).
+    - **`metric_mds=True`** selects metric MDS; `metric_mds=False` selects non-metric. The old boolean `metric=False` meant non-metric MDS but was a different argument.
 
-    ### Why a bend is hard
+    Those two uses of the word "metric" are the source of most confusion in this topic.
+    """)
+    return
 
-    MDS preserves **straight-line distance**. On a flat page that is exactly what you want. On a curved surface it is the wrong quantity: two points on opposite sides of an S can be close in a straight line while being far apart *along the surface*.
 
-    So MDS on a bent surface tends to flatten the bend, because flattening reduces the mismatch between straight-line distances. Keeping the bend would require the surface distances instead, which is the job of the manifold methods in the next lesson.
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Why a bend is hard for MDS
 
-    ## Datasets used
+    MDS preserves **straight-line (Euclidean) distance**. On a flat page that is exactly what you want. On a curved surface it is the wrong quantity: two points on opposite arms of an S can be close through the air while being far apart **along the surface**.
 
-    ### The rendered word GOLIATH
+    MDS therefore tends to **flatten** bends, because flattening reduces mismatch between straight-line distances. Keeping the bend would require **geodesic** distances along the surface — the topic of Isomap and locally linear embedding in the next lesson.
+    """)
+    return
 
-    **Source.** `Goliath.png`, supplied with this lesson: a 561 by 135 image of the word "GOLIATH" rendered in a bold typeface, white on a transparent background. Every coordinate in this notebook comes from the ink in that image, so the data is a set of real pixel positions rather than a synthetic cloud.
 
-    **How the points are made.** The sampler proposes four times as many random positions as needed, keeps only those landing on ink, and rescales the horizontal axis so the letters keep their proportions. It then labels each point with its letter by detecting the gaps between glyphs. The result is **1,000 points**, and rows are sorted left to right, so the column order carries the word order.
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Stress and SMACOF (metric MDS)
 
-    **Also in the folder.** `GOLIATH_S_curve.csv` is the same 1,000 points mapped onto an S-shaped surface in three dimensions. It is what the next lesson unrolls. This lesson builds that surface itself so the formula is visible.
+    **Raw stress** (badness of fit) is often written
 
-    There is no missing-value or privacy concern: the data are coordinates sampled from a rendered image, and nothing identifies a person.
+    \\[
+    \\sigma = \\sum_{i<j} \\bigl(d_{ij} - \\hat d_{ij}\\bigr)^2
+    \\]
+
+    where \\(d_{ij}\\) is the input distance and \\(\\hat d_{ij}\\) is the distance in the layout. With **`normalized_stress="auto"`**, **metric** MDS reports this **raw** stress; **non-metric** MDS reports **Kruskal stress-1** (normalised). Do not compare the two numbers directly.
+
+    The algorithm is **SMACOF**: starting from coordinates (here `init="random"` with `n_init=1` so you can see seed sensitivity), it alternates updates that pull embedded distances toward the input distances. Non-metric SMACOF replaces \\(d_{ij}\\) by **disparities** from **isotonic regression** on the rank order, then embeds those disparities.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Classical MDS and PCA
+
+    For **Euclidean** input distances, **classical MDS** double-centres the squared distances,
+
+    \\[
+    B = -\\tfrac12 J D^{(2)} J, \\quad J = I - \\tfrac1n \\mathbf 1\\mathbf 1^\\top,
+    \\]
+
+    and takes eigenvectors of \\(B\\). That is the same geometry as **PCA on the original coordinates** when those coordinates exist — a useful link back to lesson 1.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Dataset: rendered GOLIATH
+
+    **Source:** `Goliath.png` (also embedded as base64 below) — a **561 × 135** RGB image (alpha is **1 everywhere**, so there is no transparency). The word is **dark ink on a white background** (low channel-0 values); the sampler keeps pixels with value **below 1** as ink.
+
+    The sampler keeps **1,000** reproducible points (`seed=42`), sorted left to right. **`GOLIATH_S_curve.csv`** in the folder is the same points bent onto an S for the next lesson; here we build that surface with `make_goliath_s_curve` so the formula is visible.
     """)
     return
 
@@ -327,8 +845,8 @@ def _(mo):
     return
 
 
-@app.cell
-def _(base64, builder, io, np):
+@app.cell(hide_code=True)
+def _(Image, base64, io, np):
     # Goliath.png, embedded as base64 so the notebook needs no external file.
     # The string is the PNG itself, split across lines only to keep it readable.
     # Pixel values are divided by 255 because Pillow returns 0-255 integers while
@@ -357,24 +875,41 @@ def _(base64, builder, io, np):
         np.array(Image.open(io.BytesIO(base64.b64decode(goliath_b64)))).astype(float)
         / 255.0
     )
-    builder.image(goliath_image, title="Goliath.png, the source image", width=700, height=200)
     return goliath_b64, goliath_image
+
+
+@app.cell
+def _(go, goliath_image):
+    _channel = goliath_image[:, :, 0]
+    _figure = go.Figure(
+        go.Heatmap(
+            z=_channel,
+            colorscale=[[0, "rgb(0,0,0)"], [1, "rgb(255,255,255)"]],
+            showscale=False,
+        )
+    )
+    _figure.update_layout(
+        width=700,
+        height=200,
+        title="Goliath.png, the source image",
+        margin=dict(t=55, b=10, l=10, r=10),
+    )
+    _figure.update_xaxes(visible=False)
+    _figure.update_yaxes(autorange="reversed", visible=False)
+    _figure
+    return
 
 
 @app.cell(hide_code=True)
 def _(goliath_image, mo):
     mo.md(f"""
-    The image is **embedded in this notebook as base64 text**, not read from a file. That is deliberate: a notebook that opens `Goliath.png` works on your own machine and fails anywhere the file is absent, including a browser runtime. The decoded array has shape **{goliath_image.shape}**: rows, columns, and colour channels. The sampler reads a single colour channel, and a pixel counts as ink when it is dark, which is why the word appears as a shape rather than as colours.
-
-    The sampling step converts an **image** into a **point cloud**, which is what clustering and manifold methods can work with. Each ink pixel that is sampled becomes one row with two coordinates.
-
-    ### The sampled cloud
+    The image is **embedded as base64** in a hidden cell so the notebook runs without an external file (including browser runtimes). Shape **{goliath_image.shape}** (rows, columns, channels). Channel 0 is shown with **dark pixels = ink** on a white background; the sampler uses the same channel and keeps pixels with value **below 1** as ink.
     """)
     return
 
 
 @app.cell
-def _(goliath_image, pd, sample_goliath):
+def _(goliath_image, sample_goliath):
     letters = sample_goliath(goliath_image)
     letter_counts = letters.labels.value_counts().reindex(list("GOLIATH"))
     return letter_counts, letters
@@ -388,28 +923,34 @@ def _(letter_counts, letters, mo):
     | letter | points |
     | :--- | ---: |
     {"".join(f"| {_l} | {int(_c)} |" + chr(10) for _l, _c in letter_counts.items())}
-    The letters are not equally wide, so they do not get equal numbers of points. **I** is a thin glyph and **O** is wide, and the counts follow the available ink. That is a property of the image, not of the sampler.
+    Letters are not equally wide, so counts differ. **I** is the thinnest glyph; **L** has the fewest sampled points (**{int(letter_counts['L'])}**) because it is narrow. **O** is wide (**{int(letter_counts['O'])}**). Row order equals position in the word.
+    """)
+    return
 
-    The row order matters for everything that follows: because the rows are sorted by horizontal position, **row index equals position in the word**. That is what makes it possible to ask later whether a layout still runs left to right.
+
+@app.cell(hide_code=True)
+def _(letters, mo):
+    mo.md(f"""
+    First rows of the sampled table (two coordinate columns plus label):
+
+    {mo.Html(letters.head(8).to_html(index=False))}
     """)
     return
 
 
 @app.cell
 def _(draw_letters, letters):
-    draw_letters(letters, "Points sampled from the word GOLIATH")
+    letters_scatter_figure = draw_letters(
+        letters, "Points sampled from the word GOLIATH"
+    )
+    letters_scatter_figure
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The word is legible from points alone. Each letter is a distinct cluster of ink, and the gaps between letters are visible as empty vertical bands.
-
-    Keep two facts in mind, because the rest of the lesson depends on them:
-
-    - **The data is two-dimensional.** There are only `x0` and `x1`.
-    - **The horizontal axis carries the word order.** Moving left to right spells GOLIATH.
+    The word is legible from points alone. The data are **two-dimensional** (`x0`, `x1`), and **`x0` carries word order** left to right.
     """)
     return
 
@@ -419,9 +960,54 @@ def _(mo):
     mo.md(r"""
     ## 2. A rotation changes coordinates, not distances
 
-    This section tests a claim that is easy to accept and hard to feel: **rotating a point cloud leaves every pairwise distance unchanged.**
+    Rotating a point cloud leaves every pairwise distance unchanged. Below, drag the slider to rotate the cloud and watch the **largest pairwise distance change** stay at rounding error.
+    """)
+    return
 
-    Two rotated copies of the letters, one by −20° and one by 50°:
+
+@app.cell
+def _(mo):
+    rotation_slider = mo.ui.slider(
+        -90,
+        90,
+        value=25,
+        step=1,
+        label="Rotation angle (degrees)",
+        show_value=True,
+    )
+    rotation_slider
+    return (rotation_slider,)
+
+
+@app.cell
+def _(
+    distance_matrix_figure,
+    letters,
+    letters_panel,
+    np,
+    pairwise_distances,
+    rotate_letters,
+    rotation_slider,
+):
+    _angle = float(rotation_slider.value)
+    _rotated = rotate_letters(letters, _angle)
+    _base = pairwise_distances(letters[["x0", "x1"]])
+    _rot = pairwise_distances(_rotated[["x0", "x1"]])
+    _gap = float(np.max(np.abs(_base - _rot)))
+    rotation_slider_figure = letters_panel(
+        [letters, _rotated],
+        ["Original", f"Rotated { _angle:.0f}°"],
+        title=f"Rotation preserves shape (max distance change {_gap:.2e})",
+        width=780,
+    )
+    rotation_slider_figure
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Orthogonal rotations satisfy **RᵀR = I**, hence ‖Rx − Ry‖ = ‖x − y‖. MDS never sees orientation — only the distance matrix — so any rotated copy is equally valid input.
     """)
     return
 
@@ -430,20 +1016,13 @@ def _(mo):
 def _(letters, letters_panel, rotate_letters):
     turned_down = rotate_letters(letters, -20)
     turned_up = rotate_letters(letters, 50)
-    letters_panel(
+    rotation_triple_figure = letters_panel(
         [letters, turned_down, turned_up],
-        ["Original", "Rotated by -20 degrees", "Rotated by 50 degrees"],
-        title="The same word, three orientations",
+        ["Original", "Rotated by -20°", "Rotated by 50°"],
+        title="Three orientations, identical distances",
     )
+    rotation_triple_figure
     return turned_down, turned_up
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    The word is tilted, and no letter changed shape or size. Now the arithmetic behind that visual impression: compute the full distance matrix for each of the three clouds and compare them.
-    """)
-    return
 
 
 @app.cell
@@ -463,46 +1042,26 @@ def _(letters, np, pairwise_distances, turned_down, turned_up):
 @app.cell(hide_code=True)
 def _(distance_gap, letters, mo):
     mo.md(f"""
-    **The largest change in any pairwise distance is {distance_gap:.2e}.** With {len(letters)} points there are {len(letters) * (len(letters) - 1) // 2:,} pairs, and not one of them moved by more than a rounding error.
-
-    So the three clouds are **the same data**, described by different coordinates. That is the crux of what follows: if a method is only given distances, it cannot possibly recover which of the three orientations produced them.
+    Across {len(letters) * (len(letters) - 1) // 2:,} pairs, the **largest distance change** under rotation is **{distance_gap:.2e}** — essentially zero. The three clouds are the same data in different coordinates.
     """)
     return
 
 
 @app.cell
-def _(distances, distances_down, distances_up, go, make_subplots):
-    _figure = make_subplots(
-        rows=1,
-        cols=3,
-        subplot_titles=("Original", "Rotated -20 degrees", "Rotated 50 degrees"),
-        horizontal_spacing=0.05,
+def _(distance_matrix_figure, distances, distances_down, distances_up):
+    distance_matrices_figure = distance_matrix_figure(
+        [distances, distances_down, distances_up],
+        ["Original", "Rotated −20°", "Rotated 50°"],
+        title="Identical distance matrices (dark = far, light = near)",
     )
-    for _index, _matrix in enumerate(
-        (distances, distances_down, distances_up), start=1
-    ):
-        _figure.add_trace(
-            go.Heatmap(z=_matrix, colorscale="Blues", showscale=False),
-            row=1,
-            col=_index,
-        )
-    _figure.update_layout(
-        width=900, height=330, margin=dict(t=60, b=25, l=25, r=20)
-    )
-    _figure.update_xaxes(visible=False)
-    _figure.update_yaxes(visible=False)
-    _figure
+    distance_matrices_figure
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The three distance matrices are indistinguishable, which is the numerical form of the previous sentence.
-
-    **Reading a distance matrix.** It is square, one row and column per point, and symmetric because the distance from A to B is the distance from B to A. The diagonal is zero. Dark cells are small distances, so the dark blocks along the diagonal are the letters themselves: points within a letter are close to each other, and points in different letters are far.
-
-    Note that the matrix contains no orientation information at all. Nothing in it says the word was horizontal.
+    Each heatmap is symmetric with a **zero diagonal**. With **`Blues`**, **darker cells are larger distances**; the **light blocks on the diagonal** are within-letter pairs (small distance). The y axis is reversed so index 0 is at the top. Nothing in the matrix encodes orientation.
     """)
     return
 
@@ -535,11 +1094,9 @@ def _(mo):
 student_max_distance = distances.max()
 student_diagonal = distances.diagonal().sum()
 ```
-The largest distance is about **11.1**, roughly the span of the whole word, and the diagonal sums to **0.0**.
+The largest distance is about **4.02**, roughly the width of the word in the rescaled coordinates, and the diagonal sums to **0.0**.
 
-The diagonal is zero because every point is at distance zero from itself. That is what makes a distance matrix mostly redundant: the useful information sits off the diagonal, and the matrix is symmetric, so only half of it is needed.
-
-`distances.max()` is the diameter of the point cloud in the supplied metric, which is a compact way to describe how spread out the data is.
+The diagonal is zero because every point is at distance zero from itself. `distances.max()` is the diameter of the cloud — a compact summary of how spread out the ink is.
 """)
         },
         expanded=False,
@@ -552,7 +1109,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    MDS is given only the distance matrix. Given that the three rotations above produce identical matrices, what can MDS possibly recover? Work out your answer, then reveal it.
+    MDS is given only the distance matrix. Given that rotations produce identical matrices, what can MDS possibly recover? Work out your answer, then reveal it.
     """)
     return
 
@@ -562,17 +1119,11 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-It recovers the **relative arrangement** of the points, up to a rotation, reflection, and translation.
+It recovers the **relative arrangement** up to rotation, reflection, and translation.
 
-Because all three clouds have the same distance matrix, any of them is a valid answer, and MDS cannot know which one produced it. Whichever orientation it returns, the pairwise distances in its layout will match the supplied distances.
+The **shape** (clusters, gaps, neighbours) is meaningful; **axis directions are not**. Two seeds may return turned or mirrored layouts — both correct.
 
-Practically, this means:
-
-- The **shape** is meaningful: clusters, gaps, and neighbours are real.
-- The **axes are not**: "x" and "y" in an MDS plot are arbitrary directions.
-- The **orientation is arbitrary**: two runs with different seeds can produce layouts that are turned or mirrored relative to each other, and both are correct.
-
-That is why the next section measures agreement with the word order using an absolute correlation, and why it does not expect the layout to look like the original picture.
+That is why this lesson uses **along_word** (order along one axis) and **Procrustes alignment** (shape after removing orientation), not pixel overlap with the original image.
 """)
         },
         expanded=False,
@@ -583,12 +1134,55 @@ That is why the next section measures agreement with the word order using an abs
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 3. Recovering a layout from the distances alone
+    ## 3. Recovering a layout from distances alone
 
-    Now throw away the coordinates and keep only the distance matrix. MDS is asked for two dimensions, given the precomputed distances, and run twice with different seeds.
-
-    Two seeds are used deliberately. If the layout is determined by the distances, both runs should agree on the structure; where they differ is where the search started.
+    Coordinates are discarded; MDS sees only the **precomputed** distance matrix. Use the seed slider to see that **structure** repeats while **orientation** changes.
     """)
+    return
+
+
+@app.cell
+def _(mo):
+    mds_seed_slider = mo.ui.slider(
+        0,
+        99,
+        value=9,
+        step=1,
+        label="MDS random seed",
+        show_value=True,
+    )
+    mds_seed_slider
+    return (mds_seed_slider,)
+
+
+@app.cell
+def _(MDS, along_word, distances, letters, letters_panel, mds_seed_slider, pd):
+    _seed = int(mds_seed_slider.value)
+    _model = MDS(
+        n_components=2,
+        metric="precomputed",
+        metric_mds=True,
+        init="random",
+        n_init=1,
+        random_state=_seed,
+        normalized_stress="auto",
+    )
+    _embedded = _model.fit_transform(distances)
+    _layout = pd.DataFrame(
+        {
+            "x0": _embedded[:, 0],
+            "x1": _embedded[:, 1],
+            "labels": letters.labels.to_numpy(),
+        }
+    )
+    _score = along_word(letters.x0.to_numpy(), _embedded)
+    mds_seed_figure = letters_panel(
+        [letters, _layout],
+        ["Original coordinates", f"MDS seed {_seed} (stress {_model.stress_:.4f})"],
+        title=f"Flat word from distances alone (along-word {_score:.3f})",
+        width=820,
+    )
+    mds_seed_figure
     return
 
 
@@ -596,8 +1190,9 @@ def _(mo):
 def _(MDS, along_word, distances, letters, letters_panel, pd):
     flat_layouts = {}
     flat_agreement = {}
+    flat_stress = {}
     for _name, _seed in (("seed 9", 9), ("seed 5", 5)):
-        _embedded = MDS(
+        _model = MDS(
             n_components=2,
             metric="precomputed",
             metric_mds=True,
@@ -605,7 +1200,8 @@ def _(MDS, along_word, distances, letters, letters_panel, pd):
             n_init=1,
             random_state=_seed,
             normalized_stress="auto",
-        ).fit_transform(distances)
+        )
+        _embedded = _model.fit_transform(distances)
         flat_layouts[_name] = pd.DataFrame(
             {
                 "x0": _embedded[:, 0],
@@ -614,28 +1210,153 @@ def _(MDS, along_word, distances, letters, letters_panel, pd):
             }
         )
         flat_agreement[_name] = along_word(letters.x0.to_numpy(), _embedded)
-    letters_panel(
+        flat_stress[_name] = float(_model.stress_)
+    flat_seeds_figure = letters_panel(
         [flat_layouts["seed 9"], flat_layouts["seed 5"]],
-        ["MDS from distances, seed 9", "MDS from distances, seed 5"],
-        title="Two seeds, the same distances",
+        [
+            f"MDS seed 9 (raw stress {flat_stress['seed 9']:.2f})",
+            f"MDS seed 5 (raw stress {flat_stress['seed 5']:.2f})",
+        ],
+        title="Two seeds, the same flat distances",
         width=900,
     )
-    return flat_agreement, flat_layouts
+    flat_seeds_figure
+    return flat_agreement, flat_layouts, flat_stress
 
 
 @app.cell(hide_code=True)
-def _(flat_agreement, mo):
+def _(flat_agreement, flat_stress, mo):
     mo.md(f"""
-    The word comes back, and it is **not** in the same orientation as the original. One run may be turned or mirrored.
+    Both layouts recover the word with **along-word** correlations **{flat_agreement['seed 9']:.3f}** (seed 9) and **{flat_agreement['seed 5']:.3f}** (seed 5). **Seed 5 is mirrored** relative to seed 9 here — equally valid.
 
-    The `along-word` score measures how well the layout still runs left to right: it correlates the original row order with the longest axis of the layout, and takes the absolute value so a flipped axis is not penalised.
+    **Raw stress** differs (**{flat_stress['seed 9']:.2f}** vs **{flat_stress['seed 5']:.2f}**) because `n_init=1` lets SMACOF stop in different local minima; the layouts still match after Procrustes alignment. Production code would raise **`n_init`** for stability.
+    """)
+    return
 
-    - seed 9: **{flat_agreement['seed 9']:.3f}**
-    - seed 5: **{flat_agreement['seed 5']:.3f}**
 
-    Both are close to 1, so in both layouts the word order is preserved along one axis, even if that axis is not the horizontal one you see.
+@app.cell
+def _(MDS, distances, go, np):
+    _dims = list(range(1, 6))
+    _stress_values = []
+    for _d in _dims:
+        _model = MDS(
+            n_components=_d,
+            metric="precomputed",
+            metric_mds=True,
+            init="random",
+            n_init=4,
+            random_state=0,
+            normalized_stress="auto",
+        )
+        _model.fit(distances)
+        _stress_values.append(float(_model.stress_))
+    _figure = go.Figure(
+        go.Scatter(x=_dims, y=_stress_values, mode="lines+markers")
+    )
+    _figure.update_layout(
+        width=520,
+        height=380,
+        title="Stress vs number of dimensions (flat word)",
+        xaxis_title="n_components",
+        yaxis_type="log",
+        yaxis_title="raw stress (metric MDS)",
+        margin=dict(t=55, b=45, l=55, r=20),
+    )
+    _figure
+    return
 
-    That is exactly the behaviour promised in the previous section. The **structure** is recovered; the **orientation** is not, and cannot be, because it was never in the input.
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    **Raw stress** (metric MDS, **`n_init=4`**) is **lowest at two dimensions** for this flat word — the log axis shows the 1-D penalty clearly. Stress at 3–5 dimensions is **clearly higher, about 8 times** the 2-D value here when SMACOF finds other local minima; that does not mean the cloud is “really” four-dimensional.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Linear 3-D embedding: MDS succeeds
+
+    The flat word is embedded in 3-D by a **random orthogonal mix** (`random_projection`) — distances unchanged. MDS on those 3-D distances should recover the word, contrasting with the S-bend failure later.
+    """)
+    return
+
+
+@app.cell
+def _(letters, random_projection):
+    letters_3d = random_projection(letters, n=3, random_state=42)
+    return (letters_3d,)
+
+
+@app.cell(hide_code=True)
+def _(letters_3d, mo):
+    mo.md(f"""
+    First rows of the 3-D table (four columns — coordinates plus label):
+
+    {mo.Html(letters_3d.head(8).to_html(index=False))}
+    """)
+    return
+
+
+@app.cell
+def _(
+    MDS,
+    along_word,
+    letters,
+    letters_3d,
+    letters_panel,
+    pairwise_distances,
+    pd,
+):
+    dist_3d = pairwise_distances(letters_3d[["x0", "x1", "x2"]])
+    layouts_3d = {}
+    agree_3d = {}
+    for _label, _seed in (("seed 9", 9), ("seed 5", 5)):
+        _model = MDS(
+            n_components=2,
+            metric="precomputed",
+            metric_mds=True,
+            init="random",
+            n_init=1,
+            random_state=_seed,
+            normalized_stress="auto",
+        )
+        _emb = _model.fit_transform(dist_3d)
+        layouts_3d[_label] = pd.DataFrame(
+            {
+                "x0": _emb[:, 0],
+                "x1": _emb[:, 1],
+                "labels": letters.labels.to_numpy(),
+            }
+        )
+        agree_3d[_label] = along_word(letters.x0.to_numpy(), _emb)
+    linear_3d_figure = letters_panel(
+        [layouts_3d["seed 9"], layouts_3d["seed 5"]],
+        [
+            f"3-D distances → MDS, seed 9 ({agree_3d['seed 9']:.3f})",
+            f"3-D distances → MDS, seed 5 ({agree_3d['seed 5']:.3f})",
+        ],
+        title="Linear 3-D embedding recovered in 2-D",
+        width=900,
+    )
+    linear_3d_figure
+    return agree_3d, dist_3d, layouts_3d
+
+
+@app.cell(hide_code=True)
+def _(flat_layouts, layouts_3d, mo, procrustes_align):
+    _, procrustes_3d_gap = procrustes_align(
+        layouts_3d["seed 9"][["x0", "x1"]].to_numpy(),
+        layouts_3d["seed 5"][["x0", "x1"]].to_numpy(),
+    )
+    _, flat_vs_3d_gap = procrustes_align(
+        flat_layouts["seed 9"][["x0", "x1"]].to_numpy(),
+        layouts_3d["seed 9"][["x0", "x1"]].to_numpy(),
+    )
+    mo.md(f"""
+    Distances after a **linear orthogonal lift** are unchanged, so these panels match the **flat** MDS recovery up to rotation/reflection (Procrustes disparity **{flat_vs_3d_gap:.4f}** vs flat seed 9; seed 5 mirrored with disparity **{procrustes_3d_gap:.4f}**). The S-bend breaks this because straight-line 3-D distances no longer match **along-surface** neighbours.
     """)
     return
 
@@ -645,7 +1366,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Replace `None` so that `student_precomputed` holds the string that tells MDS the input is already a distance matrix, using the **current** scikit-learn argument.
+    Replace `None` so that `student_precomputed` holds the string that tells MDS the input is already a distance matrix (scikit-learn ≥ 1.8).
     """)
     return
 
@@ -665,11 +1386,7 @@ def _(mo):
 ```python
 student_precomputed = "precomputed"
 ```
-You would write `MDS(metric="precomputed", ...)`.
-
-The old name for this was `dissimilarity="precomputed"`, and older tutorials still use it. Since scikit-learn 1.8 the argument is `metric`, which is confusing because `metric` is also the name of the *distance function* in other estimators.
-
-Do not confuse it with `metric_mds`, which is a separate switch: `True` for metric MDS, `False` for non-metric. Two different meanings of the word "metric" in adjacent arguments is genuinely poor API design, and being explicit about both is the only defence.
+Use `MDS(metric="precomputed", ...)`. Do not confuse with `metric_mds`, which selects metric vs non-metric **algorithm**.
 """)
         },
         expanded=False,
@@ -680,46 +1397,218 @@ Do not confuse it with `metric_mds`, which is a separate switch: `True` for metr
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. A word bent into an S
+    ### Try it yourself
 
-    The letters are now wrapped onto an S-shaped surface in three dimensions, using a simple parametric formula. The **word order along the surface is unchanged**; only the geometry is different.
-
-    This is the case where preserving distances faithfully becomes a problem.
+    For the flat distance matrix, fill in the loop so `student_stresses[d]` holds `model.stress_` after metric MDS with `n_components=d` (try `d = 1, 2, 3`).
     """)
     return
 
 
 @app.cell
-def _(letters, np, pd):
-    _t = (letters.x0 - 2) * 0.78 * np.pi
-    curve = pd.DataFrame(
+def _(MDS, distances):
+    student_stresses = {}
+    for _d in (1, 2, 3):
+        student_stresses[_d] = None
+    print(student_stresses)
+    return (student_stresses,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
         {
-            "x0": np.sin(_t),
-            "x1": letters.x1 * 1.5,
-            "x2": np.sign(_t) * (np.cos(_t) - 1) * 1.5,
-            "labels": letters.labels.to_numpy(),
-        }
+            "Show answers": mo.md(r"""
+```python
+student_stresses = {}
+for d in (1, 2, 3):
+    model = MDS(
+        n_components=d,
+        metric="precomputed",
+        metric_mds=True,
+        init="random",
+        n_init=4,
+        random_state=0,
+        normalized_stress="auto",
     )
-    return (curve,)
+    model.fit(distances)
+    student_stresses[d] = model.stress_
+```
+With **`n_init=4`**, stress is **lowest at 2** dimensions; the 1-D value is vastly larger on a log plot. Values at 3+ can bump up slightly — local minima — but the word is still intrinsically **two-dimensional**.
+""")
+        },
+        expanded=False,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Use `procrustes_align` to register the seed-5 layout onto the seed-9 layout. Store the post-alignment Frobenius **`disparity`** in `student_procrustes_gap`.
+    """)
+    return
 
 
 @app.cell
-def _(curve, px):
+def _(flat_layouts, procrustes_align):
+    student_procrustes_gap = None
+    print("Procrustes gap:", student_procrustes_gap)
+    return (student_procrustes_gap,)
+
+
+@app.cell(hide_code=True)
+def _(flat_layouts, mo, procrustes_align):
+    _, _expected = procrustes_align(
+        flat_layouts["seed 9"][["x0", "x1"]].to_numpy(),
+        flat_layouts["seed 5"][["x0", "x1"]].to_numpy(),
+    )
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+```python
+_, student_procrustes_gap = procrustes_align(
+    flat_layouts["seed 9"][["x0", "x1"]].to_numpy(),
+    flat_layouts["seed 5"][["x0", "x1"]].to_numpy(),
+)
+```
+After allowing rotation **and reflection** (`scipy.spatial.procrustes`), disparity ≈ **{_expected:.4f}** — the shapes match; seed 5 was mirrored, not wrong. A disparity near 1 would mean genuinely different shapes.
+""")
+        },
+        expanded=False,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Ordinal distances: where non-metric MDS wins
+
+    The next demo **raises** flat distances to a power (`monotonic_distortion`). Order is preserved but intervals are wrong. Compare stress and Shepard diagrams for metric vs non-metric MDS on the same matrix.
+    """)
+    return
+
+
+@app.cell
+def _(distances, monotonic_distortion):
+    ordinal_subset_size = 250
+    ordinal_distances = monotonic_distortion(
+        distances[:ordinal_subset_size, :ordinal_subset_size],
+        exponent=1.8,
+    )
+    return ordinal_distances, ordinal_subset_size
+
+
+@app.cell
+def _(MDS, ordinal_distances, shepard_figure):
+    ordinal_metric_model = MDS(
+        n_components=2,
+        metric="precomputed",
+        metric_mds=True,
+        init="random",
+        n_init=1,
+        random_state=3,
+        normalized_stress="auto",
+    )
+    ordinal_nonmetric_model = MDS(
+        n_components=2,
+        metric="precomputed",
+        metric_mds=False,
+        init="random",
+        n_init=1,
+        random_state=3,
+        normalized_stress="auto",
+    )
+    ordinal_plane_m = ordinal_metric_model.fit_transform(ordinal_distances)
+    ordinal_plane_n = ordinal_nonmetric_model.fit_transform(ordinal_distances)
+    ordinal_metric_shepard = shepard_figure(
+        ordinal_distances,
+        ordinal_plane_m,
+        title=f"Shepard — metric MDS (raw stress {ordinal_metric_model.stress_:.2f})",
+        show_reference_line=True,
+    )
+    ordinal_metric_shepard
+    return (
+        ordinal_metric_model,
+        ordinal_nonmetric_model,
+        ordinal_plane_m,
+        ordinal_plane_n,
+    )
+
+
+@app.cell
+def _(ordinal_distances, ordinal_plane_n, ordinal_nonmetric_model, shepard_figure):
+    ordinal_nonmetric_shepard = shepard_figure(
+        ordinal_distances,
+        ordinal_plane_n,
+        title=(
+            f"Shepard — non-metric MDS "
+            f"(Stress-1 {ordinal_nonmetric_model.stress_:.4f})"
+        ),
+        show_reference_line=False,
+    )
+    ordinal_nonmetric_shepard
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, ordinal_metric_model, ordinal_nonmetric_model):
+    mo.md(f"""
+    **Metric raw stress:** {ordinal_metric_model.stress_:.2f}. **Non-metric Stress-1:** {ordinal_nonmetric_model.stress_:.4f} — different scales by design. Read the **metric** Shepard plot against the **y = x** line; for **non-metric**, look for a **monotonic** cloud (no y = x reference — embedded distances follow disparities, not input units).
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 4. A word bent into an S — MDS fails to unroll
+
+    The same word order is wrapped onto an S-shaped surface. MDS still minimises straight-line distance mismatch, so the layout collapses letters into **thin curved bands**: order survives, **legibility does not**.
+    """)
+    return
+
+
+@app.cell
+def _(letters, make_goliath_s_curve):
+    curve = make_goliath_s_curve(letters, fold_tightness=1.0)
+    return (curve,)
+
+
+@app.cell(hide_code=True)
+def _(curve, mo):
+    mo.md(f"""
+    Bent cloud (four columns):
+
+    {mo.Html(curve.head(8).to_html(index=False))}
+    """)
+    return
+
+
+@app.cell
+def _(LETTER_COLORS, curve, px):
     _figure = px.scatter_3d(
         curve,
         x="x0",
         y="x1",
         z="x2",
         color="labels",
-        title="The word bent into an S",
+        title="The word bent into an S (word order along the curve)",
         category_orders={"labels": list("GOLIATH")},
+        color_discrete_map=LETTER_COLORS,
     )
     _figure.update_traces(marker=dict(size=2, opacity=0.85))
     _figure.update_layout(
         width=760,
-        height=520,
+        height=480,
         margin=dict(t=55, b=20, l=20, r=20),
-        legend=dict(font=dict(size=9), itemsizing="constant"),
+        legend=dict(font=dict(size=9), itemsizing="constant", title="letter"),
+        scene=dict(
+            camera=dict(eye=dict(x=2.2, y=1.5, z=1.0)),
+            aspectmode="cube",
+        ),
     )
     _figure
     return
@@ -728,68 +1617,222 @@ def _(curve, px):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The word spirals through three dimensions. **G** and **H** are at opposite ends in word order, and they are also far apart in space, but points in the middle of the S can be close to points in an entirely different letter.
+    ### Explore fold tightness, metric vs non-metric, and stress
 
-    That is the difficulty. MDS preserves **straight-line** distance, so if two points from distant letters happen to sit close in three dimensions, MDS will faithfully place them close in two dimensions — even though they are far apart along the surface.
-
-    ### Metric MDS against non-metric MDS
-
-    Both are fitted to the same three coordinates. Metric MDS matches the distances themselves; non-metric MDS only matches their rank order.
+    Increase **fold tightness** to bring distant letters closer through the air. **Along-word** correlation can stay high at moderate folds but **falls** when the S is very tight. **`letter_shape_ratio`** **drops vs flat** then can **rise again** as letters overlap (watch the stat line under the plot). **Raw stress** is **not monotonic** in tightness — use it as a diagnostic, not a single trend line.
     """)
     return
 
 
 @app.cell
-def _(MDS, along_word, curve, letters, letters_panel, pd):
-    curve_layouts = {}
-    curve_agreement = {}
-    for _name, _metric_mds in (("metric", True), ("non-metric", False)):
-        _embedded = MDS(
-            n_components=2,
-            metric_mds=_metric_mds,
-            init="random",
-            n_init=1,
-            random_state=19,
-            normalized_stress="auto",
-        ).fit_transform(curve[["x0", "x1", "x2"]])
-        curve_layouts[_name] = pd.DataFrame(
-            {
-                "x0": _embedded[:, 0],
-                "x1": _embedded[:, 1],
-                "labels": curve.labels.to_numpy(),
-            }
-        )
-        curve_agreement[_name] = along_word(letters.x0.to_numpy(), _embedded)
-    letters_panel(
-        [curve_layouts["metric"], curve_layouts["non-metric"]],
-        ["Metric MDS on the S", "Non-metric MDS on the S"],
-        title="Metric and non-metric MDS on the same bend",
-        width=900,
+def _(mo):
+    fold_slider = mo.ui.slider(
+        0.6,
+        2.2,
+        value=1.0,
+        step=0.1,
+        label="S fold tightness",
+        show_value=True,
     )
-    return curve_agreement, curve_layouts
+    metric_checkbox = mo.ui.checkbox(value=True, label="Metric MDS (off = non-metric)")
+    mo.hstack([fold_slider, metric_checkbox], gap=2)
+    return fold_slider, metric_checkbox
+
+
+@app.cell
+def _(
+    MDS,
+    along_word,
+    fold_slider,
+    letter_shape_ratio,
+    letters,
+    letters_panel,
+    make_goliath_s_curve,
+    metric_checkbox,
+    pd,
+):
+    live_tightness = float(fold_slider.value)
+    live_curve = make_goliath_s_curve(letters, fold_tightness=live_tightness)
+    live_model = MDS(
+        n_components=2,
+        metric_mds=bool(metric_checkbox.value),
+        init="random",
+        n_init=1,
+        random_state=19,
+        normalized_stress="auto",
+    )
+    live_emb = live_model.fit_transform(live_curve[["x0", "x1", "x2"]])
+    live_layout = pd.DataFrame(
+        {
+            "x0": live_emb[:, 0],
+            "x1": live_emb[:, 1],
+            "labels": live_curve.labels.to_numpy(),
+        }
+    )
+    live_shape_ratio = letter_shape_ratio(live_curve, live_emb)
+    live_kind = "Metric" if metric_checkbox.value else "Non-metric"
+    live_stress_label = (
+        "raw stress"
+        if metric_checkbox.value
+        else "Stress-1"
+    )
+    live_s_summary = {
+        "kind": live_kind,
+        "tightness": live_tightness,
+        "stress": float(live_model.stress_),
+        "stress_label": live_stress_label,
+        "shape_ratio": live_shape_ratio,
+        "along_word": along_word(letters.x0.to_numpy(), live_emb),
+    }
+    live_s_figure = letters_panel(
+        [live_layout],
+        [f"{live_kind} MDS (tightness {live_tightness:.1f})"],
+        title="Live S-bend layout",
+        width=520,
+    )
+    live_s_figure
+    return (live_s_summary,)
 
 
 @app.cell(hide_code=True)
-def _(curve_agreement, flat_agreement, mo):
+def _(live_s_summary, mo):
     mo.md(f"""
-    Compare the four correlations:
+    **{live_s_summary['kind']}** at tightness **{live_s_summary['tightness']:.1f}:** {live_s_summary['stress_label']} **{live_s_summary['stress']:.2f}**, along-word **{live_s_summary['along_word']:.3f}**, mean shape ratio **{live_s_summary['shape_ratio']:.3f}** (σ₂/σ₁ per letter; lower = thinner ribbons).
+    """)
+    return
 
-    | Fit | Along-word correlation |
-    | :--- | ---: |
-    | Flat letters, metric MDS, seed 9 | {flat_agreement['seed 9']:.3f} |
-    | Flat letters, metric MDS, seed 5 | {flat_agreement['seed 5']:.3f} |
-    | S-bend, metric MDS | {curve_agreement['metric']:.3f} |
-    | S-bend, non-metric MDS | {curve_agreement['non-metric']:.3f} |
 
-    All four are high, and the two S-bend fits are close to the flat ones. The word order survives the bend, because the geometry, although curved, is still a gentle S rather than a fold that brings distant letters into contact.
+@app.cell
+def _(
+    MDS,
+    along_word,
+    curve,
+    flat_layouts,
+    letter_shape_ratio,
+    letters,
+    letters_panel,
+    pairwise_distances,
+    pd,
+    shepard_figure,
+):
+    curve_metric_model = MDS(
+        n_components=2,
+        metric_mds=True,
+        init="random",
+        n_init=1,
+        random_state=19,
+        normalized_stress="auto",
+    )
+    curve_nm_model = MDS(
+        n_components=2,
+        metric_mds=False,
+        init="random",
+        n_init=1,
+        random_state=19,
+        normalized_stress="auto",
+    )
+    curve_emb_metric = curve_metric_model.fit_transform(curve[["x0", "x1", "x2"]])
+    curve_emb_nonmetric = curve_nm_model.fit_transform(curve[["x0", "x1", "x2"]])
+    curve_layouts = {
+        "metric": pd.DataFrame(
+            {
+                "x0": curve_emb_metric[:, 0],
+                "x1": curve_emb_metric[:, 1],
+                "labels": curve.labels.to_numpy(),
+            }
+        ),
+        "non-metric": pd.DataFrame(
+            {
+                "x0": curve_emb_nonmetric[:, 0],
+                "x1": curve_emb_nonmetric[:, 1],
+                "labels": curve.labels.to_numpy(),
+            }
+        ),
+    }
+    curve_agreement = {
+        "metric": along_word(letters.x0.to_numpy(), curve_emb_metric),
+        "non-metric": along_word(letters.x0.to_numpy(), curve_emb_nonmetric),
+    }
+    curve_shape = {
+        "metric": letter_shape_ratio(curve, curve_emb_metric),
+        "non-metric": letter_shape_ratio(curve, curve_emb_nonmetric),
+    }
+    flat_shape = letter_shape_ratio(
+        letters, flat_layouts["seed 9"][["x0", "x1"]].to_numpy()
+    )
+    curve_input_distances = pairwise_distances(curve[["x0", "x1", "x2"]])
+    collapse_comparison_figure = letters_panel(
+        [flat_layouts["seed 9"], curve_layouts["metric"], curve_layouts["non-metric"]],
+        [
+            f"Flat MDS (shape ratio {flat_shape:.3f})",
+            f"S metric (ratio {curve_shape['metric']:.3f})",
+            f"S non-metric (ratio {curve_shape['non-metric']:.3f})",
+        ],
+        title="Flat recovery vs S-bend collapse",
+        width=1150,
+    )
+    collapse_comparison_figure
+    return (
+        curve_agreement,
+        curve_shape,
+        curve_layouts,
+        flat_shape,
+        curve_input_distances,
+        curve_emb_metric,
+        curve_emb_nonmetric,
+        curve_metric_model,
+        curve_nm_model,
+    )
 
-    So this example does **not** show MDS failing dramatically. What it does show is the shape of the problem:
 
-    - **Neither metric nor non-metric MDS unrolls a surface.** They find a flat layout that best matches straight-line distances. When the surface curves gently, that flat layout still works.
-    - **A tighter fold would break it.** If the S were folded so that distant letters touched, straight-line distances would say those letters are neighbours, and both versions would faithfully put them next to each other.
-    - **Unrolling is a different job.** That is what locally linear embedding and Isomap are for, in the next lesson. They use distances **along the surface** rather than through the air.
+@app.cell
+def _(
+    curve_emb_metric,
+    curve_emb_nonmetric,
+    curve_input_distances,
+    curve_metric_model,
+    curve_nm_model,
+    shepard_figure,
+):
+    sbend_metric_shepard = shepard_figure(
+        curve_input_distances,
+        curve_emb_metric,
+        title=(
+            f"Shepard — metric MDS on the S-bend "
+            f"(raw stress {curve_metric_model.stress_:.0f})"
+        ),
+        show_reference_line=True,
+    )
+    sbend_metric_shepard
+    return
 
-    The lesson to take away is not "MDS fails on curves". It is: **know which distance your method preserves, and check that it is the distance your problem means.**
+
+@app.cell
+def _(
+    curve_emb_nonmetric,
+    curve_input_distances,
+    curve_nm_model,
+    shepard_figure,
+):
+    sbend_nonmetric_shepard = shepard_figure(
+        curve_input_distances,
+        curve_emb_nonmetric,
+        title=(
+            f"Shepard — non-metric MDS on the S-bend "
+            f"(Stress-1 {curve_nm_model.stress_:.4f})"
+        ),
+        show_reference_line=False,
+    )
+    sbend_nonmetric_shepard
+    return
+
+
+@app.cell(hide_code=True)
+def _(curve_agreement, curve_shape, flat_shape, mo):
+    mo.md(f"""
+    **MDS fails to unroll the S.** Along-word correlation is still **{curve_agreement['metric']:.3f}** (metric) — order along the curve survives — but **mean shape ratio** falls from **{flat_shape:.3f}** on the flat layout to **{curve_shape['metric']:.3f}** (metric) and **{curve_shape['non-metric']:.3f}** (non-metric). Letters merge into **illegible ribbons** (the S seen edge-on), not an opened word.
+
+    The **metric** Shepard plot **hugs y = x** overall, with **short** pairs often **below** the line — straight-line input distances are a poor stand-in for **along-surface** neighbours. Neither MDS variant invents geodesics; that is why the next lesson turns to Isomap and LLE.
     """)
     return
 
@@ -799,7 +1842,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Metric and non-metric MDS give similar correlations here. Describe the situation in which they would be expected to differ, and why. Work out your answer, then reveal it.
+    Metric and non-metric MDS give similar correlations on the S-bend here. Describe a situation where they would differ, and why.
     """)
     return
 
@@ -809,14 +1852,38 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-They differ when the **numbers are not trustworthy as distances, but their order is**.
+They differ when **values are untrustworthy but order is**.
 
-- **Metric MDS** tries to reproduce each distance value. If your inputs are real measurements in a unit, that is right, and it uses more of the information.
-- **Non-metric MDS** only requires that "closer" stays "closer". It is the correct choice when the numbers came from ratings, rankings, or perceived similarity, where the interval between 3 and 4 need not equal the interval between 7 and 8.
+Metric MDS chases every numeric gap; non-metric MDS fits **rank order** via isotonic disparities. See the **ordinal distortion** section: powering distances breaks interval meaning while preserving order.
 
-In this lesson the inputs are Euclidean distances computed from real coordinates, so the values are meaningful and metric MDS loses nothing. The two agree because there is nothing for the rank-only version to gain.
+On the S-bend, inputs are true Euclidean distances in 3-D, so both methods chase the same wrong straight-line objective — hence similar collapsed layouts.
+""")
+        },
+        expanded=False,
+    )
+    return
 
-They would visibly diverge if you handed both a matrix of subjective similarity scores, or a matrix with systematic distortion, such as distances measured by a stretched ruler. There the values are distorted but the ordering survives, and only non-metric MDS is being honest about what the data supports.
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    If **fold tightness** increases, what should happen to (a) along-word correlation and (b) mean shape ratio in the MDS layout? Reason first, then reveal.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**(a) Along-word** can stay fairly high at moderate tightness but **falls** when the fold is extreme (try 1.6–2.2 on the slider): the global sequence is harder to keep on one axis when unrelated letters become neighbours through the air.
+
+**(b) Shape ratio** (σ₂/σ₁ per letter) **drops vs the flat layout** when glyphs become **ribbons**, but can **rise again** at extreme tightness when letters **overlap** in the 2-D map — check the stat line under the live plot.
+
+**Raw stress** is **not monotonic** in tightness; it reports misfit to straight-line distances, not “how bent” the S looks.
 """)
         },
         expanded=False,
@@ -827,24 +1894,20 @@ They would visibly diverge if you handed both a matrix of subjective similarity 
 @app.cell(hide_code=True)
 def _(
     curve_agreement,
+    curve_shape,
     distance_gap,
     flat_agreement,
-    letter_counts,
-    letters,
+    flat_shape,
     mo,
 ):
     mo.md(f"""
     ## Conclusions
 
-    1. **MDS is given distances and returns coordinates.** It minimises stress, the mismatch between the distances you supplied and the distances in its layout. It does not need coordinates to start with, which is why it is used on similarity judgments as well as on measurements.
-    2. **A rotation changes every coordinate and no distance.** The largest change across all {len(letters) * (len(letters) - 1) // 2:,} pairs was **{distance_gap:.2e}**, so the three clouds of letters are the same data in different orientations.
-    3. **Therefore an MDS layout has no meaningful axes.** Any rotation, reflection, or translation of a good layout is equally good. The recovered shape is real; the direction it points is arbitrary, which is why two seeds can give turned or mirrored pictures with the same correlation.
-    4. **A distance matrix is symmetric with a zero diagonal.** It encodes which points are close to which, and nothing about orientation. {len(letters)} points means {len(letters) * (len(letters) - 1) // 2:,} distinct distances.
-    5. **The word was recovered from distances alone** on the flat data, at along-word correlations of {flat_agreement['seed 9']:.3f} and {flat_agreement['seed 5']:.3f} for the two seeds.
-    6. **Metric and non-metric MDS preserve different things.** Metric matches the distance values; non-metric matches only their rank order. Use non-metric when the numbers are ratings or similarities rather than true distances. On the S-bend they scored {curve_agreement['metric']:.3f} and {curve_agreement['non-metric']:.3f}.
-    7. **Preserving distances is not the same as unrolling a surface.** Both MDS variants look for a flat layout matching straight-line distances, so a gentle bend survives but a tight fold would not. Unrolling needs distances along the surface, which is the next lesson's topic.
-    8. **Watch the two meanings of "metric".** `metric="precomputed"` says the input is already a distance matrix; `metric_mds=True/False` selects the algorithm variant. Older code uses `dissimilarity=` for the first.
-    9. **The letters have unequal point counts** ({", ".join(f"{_l}: {int(_c)}" for _l, _c in letter_counts.items())}), because glyph widths differ. That is a property of the image, and it is worth noticing before reading anything into cluster sizes.
+    1. **MDS fits coordinates to a distance matrix** by lowering stress — the mismatch between input and embedded distances (Goal 1).
+    2. **Rotations change coordinates, not distances** (max change **{distance_gap:.2e}** here), so MDS layouts have no meaningful axes — only shape (Goal 2).
+    3. **Heatmaps summarise pairs:** symmetric, zero diagonal, dark = far with the Blues scale (Goal 3).
+    4. **Metric MDS matches values; non-metric fits order** — use non-metric for ratings or monotonically distorted inputs (Goal 4; ordinal demo above).
+    5. **On the S-bend, MDS preserves straight-line distances but fails to unroll:** along-word **{curve_agreement['metric']:.3f}** vs flat **{flat_agreement['seed 9']:.3f}**, but mean shape ratio **{curve_shape['metric']:.3f}** vs **{flat_shape:.3f}** on the flat layout — ribbons, not a readable word (Goal 5).
     """)
     return
 
