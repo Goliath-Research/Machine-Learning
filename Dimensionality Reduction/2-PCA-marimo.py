@@ -320,8 +320,8 @@ def _(np, plt):
                     verticalalignment="bottom",
                 )
         if _display_title:
-            _grid_top = 0.88 - 0.06 * _title_lines
-            _grid_top = max(_grid_top, 0.72)
+            _grid_top = 0.92 - 0.07 * _title_lines - 0.025 * max(cols - 1, 0)
+            _grid_top = max(_grid_top, 0.68)
             figure.subplots_adjust(
                 top=_grid_top,
                 bottom=0.06,
@@ -330,7 +330,7 @@ def _(np, plt):
             )
             figure.suptitle(
                 _display_title,
-                y=_grid_top + (1.0 - _grid_top) * 0.55,
+                y=min(0.98, _grid_top + (1.0 - _grid_top) * 0.72),
                 fontsize=10,
             )
         return figure
