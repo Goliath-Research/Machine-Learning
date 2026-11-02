@@ -2,6 +2,7 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo",
+#     "matplotlib",
 #     "numpy",
 #     "pandas",
 #     "plotly",
@@ -23,6 +24,7 @@ async def _():
     # Setup: run this cell to install any missing packages.
     # You do not need to modify this code.
     _packages = {
+        "matplotlib": "matplotlib",
         "numpy": "numpy",
         "pandas": "pandas",
         "plotly": "plotly",
@@ -49,6 +51,7 @@ async def _():
 @app.cell
 def _(packages_ready):
     import marimo as mo
+    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import plotly.express as px
@@ -61,7 +64,7 @@ def _(packages_ready):
     px.defaults.color_discrete_sequence = px.colors.qualitative.G10
     builder = pb.PlotBuilder(width=780, height=540)
 
-    return PCA, builder, load_digits, mo, np, pd, px
+    return PCA, builder, load_digits, mo, np, pd, plt, px
 
 
 @app.cell(hide_code=True)
@@ -163,9 +166,9 @@ def _(digit_shapes, digits, mo):
 
 
 @app.cell
-def _(builder):
-    def plot_digits(images, rows, cols, title=None, labels=None):
-        """Draw a grid of 8 by 8 digit images with Plotly.
+def _(np, plt):
+    def plot_digits(images, rows, cols, title=None, labels=None, clim=(0, 16)):
+        """Draw a grid of 8 by 8 digit images with matplotlib.
 
         Parameters
         ----------
@@ -176,30 +179,69 @@ def _(builder):
         title : str or None
             Optional heading above the grid.
         labels : array-like or None, default None
-            Optional digit label per image, printed in blue inside each cell.
-            At 8 by 8 pixels the pattern alone is hard to identify, so the label
-            is what lets a reader tell which digit they are looking at.
+            Optional digit label per image, written in blue near the
+            bottom-left of each cell. At 8 by 8 pixels the pattern alone is
+            hard to identify, so the label is what lets a reader tell which
+            digit they are looking at. The label is placed in *axes*
+            coordinates, so it sits inside the cell whatever the pixel values
+            happen to be.
+        clim : tuple of float or None, default (0, 16)
+            Fixed grey-level range shared by every panel in the lesson. A
+            shared range is what makes a noisy panel comparable with a
+            reconstructed one; `None` lets each panel autoscale.
 
         Returns
         -------
-        plotly.graph_objects.Figure
-            The grid, with one heatmap trace per cell and axes hidden because
-            pixel coordinates carry no meaning for a reader.
+        matplotlib.figure.Figure
+            The grid. Axes are left tick-free because pixel coordinates carry
+            no meaning for a reader.
         """
-        return builder.digit_grid(images, rows, cols, title or "", labels=labels)
+        data = np.asarray(images)
+        if data.ndim == 3:
+            data = data.reshape(len(data), -1)
+        figure, axes = plt.subplots(
+            rows,
+            cols,
+            figsize=(8, rows),
+            subplot_kw={"xticks": [], "yticks": []},
+            gridspec_kw=dict(hspace=0.1, wspace=0.1),
+        )
+        for index, ax in enumerate(axes.flat):
+            if index >= len(data):
+                ax.set_visible(False)
+                continue
+            ax.imshow(
+                data[index].reshape(8, 8),
+                cmap="binary",
+                interpolation="nearest",
+                clim=clim,
+            )
+            if labels is not None:
+                ax.text(
+                    0.10,
+                    0.05,
+                    str(labels[index]),
+                    transform=ax.transAxes,
+                    color="blue",
+                    verticalalignment="bottom",
+                )
+        if title:
+            figure.suptitle(title)
+        return figure
 
     return (plot_digits,)
 
 
 @app.cell
 def _(digits, plot_digits):
-    plot_digits(
+    _figure = plot_digits(
         digits.images,
         4,
         10,
         "The first 40 images, with the true digit written in each cell",
         labels=digits.target,
     )
+    _figure
     return
 
 
@@ -484,13 +526,14 @@ def _(mo):
 @app.cell
 def _(digits, np, plot_digits):
     noisy_digits = np.random.RandomState(42).normal(digits.data, 4)
-    plot_digits(
+    _figure = plot_digits(
         noisy_digits,
         4,
         10,
         "The same 40 images with pixel noise added, labelled with their true digit",
         labels=digits.target,
     )
+    _figure
     return (noisy_digits,)
 
 
@@ -556,49 +599,53 @@ def _(mo, recon_scores):
 
 @app.cell
 def _(digits, plot_digits, rebuilt):
-    plot_digits(
+    _figure = plot_digits(
         rebuilt[0.25],
         4,
         10,
         "Rebuilt from 25% of the noisy variance",
         labels=digits.target,
     )
+    _figure
     return
 
 
 @app.cell
 def _(digits, plot_digits, rebuilt):
-    plot_digits(
+    _figure = plot_digits(
         rebuilt[0.50],
         4,
         10,
         "Rebuilt from 50% of the noisy variance",
         labels=digits.target,
     )
+    _figure
     return
 
 
 @app.cell
 def _(digits, plot_digits, rebuilt):
-    plot_digits(
+    _figure = plot_digits(
         rebuilt[0.60],
         4,
         10,
         "Rebuilt from 60% of the noisy variance",
         labels=digits.target,
     )
+    _figure
     return
 
 
 @app.cell
 def _(digits, plot_digits, rebuilt):
-    plot_digits(
+    _figure = plot_digits(
         rebuilt[0.75],
         4,
         10,
         "Rebuilt from 75% of the noisy variance",
         labels=digits.target,
     )
+    _figure
     return
 
 
