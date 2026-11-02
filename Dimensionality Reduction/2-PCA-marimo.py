@@ -549,6 +549,7 @@ def _(digit_pca, plot_digits):
         2,
         3,
         "The first six eigendigit directions (principal components 1–6)",
+        clim=None,
     )
     _figure
     return
@@ -1260,6 +1261,7 @@ def _(
     recon_scores,
 ):
     _best = recon_scores["RMSE vs clean original"].idxmin()
+    _best_value = recon_scores.loc[_best, "RMSE vs clean original"]
     _r50 = recon_scores.loc["50%", "RMSE vs clean original"]
     _r60 = recon_scores.loc["60%", "RMSE vs clean original"]
     mo.accordion(
@@ -1271,7 +1273,7 @@ def _(
 4. **Because each component is defined as perpendicular to all the earlier ones.** The 40th direction depends on the previous 39 having been removed from consideration, so the set of components is ordered by construction. You always keep a prefix.
 5. **Because it has no shared direction.** Real stroke structure appears consistently across images and therefore lines up in a direction where the data genuinely varies. Independent noise varies differently in every image, so it spreads thinly across all 64 directions, most of which have negligible variance.
 6. **The two statements compare against different references.** Changing the input little means staying close to the noisy image; being accurate means staying close to the clean image. The noisy input is itself far from the clean one, so fidelity to it means inheriting its errors.
-7. **On the four-share grid, {_best} wins** at {_r50:.3f} against the **clean original**, with 60% at {_r60:.3f} (difference {abs(_r50 - _r60):.3f}). The full k sweep minimum is **k = {best_k_clean}** at **{best_clean_rmse:.3f}**. "Best" means closest to the truth, not closest to the input.
+7. **On the four-share grid, {_best} wins** at {_best_value:.3f} against the **clean original**, with 60% at {_r60:.3f} (difference {abs(_r50 - _r60):.3f}). The full k sweep minimum is **k = {best_k_clean}** at **{best_clean_rmse:.3f}**. "Best" means closest to the truth, not closest to the input.
 8. **Because the right share depends on what the components are for.** A visualisation tolerates a lot of loss; a filter needs enough to hold the signal; a compressed representation needs whatever the downstream model can work with. The required share also depends on the noise level and on how the variance is distributed in the particular data.
 """)
         },
