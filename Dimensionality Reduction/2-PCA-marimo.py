@@ -70,7 +70,7 @@ def _(packages_ready):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # PCA for Pictures and Noise
+    # PCA for Image Visualization and Noise Filtering
 
     ## Objectives
 
