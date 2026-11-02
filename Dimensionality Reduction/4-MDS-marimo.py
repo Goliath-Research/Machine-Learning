@@ -373,8 +373,9 @@ def _(np):
         -------
         float
             Average over letters of ``sigma_2 / sigma_1`` (0 = line, 1 = round
-            blob). MDS on the S-bend collapses letters toward **ribbons**, so
-            this ratio **falls** relative to a flat, legible layout.
+            blob). Versus a flat layout the ratio **drops sharply** on a
+            moderate S-bend; at **extreme** folds overlapping letters can
+            **raise** it again, so it is not monotonic in tightness.
         """
         embedded = np.asarray(embedded)
         labels = frame["labels"].to_numpy()
@@ -397,7 +398,7 @@ def _(mo):
     mo.md(r"""
     ### `letter_shape_ratio`
 
-    Legible letters occupy **2-D blobs** in the layout; S-bend MDS squashes them into **ribbons** (one long direction, one thin direction). For each letter we SVD its centered points and record ``sigma_2 / sigma_1`` (near **1** = fat blob, near **0** = line). Word order can stay high on `along_word` while this ratio **falls**.
+    Legible letters occupy **2-D blobs** in the layout; S-bend MDS squashes them into **ribbons** (one long direction, one thin direction). For each letter we SVD its centered points and record ``sigma_2 / sigma_1`` (near **1** = fat blob, near **0** = line). The ratio **falls vs flat** at moderate bends but can **rise again** when letters overlap in projection — not a monotonic legibility dial.
     """)
     return
 
@@ -632,7 +633,7 @@ def _(mo):
     mo.md(r"""
     ### `shepard_figure`
 
-    Each dot is one pair of points. On **metric** MDS the cloud hugs the diagonal when straight-line input distances are trustworthy. When the surface is bent, many pairs are **too close in the input** (through-the-air distance) compared with distance along the word — the cloud bends **below** the diagonal and letters flatten in the layout.
+    Each dot is one pair of points. On **metric** MDS the cloud **hugs y = x** when distances are trustworthy; on the S-bend, **short** pairs often sit **below** y = x (embedded distance smaller than input straight-line distance) while the bulk still tracks the diagonal — letters flatten in the layout.
     """)
     return
 
@@ -880,7 +881,7 @@ def _(Image, base64, io, np):
 @app.cell
 def _(go, goliath_image):
     _channel = goliath_image[:, :, 0]
-    _figure = go.Figure(go.Heatmap(z=_channel, colorscale="Gray_r", showscale=False))
+    _figure = go.Figure(go.Heatmap(z=_channel, colorscale="Greys", showscale=False))
     _figure.update_layout(
         width=700,
         height=200,
@@ -902,7 +903,7 @@ def _(goliath_image, mo):
 
 
 @app.cell
-def _(goliath_image, pd, sample_goliath):
+def _(goliath_image, sample_goliath):
     letters = sample_goliath(goliath_image)
     letter_counts = letters.labels.value_counts().reindex(list("GOLIATH"))
     return letter_counts, letters
@@ -933,7 +934,10 @@ def _(letters, mo):
 
 @app.cell
 def _(draw_letters, letters):
-    draw_letters(letters, "Points sampled from the word GOLIATH")
+    letters_scatter_figure = draw_letters(
+        letters, "Points sampled from the word GOLIATH"
+    )
+    letters_scatter_figure
     return
 
 
@@ -984,12 +988,13 @@ def _(
     _base = pairwise_distances(letters[["x0", "x1"]])
     _rot = pairwise_distances(_rotated[["x0", "x1"]])
     _gap = float(np.max(np.abs(_base - _rot)))
-    letters_panel(
+    rotation_slider_figure = letters_panel(
         [letters, _rotated],
         ["Original", f"Rotated { _angle:.0f}°"],
         title=f"Rotation preserves shape (max distance change {_gap:.2e})",
         width=780,
     )
+    rotation_slider_figure
     return
 
 
@@ -1005,11 +1010,12 @@ def _(mo):
 def _(letters, letters_panel, rotate_letters):
     turned_down = rotate_letters(letters, -20)
     turned_up = rotate_letters(letters, 50)
-    letters_panel(
+    rotation_triple_figure = letters_panel(
         [letters, turned_down, turned_up],
         ["Original", "Rotated by -20°", "Rotated by 50°"],
         title="Three orientations, identical distances",
     )
+    rotation_triple_figure
     return turned_down, turned_up
 
 
@@ -1037,11 +1043,12 @@ def _(distance_gap, letters, mo):
 
 @app.cell
 def _(distance_matrix_figure, distances, distances_down, distances_up):
-    distance_matrix_figure(
+    distance_matrices_figure = distance_matrix_figure(
         [distances, distances_down, distances_up],
         ["Original", "Rotated −20°", "Rotated 50°"],
         title="Identical distance matrices (dark = far, light = near)",
     )
+    distance_matrices_figure
     return
 
 
@@ -1163,12 +1170,13 @@ def _(MDS, along_word, distances, letters, letters_panel, mds_seed_slider, pd):
         }
     )
     _score = along_word(letters.x0.to_numpy(), _embedded)
-    letters_panel(
+    mds_seed_figure = letters_panel(
         [letters, _layout],
         ["Original coordinates", f"MDS seed {_seed} (stress {_model.stress_:.4f})"],
         title=f"Flat word from distances alone (along-word {_score:.3f})",
         width=820,
     )
+    mds_seed_figure
     return
 
 
@@ -1197,7 +1205,7 @@ def _(MDS, along_word, distances, letters, letters_panel, pd):
         )
         flat_agreement[_name] = along_word(letters.x0.to_numpy(), _embedded)
         flat_stress[_name] = float(_model.stress_)
-    letters_panel(
+    flat_seeds_figure = letters_panel(
         [flat_layouts["seed 9"], flat_layouts["seed 5"]],
         [
             f"MDS seed 9 (raw stress {flat_stress['seed 9']:.2f})",
@@ -1206,6 +1214,7 @@ def _(MDS, along_word, distances, letters, letters_panel, pd):
         title="Two seeds, the same flat distances",
         width=900,
     )
+    flat_seeds_figure
     return flat_agreement, flat_layouts, flat_stress
 
 
@@ -1229,7 +1238,7 @@ def _(MDS, distances, go, np):
             metric="precomputed",
             metric_mds=True,
             init="random",
-            n_init=1,
+            n_init=4,
             random_state=0,
             normalized_stress="auto",
         )
@@ -1254,7 +1263,7 @@ def _(MDS, distances, go, np):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    **Raw stress** (metric MDS) **falls** as you allow more dimensions, then levels off — on a log axis you can see the drop from 1-D to 2-D. For this flat word, **two components** already capture essentially all structure.
+    **Raw stress** (metric MDS, **`n_init=4`**) is **lowest at two dimensions** for this flat word — the log axis shows the 1-D penalty clearly. Stress at 3–5 dimensions can be **slightly higher** when SMACOF finds other local minima; that does not mean the cloud is “really” four-dimensional.
     """)
     return
 
@@ -1294,31 +1303,30 @@ def _(
     letters_panel,
     pairwise_distances,
     pd,
-    procrustes_align,
 ):
     dist_3d = pairwise_distances(letters_3d[["x0", "x1", "x2"]])
     layouts_3d = {}
     agree_3d = {}
-    for label, seed in (("seed 9", 9), ("seed 5", 5)):
-        model = MDS(
+    for _label, _seed in (("seed 9", 9), ("seed 5", 5)):
+        _model = MDS(
             n_components=2,
             metric="precomputed",
             metric_mds=True,
             init="random",
             n_init=1,
-            random_state=seed,
+            random_state=_seed,
             normalized_stress="auto",
         )
-        emb = model.fit_transform(dist_3d)
-        layouts_3d[label] = pd.DataFrame(
+        _emb = _model.fit_transform(dist_3d)
+        layouts_3d[_label] = pd.DataFrame(
             {
-                "x0": emb[:, 0],
-                "x1": emb[:, 1],
+                "x0": _emb[:, 0],
+                "x1": _emb[:, 1],
                 "labels": letters.labels.to_numpy(),
             }
         )
-        agree_3d[label] = along_word(letters.x0.to_numpy(), emb)
-    letters_panel(
+        agree_3d[_label] = along_word(letters.x0.to_numpy(), _emb)
+    linear_3d_figure = letters_panel(
         [layouts_3d["seed 9"], layouts_3d["seed 5"]],
         [
             f"3-D distances → MDS, seed 9 ({agree_3d['seed 9']:.3f})",
@@ -1327,15 +1335,16 @@ def _(
         title="Linear 3-D embedding recovered in 2-D",
         width=900,
     )
+    linear_3d_figure
+    return agree_3d, dist_3d, layouts_3d
+
+
+@app.cell(hide_code=True)
+def _(flat_layouts, layouts_3d, mo, procrustes_align):
     _, procrustes_3d_gap = procrustes_align(
         layouts_3d["seed 9"][["x0", "x1"]].to_numpy(),
         layouts_3d["seed 5"][["x0", "x1"]].to_numpy(),
     )
-    return agree_3d, dist_3d, layouts_3d, procrustes_3d_gap
-
-
-@app.cell(hide_code=True)
-def _(flat_layouts, layouts_3d, mo, procrustes_align, procrustes_3d_gap):
     _, flat_vs_3d_gap = procrustes_align(
         flat_layouts["seed 9"][["x0", "x1"]].to_numpy(),
         layouts_3d["seed 9"][["x0", "x1"]].to_numpy(),
@@ -1411,14 +1420,14 @@ for d in (1, 2, 3):
         metric="precomputed",
         metric_mds=True,
         init="random",
-        n_init=1,
+        n_init=4,
         random_state=0,
         normalized_stress="auto",
     )
     model.fit(distances)
     student_stresses[d] = model.stress_
 ```
-Stress drops sharply from 1 to 2 dimensions, then barely changes at 3 — the cloud is intrinsically two-dimensional.
+With **`n_init=4`**, stress is **lowest at 2** dimensions; the 1-D value is vastly larger on a log plot. Values at 3+ can bump up slightly — local minima — but the word is still intrinsically **two-dimensional**.
 """)
         },
         expanded=False,
@@ -1508,12 +1517,13 @@ def _(MDS, ordinal_distances, shepard_figure):
     )
     ordinal_plane_m = ordinal_metric_model.fit_transform(ordinal_distances)
     ordinal_plane_n = ordinal_nonmetric_model.fit_transform(ordinal_distances)
-    shepard_figure(
+    ordinal_metric_shepard = shepard_figure(
         ordinal_distances,
         ordinal_plane_m,
         title=f"Shepard — metric MDS (raw stress {ordinal_metric_model.stress_:.2f})",
         show_reference_line=True,
     )
+    ordinal_metric_shepard
     return (
         ordinal_metric_model,
         ordinal_nonmetric_model,
@@ -1524,7 +1534,7 @@ def _(MDS, ordinal_distances, shepard_figure):
 
 @app.cell
 def _(ordinal_distances, ordinal_plane_n, ordinal_nonmetric_model, shepard_figure):
-    shepard_figure(
+    ordinal_nonmetric_shepard = shepard_figure(
         ordinal_distances,
         ordinal_plane_n,
         title=(
@@ -1533,6 +1543,7 @@ def _(ordinal_distances, ordinal_plane_n, ordinal_nonmetric_model, shepard_figur
         ),
         show_reference_line=False,
     )
+    ordinal_nonmetric_shepard
     return
 
 
@@ -1602,7 +1613,7 @@ def _(mo):
     mo.md(r"""
     ### Explore fold tightness, metric vs non-metric, and stress
 
-    Increase **fold tightness** to bring distant letters closer through the air. **Along-word** correlation can stay high at moderate folds but **falls** when the S is very tight; **`letter_shape_ratio`** usually **falls** as glyphs become ribbons (watch the stat line under the plot). **Raw stress** is **not monotonic** in tightness — use it as a diagnostic, not a single trend line.
+    Increase **fold tightness** to bring distant letters closer through the air. **Along-word** correlation can stay high at moderate folds but **falls** when the S is very tight. **`letter_shape_ratio`** **drops vs flat** then can **rise again** as letters overlap (watch the stat line under the plot). **Raw stress** is **not monotonic** in tightness — use it as a diagnostic, not a single trend line.
     """)
     return
 
@@ -1659,12 +1670,6 @@ def _(
         if metric_checkbox.value
         else "Stress-1"
     )
-    letters_panel(
-        [live_layout],
-        [f"{live_kind} MDS (tightness {live_tightness:.1f})"],
-        title="Live S-bend layout",
-        width=520,
-    )
     live_s_summary = {
         "kind": live_kind,
         "tightness": live_tightness,
@@ -1673,6 +1678,13 @@ def _(
         "shape_ratio": live_shape_ratio,
         "along_word": along_word(letters.x0.to_numpy(), live_emb),
     }
+    live_s_figure = letters_panel(
+        [live_layout],
+        [f"{live_kind} MDS (tightness {live_tightness:.1f})"],
+        title="Live S-bend layout",
+        width=520,
+    )
+    live_s_figure
     return (live_s_summary,)
 
 
@@ -1742,7 +1754,8 @@ def _(
     flat_shape = letter_shape_ratio(
         letters, flat_layouts["seed 9"][["x0", "x1"]].to_numpy()
     )
-    letters_panel(
+    curve_input_distances = pairwise_distances(curve[["x0", "x1", "x2"]])
+    collapse_comparison_figure = letters_panel(
         [flat_layouts["seed 9"], curve_layouts["metric"], curve_layouts["non-metric"]],
         [
             f"Flat MDS (shape ratio {flat_shape:.3f})",
@@ -1752,16 +1765,7 @@ def _(
         title="Flat recovery vs S-bend collapse",
         width=1150,
     )
-    curve_input_distances = pairwise_distances(curve[["x0", "x1", "x2"]])
-    shepard_figure(
-        curve_input_distances,
-        curve_emb_metric,
-        title=(
-            f"Shepard — metric MDS on the S-bend "
-            f"(raw stress {curve_metric_model.stress_:.0f})"
-        ),
-        show_reference_line=True,
-    )
+    collapse_comparison_figure
     return (
         curve_agreement,
         curve_shape,
@@ -1777,12 +1781,34 @@ def _(
 
 @app.cell
 def _(
+    curve_emb_metric,
+    curve_emb_nonmetric,
+    curve_input_distances,
+    curve_metric_model,
+    curve_nm_model,
+    shepard_figure,
+):
+    sbend_metric_shepard = shepard_figure(
+        curve_input_distances,
+        curve_emb_metric,
+        title=(
+            f"Shepard — metric MDS on the S-bend "
+            f"(raw stress {curve_metric_model.stress_:.0f})"
+        ),
+        show_reference_line=True,
+    )
+    sbend_metric_shepard
+    return
+
+
+@app.cell
+def _(
     curve_emb_nonmetric,
     curve_input_distances,
     curve_nm_model,
     shepard_figure,
 ):
-    shepard_figure(
+    sbend_nonmetric_shepard = shepard_figure(
         curve_input_distances,
         curve_emb_nonmetric,
         title=(
@@ -1791,6 +1817,7 @@ def _(
         ),
         show_reference_line=False,
     )
+    sbend_nonmetric_shepard
     return
 
 
@@ -1799,7 +1826,7 @@ def _(curve_agreement, curve_shape, flat_shape, mo):
     mo.md(f"""
     **MDS fails to unroll the S.** Along-word correlation is still **{curve_agreement['metric']:.3f}** (metric) — order along the curve survives — but **mean shape ratio** falls from **{flat_shape:.3f}** on the flat layout to **{curve_shape['metric']:.3f}** (metric) and **{curve_shape['non-metric']:.3f}** (non-metric). Letters merge into **illegible ribbons** (the S seen edge-on), not an opened word.
 
-    The **metric** Shepard plot bends away from **y = x**: straight-line input distances are a poor stand-in for **along-surface** neighbours. Neither MDS variant invents geodesics; that is why the next lesson turns to Isomap and LLE.
+    The **metric** Shepard plot **hugs y = x** overall, with **short** pairs often **below** the line — straight-line input distances are a poor stand-in for **along-surface** neighbours. Neither MDS variant invents geodesics; that is why the next lesson turns to Isomap and LLE.
     """)
     return
 
@@ -1848,7 +1875,7 @@ def _(mo):
             "Show answers": mo.md(r"""
 **(a) Along-word** can stay fairly high at moderate tightness but **falls** when the fold is extreme (try 1.6–2.2 on the slider): the global sequence is harder to keep on one axis when unrelated letters become neighbours through the air.
 
-**(b) Shape ratio** (σ₂/σ₁ per letter) generally **falls** as glyphs become **ribbons** in the 2-D layout, even when along-word stays fairly high — check the stat line under the live plot.
+**(b) Shape ratio** (σ₂/σ₁ per letter) **drops vs the flat layout** when glyphs become **ribbons**, but can **rise again** at extreme tightness when letters **overlap** in the 2-D map — check the stat line under the live plot.
 
 **Raw stress** is **not monotonic** in tightness; it reports misfit to straight-line distances, not “how bent” the S looks.
 """)
