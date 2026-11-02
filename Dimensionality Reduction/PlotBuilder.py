@@ -7,6 +7,10 @@ displays simply by ending a cell with it.
 
 Only Plotly is used. The helpers cover the plot kinds that would otherwise need
 matplotlib: grids of small images, multi-panel layouts, and shaded images.
+
+One exception: the digit images in the 2-PCA marimo lesson are drawn with
+matplotlib, by that notebook's own `plot_digits` function, and do not use
+`digit_grid`.
 """
 import numpy as np
 import pandas as pd
