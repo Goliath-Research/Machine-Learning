@@ -276,7 +276,7 @@ def _(mo):
     return
 
 @app.cell
-def _(LETTER_COLORS, px):
+def _(LETTER_COLORS, go):
     def draw_letters(frame, title):
         """Scatter the letters coloured by glyph, with a 1:1 aspect ratio.
 
@@ -292,18 +292,21 @@ def _(LETTER_COLORS, px):
         plotly.graph_objects.Figure
             The scatter, with one legend entry per glyph.
         """
-        figure = px.scatter(
-            frame,
-            x="x0",
-            y="x1",
-            color="labels",
-            title=title,
-            category_orders={"labels": list("GOLIATH")},
-            color_discrete_map=LETTER_COLORS,
-        )
-        figure.update_traces(marker=dict(size=4, opacity=0.8))
+        figure = go.Figure()
+        for letter in "GOLIATH":
+            mask = frame["labels"].to_numpy() == letter
+            figure.add_trace(
+                go.Scattergl(
+                    x=frame["x0"].to_numpy()[mask],
+                    y=frame["x1"].to_numpy()[mask],
+                    mode="markers",
+                    name=letter,
+                    marker=dict(size=4, opacity=0.8, color=LETTER_COLORS[letter]),
+                )
+            )
         figure.update_yaxes(scaleanchor="x", scaleratio=1)
         figure.update_layout(
+            title=title,
             height=380,
             margin=dict(t=55, b=40, l=45, r=20),
             legend=dict(font=dict(size=9), itemsizing="constant", title="letter"),
@@ -495,7 +498,7 @@ def _(LETTER_COLORS, go, make_subplots):
             for letter in "GOLIATH":
                 mask = frame["labels"].to_numpy() == letter
                 figure.add_trace(
-                    go.Scatter(
+                    go.Scattergl(
                         x=frame["x0"].to_numpy()[mask],
                         y=frame["x1"].to_numpy()[mask],
                         mode="markers",
@@ -540,7 +543,12 @@ def _(mo):
 
 @app.cell
 def _(go, make_subplots, np):
-    def distance_matrix_figure(matrices, captions, title="Pairwise distance matrices"):
+    def distance_matrix_figure(
+        matrices,
+        captions,
+        title="Pairwise distance matrices",
+        max_points=200,
+    ):
         """Draw heatmaps for one or more distance matrices.
 
         Parameters
@@ -551,6 +559,8 @@ def _(go, make_subplots, np):
             Subplot titles.
         title : str, default "Pairwise distance matrices"
             Overall figure title.
+        max_points : int, default 200
+            Maximum points per axis for display (evenly spaced along sort order).
 
         Returns
         -------
@@ -566,6 +576,10 @@ def _(go, make_subplots, np):
         )
         zmax = max(float(m.max()) for m in matrices)
         for index, matrix in enumerate(matrices, start=1):
+            n = matrix.shape[0]
+            if n > max_points:
+                pick = np.linspace(0, n - 1, max_points, dtype=int)
+                matrix = matrix[np.ix_(pick, pick)]
             figure.add_trace(
                 go.Heatmap(
                     z=matrix,
@@ -1250,7 +1264,7 @@ def _(go, np):
         input_distances,
         embedded_coords,
         title="Shepard diagram",
-        max_pairs=6000,
+        max_pairs=4000,
         seed=42,
         show_reference_line=True,
     ):
@@ -1264,7 +1278,7 @@ def _(go, np):
             Coordinates returned by MDS.
         title : str, default "Shepard diagram"
             Figure title.
-        max_pairs : int, default 6000
+        max_pairs : int, default 4000
             Maximum number of upper-triangle pairs to draw (random subsample).
         seed : int, default 42
             Subsample seed.
@@ -1291,7 +1305,7 @@ def _(go, np):
         limit = float(max(original.max(), embedded.max()))
         figure = go.Figure()
         figure.add_trace(
-            go.Scatter(
+            go.Scattergl(
                 x=original,
                 y=embedded,
                 mode="markers",
@@ -1301,7 +1315,7 @@ def _(go, np):
         )
         if show_reference_line:
             figure.add_trace(
-                go.Scatter(
+                go.Scattergl(
                     x=[0, limit],
                     y=[0, limit],
                     mode="lines",
