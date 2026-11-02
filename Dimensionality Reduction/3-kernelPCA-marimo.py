@@ -394,7 +394,7 @@ def _(GROUP_COLORS, go, make_subplots, np):
                 )
         figure.update_layout(
             width=width,
-            height=620,
+            height=480,
             title=title,
             margin=dict(t=80, b=55, l=50, r=20),
         )
@@ -518,6 +518,83 @@ def _(go, np, px):
         return figure
 
     return (kernel_heatmap,)
+
+
+@app.cell
+def _(go, make_subplots, np):
+    def kernel_heatmap_row(points, gammas, title=""):
+        """Plot several RBF kernel matrices in one horizontal row.
+
+        All panels share the same colour scale from 0 to 1 so that gamma
+        settings can be compared fairly; very small gamma then looks almost
+        uniform because every entry sits near 1.
+
+        Parameters
+        ----------
+        points : array-like, shape (n_samples, n_features)
+            Coordinates used to build each kernel matrix.
+        gammas : sequence of float
+            One gamma value per panel, left to right.
+        title : str, default ""
+            Overall figure title.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            One row of heatmaps with a single colour bar.
+        """
+        points = np.asarray(points)
+        gamma_list = list(gammas)
+        captions = [f"gamma={gamma:g}" for gamma in gamma_list]
+        figure = make_subplots(
+            rows=1,
+            cols=len(gamma_list),
+            subplot_titles=captions,
+            horizontal_spacing=0.06,
+        )
+        diff = points[:, None, :] - points[None, :, :]
+        sq_dist = np.sum(diff * diff, axis=2)
+        for index, gamma in enumerate(gamma_list, start=1):
+            kernel_matrix = np.exp(-gamma * sq_dist)
+            figure.add_trace(
+                go.Heatmap(
+                    z=kernel_matrix,
+                    zmin=0.0,
+                    zmax=1.0,
+                    colorscale="Viridis",
+                    showscale=index == len(gamma_list),
+                    colorbar=dict(title="k", len=0.85),
+                ),
+                row=1,
+                col=index,
+            )
+        figure.update_layout(
+            width=980,
+            height=380,
+            title=title,
+            margin=dict(t=70, b=45, l=45, r=55),
+        )
+        figure.update_xaxes(title_text="point index")
+        for index in range(1, len(gamma_list) + 1):
+            anchor = f"x{index}" if index > 1 else "x"
+            figure.update_yaxes(
+                title_text="point index",
+                scaleanchor=anchor,
+                scaleratio=1,
+                row=1,
+                col=index,
+            )
+        return figure
+
+    return (kernel_heatmap_row,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    **`kernel_heatmap_row`.** One squared-distance grid is reused for every panel; each column applies a different gamma in the RBF formula. **`zmin=0` and `zmax=1` are fixed for all three** so the colour bar means the same thing everywhere — the **`gamma=0.01`** panel then looks almost uniformly bright because every off-diagonal entry is still close to 1, which is exactly the “too permissive” failure mode.
+    """)
+    return
 
 
 @app.cell
@@ -1043,30 +1120,19 @@ def _(mo):
     mo.md(r"""
     ### Kernel connectivity at three gammas (moons sample)
 
-    Each heatmap shows the RBF similarity matrix on the first 40 moon points. **Small gamma** washes every pair towards 1; **gamma = 15** separates within-arm similarity from across-gap darkness; **large gamma** leaves only the diagonal bright — the matrix looks like an identity, and kernel PCA has almost nothing global to work with.
+    One figure shows the RBF similarity matrix on the first 40 moon points at three gammas side by side, with a **shared colour scale from 0 to 1**. **Small gamma** washes every pair towards 1, so the left panel looks almost uniform — that flat brightness is the point. **gamma = 15** separates within-arm similarity from across-gap darkness; **large gamma** leaves only the diagonal bright, so the matrix resembles an identity and kernel PCA has almost nothing global to work with.
     """)
     return
 
 
 @app.cell
-def _(kernel_heatmap, make_moons, mo, rbf_kernel_matrix):
+def _(kernel_heatmap_row, make_moons):
     _moons, _ = make_moons(100, noise=0.015, random_state=0)
     _sample = _moons[:40]
-    mo.vstack(
-        [
-            kernel_heatmap(
-                rbf_kernel_matrix(_sample, 0.01),
-                title="Moons kernel matrix, gamma=0.01",
-            ),
-            kernel_heatmap(
-                rbf_kernel_matrix(_sample, 15),
-                title="Moons kernel matrix, gamma=15",
-            ),
-            kernel_heatmap(
-                rbf_kernel_matrix(_sample, 100),
-                title="Moons kernel matrix, gamma=100",
-            ),
-        ]
+    kernel_heatmap_row(
+        _sample,
+        (0.01, 15, 100),
+        title="Moons kernel matrices (first 40 points)",
     )
     return
 
@@ -1127,7 +1193,6 @@ def _(
     hearts,
     kernel_dropdown,
     make_subplots,
-    mo,
     moon_labels,
     moons,
     np,
@@ -1178,18 +1243,14 @@ def _(
     _figure.update_layout(
         width=820,
         height=360,
-        title=f"{dataset_dropdown.value}, kernel={_kernel}, gamma={_gamma:g}",
+        title=(
+            f"{dataset_dropdown.value}, kernel={_kernel}, gamma={_gamma:g} — "
+            f"AUC {_scores.loc['kernel', 'auc']:.3f}, "
+            f"overlap {_scores.loc['kernel', 'overlap']:.1f}%"
+        ),
         margin=dict(t=70, b=45, l=50, r=20),
     )
-    mo.vstack(
-        [
-            _figure,
-            mo.md(
-                f"First-component AUC **{_scores.loc['kernel', 'auc']:.3f}**, "
-                f"overlap **{_scores.loc['kernel', 'overlap']:.1f}%**."
-            ),
-        ]
-    )
+    _figure
     return
 
 
