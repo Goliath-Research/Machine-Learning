@@ -337,6 +337,7 @@ def _(GROUP_COLORS, go, make_subplots, np):
         figure = make_subplots(
             rows=2,
             cols=3,
+            specs=[[{}, {}, {}], [{}, {}, None]],
             subplot_titles=[spec["caption"] for spec in specs],
             horizontal_spacing=0.06,
             vertical_spacing=0.14,
@@ -506,6 +507,8 @@ def _(go, np, px):
             color_continuous_scale="Viridis",
             origin="lower",
             title=title,
+            zmin=0,
+            zmax=1,
         )
         figure.update_layout(
             width=420,
@@ -1052,7 +1055,7 @@ def _(mo):
 def _(kernel_heatmap, make_moons, mo, rbf_kernel_matrix):
     _moons, _ = make_moons(100, noise=0.015, random_state=0)
     _sample = _moons[:40]
-    mo.vstack(
+    mo.hstack(
         [
             kernel_heatmap(
                 rbf_kernel_matrix(_sample, 0.01),
