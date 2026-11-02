@@ -76,11 +76,11 @@ def _(mo):
 
     By the end of this lesson, you should be able to:
 
-    1. Explain why an 8 by 8 image becomes a point with 64 coordinates.
-    2. Project that 64-dimensional cloud onto two principal components and explain what the picture does and does not show.
-    3. Use the cumulative explained variance ratio to choose a number of components for a target share.
-    4. Explain why a component with tiny variance can hold mostly noise, and why that makes reconstruction a filter.
-    5. Measure how much noise a reconstruction removes, and explain why a *higher* share is not always better.
+    1. Explain what PCA assumes about an image: the 64 pixels are treated as independent coordinates, so a shifted digit is a different point. Say what that blindness costs on images and what it buys in generality.
+    2. Explain why a two-component plot supports conclusions about *grouping* but not about distances, and tie the loss to the share of variance those components keep.
+    3. Choose a component count from the cumulative variance curve, and explain why the choice is always a prefix and never an arbitrary subset.
+    4. Explain why shared stroke structure lands in the high-variance components while independent pixel noise does not.
+    5. Explain why keeping *more* components can make a reconstruction worse, and why comparing the output with its noisy input cannot reveal that.
 
     ## Background
 
@@ -90,9 +90,15 @@ def _(mo):
 
     A digit image here is 8 by 8 pixels, and each pixel is a grey level from 0 to 16. That is 64 numbers per image.
 
-    To PCA, an image is simply **a point in 64 dimensions**. Nothing about the grid survives: the 64 values are just coordinates, in the same way that two columns gave a point in a plane last lesson. Flattening the grid into a row of 64 keeps the order fixed, and that order is all PCA sees.
+To PCA, an image is simply **a point in 64 dimensions**. Nothing about the grid survives: the 64 values are just coordinates, in the same way that two columns gave a point in a plane last lesson. Flattening the grid into a row of 64 keeps the order fixed, and that order is all PCA sees.
 
-    With 1,797 images, the data is a table of **1,797 rows and 64 columns**. Two principal components then give two columns, which you can plot. That is the entire trick behind "visualising high-dimensional data": you find the two directions that spread the cloud most, and accept whatever is lost.
+**That last point is an assumption with consequences.** PCA measures closeness with ordinary straight-line distance, and that distance has no idea that pixel 1 sits next to pixel 2. Every pixel is an independent, interchangeable coordinate. Three things follow:
+
+- **A shifted digit is a different point.** Move every stroke one pixel to the right and the distance to the original is large, even though it is the same digit. PCA cannot represent translation.
+- **PCA cannot exploit spatial structure.** It has no notion of a stroke, an edge, or a region. That is why its components look like ghostly whole-image templates rather than anything you would draw, and it is the reason image-specific methods beat it on real pictures.
+- **The same blindness is what makes it general.** Because it never assumes pixels are adjacent, the identical fit works on cars, flowers, or word counts. Nothing about images is hard-coded.
+
+With 1,797 images, the data is a table of **1,797 rows and 64 columns**. Two principal components then give two columns, which you can plot. That is the entire trick behind "visualising high-dimensional data": you find the two directions that spread the cloud most, and accept whatever is lost.
 
     **What the plot shows and does not show.** Two components keep only part of the variance, so distances in the picture are shorter and some overlap is exaggerated. What you can trust is *relative* placement: digits that form separate islands really are different in the 64 original dimensions. What you cannot trust is the axes, or the exact distances between islands.
 
@@ -777,29 +783,23 @@ def _(
     components_for_80,
     components_for_90,
     digit_plane_share,
-    digit_shapes,
-    digit_ratio,
     mo,
     noise_components,
     noisy_rmse,
     recon_scores,
     tiny_components,
 ):
-    _best = recon_scores["RMSE vs clean original"].idxmin()
-    _best_value = recon_scores.loc[_best, "RMSE vs clean original"]
     mo.md(f"""
     ## Conclusions
 
-    1. **An image is a point.** Each 8 by 8 digit becomes 64 coordinates, so the dataset is a table of {digit_shapes.split(";")[0].split(",")[0]}. Flattening the grid keeps the pixel order and discards nothing; the geometry of the grid plays no part in the fit.
+    1. **The fit assumes the pixels are independent coordinates.** The distance PCA maximises has no notion of adjacency, so a digit shifted by one pixel is as different, to the fit, as a different digit. It cannot represent translation and cannot see a stroke. That is the real cost of using a general purpose method on images: not that the arithmetic is wrong, but that the geometry it assumes is not the geometry of a picture. The same indifference is why one fit serves cars, flowers and text equally well.
     2. **Two components give a usable picture, but only a partial one.** The plot keeps {digit_plane_share:.1%} of the variance, and the digits do form coherent regions without the labels being used. What it does not give you is meaningful axes, literal distances, or an honest impression of overlap.
     3. **Read the cumulative curve, not the per-component one, to choose a count.** {components_for_80} components reach 80% of the variance and {components_for_90} reach 90%. You cannot skip components, because each is defined as perpendicular to all previous ones; the choice is always "how many from the front".
     4. **The tail of the curve is nearly flat.** {tiny_components} components have a share below 0.0005 each, so those directions are almost constant. Whatever varies there is not the shared structure of a digit.
     5. **Noise filtering works because noise has no shared direction.** Real stroke structure appears across images, so it lands in the high-variance components. Independent pixel noise spreads thinly through all 64 directions, including the negligible ones that a reconstruction discards.
-    6. **More components is not better.** On this data the reconstruction error against the clean original was {recon_scores.loc['25%', 'RMSE vs clean original']:.3f} at 25%, {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} at 50%, {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} at 60%, and {recon_scores.loc['75%', 'RMSE vs clean original']:.3f} at 75%. The best was **{_best}**, at {_best_value:.3f}, against a noisy baseline of {noisy_rmse:.3f}.
-    7. **Too few components destroys signal, too many keeps noise.** At 25% ({noise_components[0.25]} components) the strokes soften and detail is lost. At 75% ({noise_components[0.75]} components) most of the noise survives. The middle is where the filter does its job.
-    8. **The best share is a band, not a point.** The 50% and 60% fits score {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} and {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} — a difference of {abs(recon_scores.loc['50%', 'RMSE vs clean original'] - recon_scores.loc['60%', 'RMSE vs clean original']):.3f}. Reporting a single winner would overstate what the numbers support: anything from about half to two thirds of the variance gives essentially the same result.
-    9. **Never judge a filter by its faithfulness to its input.** Reconstructed from 25%, the output strays furthest from the input, and it is also the least accurate of the four. But the ordering does not hold in general: 75% stays closest to the noisy input while being worse than 50% or 60%. Judging by closeness to the noisy input rewards doing nothing. That is why the clean originals were kept in this lesson.
-    10. **Choosing the share is a judgement, not a calculation.** The target depends on the purpose: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates. No threshold is universal.
+    6. **There is an optimum, and it is not at either end.** Against the clean original the error was {recon_scores.loc['25%', 'RMSE vs clean original']:.3f} at 25%, {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} at 50%, {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} at 60% and {recon_scores.loc['75%', 'RMSE vs clean original']:.3f} at 75%, against a noisy baseline of {noisy_rmse:.3f}. Too few components ({noise_components[0.25]}) blur away real stroke detail; too many ({noise_components[0.75]}) carry the noise back in. The 50% and 60% fits differ by only {abs(recon_scores.loc['50%', 'RMSE vs clean original'] - recon_scores.loc['60%', 'RMSE vs clean original']):.3f}, so the honest reading is a **band** from about half to two thirds of the variance, not a single winning number.
+    7. **Judge a filter by the truth, never by its faithfulness to its input.** The 75% reconstruction changes the noisy input least of the four, and it is worse than either middle fit. Scoring against the noisy input rewards doing nothing, which is why the clean originals were kept: without them this lesson could not have found its own optimum.
+    8. **Choosing the share is a judgement, not a calculation.** The target depends on the purpose: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates. No threshold such as 90% is universal.
     """)
     return
 
@@ -809,7 +809,7 @@ def _(mo):
     mo.md(r"""
     ## Check your understanding
 
-    1. How does an 8 by 8 image become a point, and how many coordinates does it have?
+    1. An image becomes a point in 64 dimensions. What does PCA's distance measure assume about those 64 coordinates, and what can it therefore not represent about a picture?
     2. Two components keep only part of the variance. What can you still trust in that plot, and what can you not?
     3. Why is the cumulative ratio, rather than the per-component ratio, the curve you use to choose a number of components?
     4. Why can you not keep component 40 while discarding component 39?
@@ -826,7 +826,7 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-1. **Each pixel becomes a feature.** The 8 by 8 grid is flattened into a row of **64** values, so the dataset is a table with one row per image and 64 columns. The grid layout plays no part in the fit.
+1. **It assumes the coordinates are independent.** Straight-line distance treats each pixel as its own axis with no relation to its neighbours, so the fit has no idea that pixel 1 is next to pixel 2. It therefore cannot represent **translation**: the same digit shifted one pixel right is a distant point, because every one of its 64 coordinates moved. Nor can it see a stroke or an edge, only whole-image patterns. The trade is that the same assumption makes the method work on any table of numbers.
 2. **Trust the relative placement:** digits forming separate islands really do differ in the 64 original dimensions. **Do not trust the axes**, which are mixtures rather than measurements, the exact distances, or the apparent overlap, which is exaggerated because most of the variance is missing.
 3. **Because keeping k components is a cumulative question.** The per-component ratio says how much one component adds; the cumulative ratio says how much you retain in total if you stop there. Only the second maps a component count to retained information.
 4. **Because each component is defined as perpendicular to all the earlier ones.** The 40th direction depends on the previous 39 having been removed from consideration, so the set of components is ordered by construction. You always keep a prefix.

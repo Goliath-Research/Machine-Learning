@@ -96,7 +96,7 @@ def _(mo):
     1. Explain why a linear component cannot separate groups that curve around each other.
     2. Explain what a kernel does: it replaces the inner product with a similarity, so components are computed in a richer space without ever building that space.
     3. Explain what `gamma` controls, and predict which failure a value that is too small or too large produces.
-    4. Compare linear PCA with RBF kernel PCA on four clouds, and say which one separates each.
+    4. Explain why the same kernel can rescue data that winds around a centre yet *lose* ground on data a straight boundary already separates, and predict which shape falls into which case.
     5. Explain why kernel PCA is **not** automatically better, using a case where it does worse than linear PCA.
 
     ## Background

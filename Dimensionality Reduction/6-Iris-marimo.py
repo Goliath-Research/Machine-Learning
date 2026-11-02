@@ -95,7 +95,7 @@ def _(mo):
 
     By the end of this lesson, you should be able to:
 
-    1. Explain how five different methods turn four standardized measurements into two coordinates.
+    1. Explain what each method optimises, and why two methods given identical input can disagree about which flowers belong together.
     2. Read the share of variance kept by two principal components, and say what that share does *not* guarantee.
     3. Explain why the axes of an MDS, LLE, Isomap, or t-SNE plot carry no meaning, while the groupings can still be real.
     4. Explain why t-SNE cannot place a new point without refitting everything.

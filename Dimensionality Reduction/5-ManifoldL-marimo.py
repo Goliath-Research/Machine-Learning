@@ -193,13 +193,26 @@ def _(mo):
 
     ## Objectives
 
-    - Unroll the saved S-shaped GOLIATH cloud with locally linear embedding, Isomap, and t-SNE.
-    - Compare t-SNE at perplexity 5, 30, 50, and 120.
-    - Place the digits with two principal components and with t-SNE, and score each picture with a 5-neighbor classifier.
+    By the end of this lesson, you should be able to:
+
+    1. Explain what the manifold assumption buys: that distance *along* a surface can differ completely from straight-line distance *through* the space, and that this is why linear projection fails on a bent cloud.
+    2. Explain what each method preserves — reconstruction weights (LLE), graph shortest paths (Isomap), neighbourhood probabilities (t-SNE) — and why preserving one property does not preserve the others.
+    3. Explain why the neighbourhood size, whether called neighbours or perplexity, is the parameter that trades local detail against global shape, and why it fails at both extremes.
+    4. Explain why an embedding can preserve neighbours well while distorting every distance, and why a high along-word score does not mean the letters are readable.
+    5. Explain why PCA and t-SNE are different kinds of object: PCA is a fixed transformation you can reuse on new data, while t-SNE is a fit that must be redone from scratch.
 
     ## Background
 
-    Locally linear embedding rebuilds each point from its neighbors and keeps those local weights. Isomap keeps shortest-path distances on the neighbor graph, a stand-in for distance along the surface. t-SNE places points so that neighbors stay neighbors. Perplexity sets how many neighbors that effort considers. The default is 30.
+    **Why a bent surface breaks a linear method.** Each of these clouds lies on a sheet that has been folded through space. Two points can be neighbours *along the sheet* while being far apart *through the air*, and a linear method such as PCA can only measure the second. Unrolling the sheet means replacing straight-line distance with a distance that follows the surface. Every method in this lesson is a different guess at that replacement.
+
+    **The four methods.**
+
+    - **Locally linear embedding** rebuilds each point from its neighbours and keeps those local weights. The weights describe local shape and nothing global.
+    - **Isomap** keeps shortest-path distances on the neighbour graph, a stand-in for distance along the surface. Those paths give it global reach that LLE lacks.
+    - **t-SNE** places points so that neighbours stay neighbours. It optimises the neighbourhood, not the distances, which is why the gaps in its pictures are not measurements.
+    - **PCA**, kept here for comparison, projects linearly and cannot bend at all.
+
+    **The neighbour count is the key setting.** `n_neighbors` for LLE and Isomap, `perplexity` for t-SNE: each asks how much of the neighbourhood to trust. Perplexity is roughly the effective number of neighbours considered, and the default is 30. Too small and the fit memorises local noise; too large and it averages over the structure it should have found.
 
     The along-word score is the absolute correlation between the original row order and the longer axis of the embedding. The file is stored in that row order. A high score means the word still runs along one axis. It does not by itself mean the letters are readable.
 
@@ -398,7 +411,7 @@ student_perplexity = "perplexity"
 **perplexity.** A small value keeps the fit focused on the nearest points. A larger value asks it to respect a wider neighborhood. The default is 30.
 ''')
         },
-        lazy=True,
+        expanded=False,
     )
     return
 
@@ -408,12 +421,14 @@ def _(isomap_agreement, lle_agreement, mo, pca_neighbor_score, tsne_agreement, t
     mo.md(f"""
     ## Conclusions
 
-    **Key takeaways:**
-
-    - Modified locally linear embedding has along-word correlations {lle_agreement[82]:.3f} at 82 neighbors, {lle_agreement[97]:.3f} at 97, and {lle_agreement[101]:.3f} at 101.
-    - Isomap has correlations {isomap_agreement[62]:.3f} at 62 neighbors and {isomap_agreement[100]:.3f} at 100.
-    - t-SNE along-word correlations are {tsne_agreement[5]:.3f} at perplexity 5, {tsne_agreement[30]:.3f} at 30, {tsne_agreement[50]:.3f} at 50, and {tsne_agreement[120]:.3f} at 120.
-    - On the digits, 5-neighbor accuracy is {pca_neighbor_score:.3f} in the PCA plane and {tsne_neighbor_score:.3f} in the t-SNE plane. Neither embedding was shown the labels.
+    1. **The manifold assumption is the whole lesson.** On the S-bend the points lie on a sheet that has been bent through space, so two points far apart *along* the sheet can be close *through* the air. A linear projection like PCA can only measure the second. Every method here works by trying to estimate the first, and each does it with a different substitute for "distance along the surface".
+    2. **Each method preserves a different thing, and gains and loses accordingly.** LLE keeps each point's reconstruction weights from its neighbours, so it respects local shape but has no global constraint. Isomap keeps shortest paths on a neighbour graph, which recovers global shape as long as the graph stays connected enough to be honest. t-SNE keeps neighbourhood probabilities, which separates groups brilliantly and distorts distances badly. None of them preserves all three.
+    3. **On this cloud the global methods won.** Isomap scored {isomap_agreement[62]:.3f} and {isomap_agreement[100]:.3f} on the along-word measure at 62 and 100 neighbours, LLE {lle_agreement[82]:.3f} to {lle_agreement[101]:.3f} across its three settings, and t-SNE ranged from {tsne_agreement[5]:.3f} at perplexity 5 to {tsne_agreement[120]:.3f} at 120. That ordering is a property of *this* cloud — a smoothly bent sheet with a genuine global order — not a general ranking of the methods.
+    4. **The neighbour count is the parameter, and it is the same idea under two names.** LLE's `n_neighbors` and t-SNE's `perplexity` both say how much of the neighbourhood to believe. Too small and the fit memorises local noise; too large and it smooths away the structure it was meant to find. t-SNE here went from {tsne_agreement[5]:.3f} at 5 to {tsne_agreement[120]:.3f} at 120 on the same data, which is the clearest evidence in this lesson that the setting is doing real work.
+    5. **A high along-word score is a weak certificate.** It says the word still runs along one axis. It does not say the letters are separated, ordered correctly, or readable — a layout can correlate just as well with the row order while running backwards, or while the letters overlap. Read the picture, not just the number.
+    6. **Neighbourhood quality and distance fidelity are different claims.** On the digits, 5-neighbour accuracy was {pca_neighbor_score:.3f} in the PCA plane and {tsne_neighbor_score:.3f} in the t-SNE plane, so t-SNE kept far more local class structure. That says the *neighbours* are better preserved. It says nothing about the distances between clusters, which t-SNE exaggerates deliberately. Neither embedding was shown the labels, so both scores measure structure the fit found on its own.
+    7. **t-SNE is a fit, PCA is a transformation.** PCA gives you a fixed projection you can apply to a new image later. t-SNE has no `transform`: adding one point means refitting everything, and the new layout will not line up with the old one. Choose between them on that basis as much as on the pictures, because a map you cannot extend is a different tool from one you can.
+    8. **Do not read a manifold plot as a map.** The axes carry no meaning, the cluster sizes mean nothing, and the gaps between groups are a property of the algorithm. What you may read is who is next to whom.
     """)
     return
 
