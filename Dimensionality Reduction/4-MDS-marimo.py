@@ -1269,7 +1269,7 @@ def _(MDS, distances, go, np):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    **Raw stress** (metric MDS, **`n_init=4`**) is **lowest at two dimensions** for this flat word — the log axis shows the 1-D penalty clearly. Stress at 3–5 dimensions can be **slightly higher** when SMACOF finds other local minima; that does not mean the cloud is “really” four-dimensional.
+    **Raw stress** (metric MDS, **`n_init=4`**) is **lowest at two dimensions** for this flat word — the log axis shows the 1-D penalty clearly. Stress at 3–5 dimensions is **clearly higher, about 8 times** the 2-D value here when SMACOF finds other local minima; that does not mean the cloud is “really” four-dimensional.
     """)
     return
 
