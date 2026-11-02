@@ -90,15 +90,15 @@ def _(mo):
 
     A digit image here is 8 by 8 pixels, and each pixel is a grey level from 0 to 16. That is 64 numbers per image.
 
-To PCA, an image is simply **a point in 64 dimensions**. Nothing about the grid survives: the 64 values are just coordinates, in the same way that two columns gave a point in a plane last lesson. Flattening the grid into a row of 64 keeps the order fixed, and that order is all PCA sees.
+    To PCA, an image is simply **a point in 64 dimensions**. Nothing about the grid survives: the 64 values are just coordinates, in the same way that two columns gave a point in a plane last lesson. Flattening the grid into a row of 64 keeps the order fixed, and that order is all PCA sees.
 
-**That last point is an assumption with consequences.** PCA measures closeness with ordinary straight-line distance, and that distance has no idea that pixel 1 sits next to pixel 2. Every pixel is an independent, interchangeable coordinate. Three things follow:
+    **That last point is an assumption with consequences.** PCA measures closeness with ordinary straight-line distance, and that distance has no idea that pixel 1 sits next to pixel 2. Every pixel is an independent, interchangeable coordinate. Three things follow:
 
-- **A shifted digit is a different point.** Move every stroke one pixel to the right and the distance to the original is large, even though it is the same digit. PCA cannot represent translation.
-- **PCA cannot exploit spatial structure.** It has no notion of a stroke, an edge, or a region. That is why its components look like ghostly whole-image templates rather than anything you would draw, and it is the reason image-specific methods beat it on real pictures.
-- **The same blindness is what makes it general.** Because it never assumes pixels are adjacent, the identical fit works on cars, flowers, or word counts. Nothing about images is hard-coded.
+    - **A shifted digit is a different point.** Move every stroke one pixel to the right and the distance to the original is large, even though it is the same digit. PCA cannot represent translation.
+    - **PCA cannot exploit spatial structure.** It has no notion of a stroke, an edge, or a region. That is why its components look like ghostly whole-image templates rather than anything you would draw, and it is the reason image-specific methods beat it on real pictures.
+    - **The same blindness is what makes it general.** Because it never assumes pixels are adjacent, the identical fit works on cars, flowers, or word counts. Nothing about images is hard-coded.
 
-With 1,797 images, the data is a table of **1,797 rows and 64 columns**. Two principal components then give two columns, which you can plot. That is the entire trick behind "visualising high-dimensional data": you find the two directions that spread the cloud most, and accept whatever is lost.
+    With 1,797 images, the data is a table of **1,797 rows and 64 columns**. Two principal components then give two columns, which you can plot. That is the entire trick behind "visualising high-dimensional data": you find the two directions that spread the cloud most, and accept whatever is lost.
 
     **What the plot shows and does not show.** Two components keep only part of the variance, so distances in the picture are shorter and some overlap is exaggerated. What you can trust is *relative* placement: digits that form separate islands really are different in the 64 original dimensions. What you cannot trust is the axes, or the exact distances between islands.
 
@@ -598,12 +598,6 @@ def _(PCA, digits, noisy_digits, np):
 
 
 @app.cell
-def _(mo, recon_scores):
-    mo.Html(recon_scores.round(3).to_html())
-    return
-
-
-@app.cell
 def _(digits, plot_digits, rebuilt):
     _figure = plot_digits(
         rebuilt[0.25],
@@ -672,18 +666,12 @@ def _(mo, noise_components):
 
 @app.cell(hide_code=True)
 def _(mo, noisy_rmse, recon_scores):
-    _best = recon_scores["RMSE vs clean original"].idxmin()
-    _best_value = recon_scores.loc[_best, "RMSE vs clean original"]
     _rows = "\n".join(
         f"    | {_share} | {int(recon_scores.loc[_share, 'components'])} | "
         f"{recon_scores.loc[_share, 'RMSE vs noisy input']:.3f} | "
         f"{recon_scores.loc[_share, 'RMSE vs clean original']:.3f} |"
         for _share in recon_scores.index
     )
-    _r25 = recon_scores.loc["25%", "RMSE vs clean original"]
-    _r50 = recon_scores.loc["50%", "RMSE vs clean original"]
-    _r60 = recon_scores.loc["60%", "RMSE vs clean original"]
-    _r75 = recon_scores.loc["75%", "RMSE vs clean original"]
     mo.md(f"""
     Read the two error columns together, and against the noise baseline of **{noisy_rmse:.3f}**.
 
@@ -691,7 +679,19 @@ def _(mo, noisy_rmse, recon_scores):
     | :--- | ---: | ---: | ---: |
     {_rows}
     | (noisy input) | none | — | {noisy_rmse:.3f} |
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo, noisy_rmse, recon_scores):
+    _best = recon_scores["RMSE vs clean original"].idxmin()
+    _best_value = recon_scores.loc[_best, "RMSE vs clean original"]
+    _r25 = recon_scores.loc["25%", "RMSE vs clean original"]
+    _r50 = recon_scores.loc["50%", "RMSE vs clean original"]
+    _r60 = recon_scores.loc["60%", "RMSE vs clean original"]
+    _r75 = recon_scores.loc["75%", "RMSE vs clean original"]
+    mo.md(f"""
     **Every reconstruction beats the noisy input**, which is the filter working. But they are not equally good: the best is **{_best}**, at an error of **{_best_value:.3f}**.
 
     The shape of that result is the lesson:
@@ -699,7 +699,6 @@ def _(mo, noisy_rmse, recon_scores):
     - **At 25%**, the error against the clean original is **{_r25:.3f}**, higher than at 50%. Removing more components did not help; it removed real stroke detail. The error against the *noisy input* is large, which is why "how much did it change?" is the wrong question.
     - **At 50%**, the error against the clean original is **{_r50:.3f}**.
     - **At 60%**, it is **{_r60:.3f}**, against **{_r50:.3f}** at 50%. The two are **effectively tied** — a difference of {abs(_r60 - _r50):.3f}, far smaller than the gaps to the 25% or 75% rows. The extra components brought back some stroke detail and some noise, and the two roughly cancelled.
-
     - **At 75%**, the error against the noisy input is smallest — the output is closest to its input — but the error against the clean original is **{_r75:.3f}**, higher again, because the noise was kept.
 
     The 50% and 60% rows are therefore worth reading together. **The best share is a region, not a single value**: anywhere from about half to about two thirds of the variance gives a similar result, and the choice inside that band hardly matters. The 25% and 75% rows are the clear failures on either side.
