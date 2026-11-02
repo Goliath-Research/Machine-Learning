@@ -18,7 +18,6 @@ app = marimo.App(width="medium")
 
 @app.cell
 async def _():
-
     import importlib.util as _import_util
     import sys as _sys
 
@@ -46,7 +45,11 @@ async def _():
 
     # The imports below wait until package installation has completed.
     packages_ready = True
-    
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
     import sys
     from pathlib import Path
 
@@ -89,6 +92,8 @@ async def _():
         pd,
         px,
     )
+
+
 
 @app.cell(hide_code=True)
 def _(mo):
