@@ -248,7 +248,7 @@ class PlotBuilder:
         figure.update_yaxes(visible=False)
         return figure
 
-    def digit_grid(self, images, rows, cols, title=""):
+    def digit_grid(self, images, rows, cols, title="", labels=None):
         """Draw a grid of small square images, each 8 by 8 pixels.
 
         This is the case that would otherwise need matplotlib: many tiny panels
@@ -264,11 +264,17 @@ class PlotBuilder:
             Grid shape. Only the first `rows * cols` images are drawn.
         title : str, default ""
             Figure title.
+        labels : array-like or None, default None
+            Optional label per image, written in blue at the bottom-left of its
+            cell. At 8 by 8 pixels a digit is hard to identify by eye, so a
+            label is what lets a reader check the picture against the class.
+            Pass any sequence whose length matches `images`.
 
         Returns
         -------
         plotly.graph_objects.Figure
-            A figure with `rows * cols` heatmap traces and no axis labels.
+            A figure with `rows * cols` heatmap traces, optional label text, and
+            no axis labels.
         """
         data = np.asarray(images)
         if data.ndim == 2:
@@ -295,6 +301,22 @@ class PlotBuilder:
                     row=row,
                     col=col,
                 )
+                if labels is not None:
+                    # A text trace pinned to the lower-left corner of the cell.
+                    figure.add_trace(
+                        go.Scatter(
+                            x=[0.05],
+                            y=[0.05],
+                            mode="text",
+                            text=[str(labels[shown])],
+                            textfont=dict(color="blue", size=11),
+                            textposition="bottom left",
+                            hoverinfo="skip",
+                            showlegend=False,
+                        ),
+                        row=row,
+                        col=col,
+                    )
                 shown += 1
         figure.update_layout(
             width=self.width,

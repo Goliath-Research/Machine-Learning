@@ -64,31 +64,6 @@ def _(packages_ready):
     return PCA, builder, load_digits, mo, np, pd, px
 
 
-@app.cell
-def _(builder):
-    def plot_digits(images, rows, cols, title=None):
-        """Draw a grid of 8 by 8 digit images with Plotly.
-
-        Parameters
-        ----------
-        images : array-like
-            One row of 64 pixel values per image, or an (n, 8, 8) array.
-        rows, cols : int
-            Grid shape for the panel.
-        title : str or None
-            Optional heading above the grid.
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            The grid, with one heatmap trace per cell and axes hidden because
-            pixel coordinates carry no meaning for a reader.
-        """
-        return builder.digit_grid(images, rows, cols, title or "")
-
-    return (plot_digits,)
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -188,8 +163,43 @@ def _(digit_shapes, digits, mo):
 
 
 @app.cell
+def _(builder):
+    def plot_digits(images, rows, cols, title=None, labels=None):
+        """Draw a grid of 8 by 8 digit images with Plotly.
+
+        Parameters
+        ----------
+        images : array-like
+            One row of 64 pixel values per image, or an (n, 8, 8) array.
+        rows, cols : int
+            Grid shape for the panel.
+        title : str or None
+            Optional heading above the grid.
+        labels : array-like or None, default None
+            Optional digit label per image, printed in blue inside each cell.
+            At 8 by 8 pixels the pattern alone is hard to identify, so the label
+            is what lets a reader tell which digit they are looking at.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            The grid, with one heatmap trace per cell and axes hidden because
+            pixel coordinates carry no meaning for a reader.
+        """
+        return builder.digit_grid(images, rows, cols, title or "", labels=labels)
+
+    return (plot_digits,)
+
+
+@app.cell
 def _(digits, plot_digits):
-    plot_digits(digits.images, 4, 10, "The first 40 images, as 8 by 8 grids")
+    plot_digits(
+        digits.images,
+        4,
+        10,
+        "The first 40 images, with the true digit written in each cell",
+        labels=digits.target,
+    )
     return
 
 
@@ -206,7 +216,7 @@ def _(mo):
 
 
 @app.cell
-def _(PCA, digits, pd, plt, sns):
+def _(PCA, builder, digits, pd):
     digit_pca2 = PCA(n_components=2).fit(digits.data)
     digit_plane = digit_pca2.transform(digits.data)
     digit_plane_share = float(digit_pca2.explained_variance_ratio_.sum())
@@ -254,32 +264,112 @@ def _(mo):
     mo.md(r"""
     ## 2. How many components are needed?
 
-    Fit all 64 components and look at the shares. The left panel shows each component's own share; the right panel shows the running total, which is the curve you actually use to choose.
+    Fit all 64 components and record two quantities for each one:
+
+    - **its own share** of the variance — how much that component alone accounts for;
+    - **the running total** — how much the first k components account for together.
+
+    These are shown as two separate figures rather than side by side, because **their vertical axes measure different things**. The individual shares are all small fractions, while the running total climbs to 1. Plotting them side by side, with two different scales, invites the false impression that the two curves are comparable.
+
+    ### Each component's own share
     """)
     return
 
 
 @app.cell
-def _(PCA, builder, digits, np):
+def _(PCA, builder, digits, np, px):
     digit_pca = PCA().fit(digits.data)
     digit_ratio = digit_pca.explained_variance_ratio_
     digit_cumulative = np.cumsum(digit_ratio)
     components_for_80 = int(np.searchsorted(digit_cumulative, 0.80) + 1)
     components_for_90 = int(np.searchsorted(digit_cumulative, 0.90) + 1)
     tiny_components = int(np.sum(digit_ratio < 0.0005))
-    builder.variance_curves(
-        digit_ratio,
-        digit_cumulative,
-        title="How much variance each component keeps on the digits",
+    _components = np.arange(1, len(digit_ratio) + 1)
+    _figure = px.scatter(
+        x=_components,
+        y=digit_ratio,
+        title="Share of the variance held by each component, on its own",
+        labels={
+            "x": "Component number",
+            "y": "Share of variance held by this component",
+        },
     )
+    _figure.update_traces(
+        marker=dict(size=6, color="#C0392B"),
+        hovertemplate="Component %{x}<br>Share: %{y:.4f}<extra></extra>",
+    )
+    _figure.update_layout(
+        width=builder.width, height=380, margin=dict(t=60, b=55, l=70, r=20)
+    )
+    _figure
     return (
         components_for_80,
         components_for_90,
         digit_cumulative,
+        digit_pca,
         digit_ratio,
         tiny_components,
-        digit_pca,
     )
+
+
+@app.cell(hide_code=True)
+def _(digit_ratio, mo):
+    mo.md(f"""
+    This curve answers **"which single component matters most?"**
+
+    The first component alone holds **{digit_ratio[0]:.1%}** of the total variance — one sixty-fourth of the axes carrying more than a seventh of the variation. The second holds {digit_ratio[1]:.1%}. Then the curve collapses quickly: by around the twentieth component each one adds only a fraction of a percent.
+
+    That collapse is what makes compression possible. Most of the 64 directions carry almost nothing.
+
+    **How to read it:** a tall point near the left means that component is worth keeping. The height here is a share **of the total**, so the values do not add up to 1 unless you sum every one of them.
+
+    **What it cannot tell you:** how many components you need in total. For that you need the running total, in the next figure.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### The running total
+
+    This is the curve you actually use to choose a number of components. Each point answers: **if I stop here, how much of the variance have I kept?**
+    """)
+    return
+
+
+@app.cell
+def _(builder, digit_cumulative, digit_ratio, np, px):
+    _components = np.arange(1, len(digit_ratio) + 1)
+    _figure = px.line(
+        x=_components,
+        y=digit_cumulative,
+        title="Variance kept by the first k components",
+        labels={
+            "x": "Number of components kept (k)",
+            "y": "Cumulative share of variance kept",
+        },
+    )
+    _figure.update_traces(
+        line=dict(color="#2E86C1", width=2.5),
+        hovertemplate="k = %{x}<br>Kept: %{y:.3f}<extra></extra>",
+    )
+    for _level in (0.80, 0.90):
+        _figure.add_hline(
+            y=_level,
+            line_dash="dash",
+            line_color="grey",
+            annotation_text=f"{_level:.0%}",
+            annotation_position="right",
+        )
+    _figure.update_layout(
+        width=builder.width,
+        height=380,
+        margin=dict(t=60, b=55, l=70, r=40),
+        yaxis_range=[0, 1.02],
+    )
+    _figure
+    return
 
 
 @app.cell(hide_code=True)
@@ -291,19 +381,20 @@ def _(
     tiny_components,
 ):
     mo.md(f"""
-    The two curves say different things, and confusing them is a common error.
+    The vertical axis runs from **0 to 1**, so every point is a fraction of the whole. That is what makes the two dashed lines meaningful: they mark the 80% and 90% levels.
 
-    - **Left, the per-component share**, falls steeply and then flattens. The first component keeps {digit_ratio[0]:.1%} on its own.
-    - **Right, the running total**, rises quickly at first and then levels off. This is the curve you read a component count from.
+    | Target share | Components needed | What is left out |
+    | :--- | ---: | ---: |
+    | 80% | **{components_for_80}** | {64 - components_for_80} components, holding {1 - 0.80:.0%} |
+    | 90% | **{components_for_90}** | {64 - components_for_90} components, holding {1 - 0.90:.0%} |
 
-    | Target share | Components needed |
-    | :--- | ---: |
-    | 80% | **{components_for_80}** |
-    | 90% | **{components_for_90}** |
+    So **{components_for_80} components out of 64** — about a fifth of them — carry 80% of the variance. That is real compression: the remaining {64 - components_for_80} components together hold only 20%.
 
-    So 13 components out of 64 — about a fifth of them — carry 80% of the variance. That is real compression: the remaining 51 components together hold only 20%.
+    **How to read it:** find your target share on the vertical axis, move right to the curve, then read the component count down on the horizontal axis. The `np.searchsorted` calls in the code above do exactly that arithmetic.
 
-    **The tail is nearly flat.** **{tiny_components}** components have a share below 0.0005 each. Those directions vary so little that they are, for practical purposes, constant. This is where the noise-filtering argument will come from: whatever lives in those directions is not the shared structure of a digit.
+    **Why the tail is nearly flat.** **{tiny_components}** components have a share below 0.0005 each. Those directions vary so little that they are, in practice, constant. This is where the noise-filtering argument in the next section will come from: whatever lives in those directions is not the shared structure of a digit.
+
+    **The target itself is a judgement.** 70% to 95% are all defensible depending on the purpose: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates. There is no universal threshold.
     """)
     return
 
@@ -393,7 +484,13 @@ def _(mo):
 @app.cell
 def _(digits, np, plot_digits):
     noisy_digits = np.random.RandomState(42).normal(digits.data, 4)
-    plot_digits(noisy_digits, 4, 10, "The same 40 images, with pixel noise added")
+    plot_digits(
+        noisy_digits,
+        4,
+        10,
+        "The same 40 images with pixel noise added, labelled with their true digit",
+        labels=digits.target,
+    )
     return (noisy_digits,)
 
 
@@ -458,20 +555,38 @@ def _(mo, recon_scores):
 
 
 @app.cell
-def _(plot_digits, rebuilt):
-    plot_digits(rebuilt[0.25], 4, 10, "Rebuilt from 25% of the noisy variance")
+def _(digits, plot_digits, rebuilt):
+    plot_digits(
+        rebuilt[0.25],
+        4,
+        10,
+        "Rebuilt from 25% of the noisy variance",
+        labels=digits.target,
+    )
     return
 
 
 @app.cell
-def _(plot_digits, rebuilt):
-    plot_digits(rebuilt[0.50], 4, 10, "Rebuilt from 50% of the noisy variance")
+def _(digits, plot_digits, rebuilt):
+    plot_digits(
+        rebuilt[0.50],
+        4,
+        10,
+        "Rebuilt from 50% of the noisy variance",
+        labels=digits.target,
+    )
     return
 
 
 @app.cell
-def _(plot_digits, rebuilt):
-    plot_digits(rebuilt[0.75], 4, 10, "Rebuilt from 75% of the noisy variance")
+def _(digits, plot_digits, rebuilt):
+    plot_digits(
+        rebuilt[0.75],
+        4,
+        10,
+        "Rebuilt from 75% of the noisy variance",
+        labels=digits.target,
+    )
     return
 
 
