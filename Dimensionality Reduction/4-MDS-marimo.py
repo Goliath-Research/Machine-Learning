@@ -18,7 +18,6 @@ app = marimo.App(width="medium")
 
 @app.cell
 async def _():
-
     import importlib.util as _import_util
     import sys as _sys
 
@@ -46,7 +45,11 @@ async def _():
 
     # The imports below wait until package installation has completed.
     packages_ready = True
-    
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
     import sys
     from pathlib import Path
 
@@ -89,6 +92,8 @@ async def _():
         pd,
         px,
     )
+
+
 
 @app.cell(hide_code=True)
 def _(mo):
@@ -167,13 +172,13 @@ def _(mo):
 
     **Raw stress** (badness of fit) is often written
 
-    \\[
-    \\sigma = \\sum_{i<j} \\bigl(d_{ij} - \\hat d_{ij}\\bigr)^2
-    \\]
+    $$
+    \sigma = \sum_{i<j} \bigl(d_{ij} - \hat d_{ij}\bigr)^2
+    $$
 
-    where \\(d_{ij}\\) is the input distance and \\(\\hat d_{ij}\\) is the distance in the layout. With **`normalized_stress="auto"`**, **metric** MDS reports this **raw** stress; **non-metric** MDS reports **Kruskal stress-1** (normalised). Do not compare the two numbers directly.
+    where \(d_{ij}\) is the input distance and \(\hat d_{ij}\) is the distance in the layout. With **`normalized_stress="auto"`**, **metric** MDS reports this **raw** stress; **non-metric** MDS reports **Kruskal stress-1** (normalised). Do not compare the two numbers directly.
 
-    The algorithm is **SMACOF**: starting from coordinates (here `init="random"` with `n_init=1` so you can see seed sensitivity), it alternates updates that pull embedded distances toward the input distances. Non-metric SMACOF replaces \\(d_{ij}\\) by **disparities** from **isotonic regression** on the rank order, then embeds those disparities.
+    The algorithm is **SMACOF**: starting from coordinates (here `init="random"` with `n_init=1` so you can see seed sensitivity), it alternates updates that pull embedded distances toward the input distances. Non-metric SMACOF replaces \(d_{ij}\) by **disparities** from **isotonic regression** on the rank order, then embeds those disparities.
     """)
     return
 
@@ -184,11 +189,11 @@ def _(mo):
 
     For **Euclidean** input distances, **classical MDS** double-centres the squared distances,
 
-    \\[
-    B = -\\tfrac12 J D^{(2)} J, \\quad J = I - \\tfrac1n \\mathbf 1\\mathbf 1^\\top,
-    \\]
+    $$
+    B = -\tfrac12 J D^{(2)} J, \quad J = I - \tfrac1n \mathbf 1\mathbf 1^\top,
+    $$
 
-    and takes eigenvectors of \\(B\\). That is the same geometry as **PCA on the original coordinates** when those coordinates exist — a useful link back to lesson 1.
+    and takes eigenvectors of \(B\). That is the same geometry as **PCA on the original coordinates** when those coordinates exist — a useful link back to lesson 1.
     """)
     return
 
@@ -215,32 +220,12 @@ def _(mo):
 @app.cell
 def _(np, pd):
     def sample_goliath(image, per_letter_point_count=1000, seed=42):
-        """Sample points from the ink of a rendered word.
-
-        Parameters
-        ----------
-        image : numpy.ndarray
-            The loaded image, with pixel values in the 0 to 1 float range. Only
-            the first colour channel is used, so the ink is separated from the
-            background by brightness.
-        per_letter_point_count : int, default 1000
-            How many ink pixels to keep. Four times as many are proposed, and
-            only those landing on ink are kept, so the request is oversampled.
-        seed : int, default 42
-            Seed for the sampler. A fixed seed makes the point cloud reproducible.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns `x0`, `x1`, `labels`: the coordinates of each sampled pixel
-            and the letter it belongs to. Rows are sorted left to right.
-        """
+        """Sample ink pixels into sorted columns `x0`, `x1`, `labels` (reproducible `seed`)."""
         ink = image[::-1, :, 0].T
         rng = np.random.RandomState(seed)
         proposals = rng.rand(4 * per_letter_point_count, 2)
         rows, columns = (proposals * ink.shape).astype(int).T
-        keep = ink[rows, columns] < 1
-        points = proposals[keep]
+        points = proposals[ink[rows, columns] < 1]
         # Rescale the horizontal axis so the letters keep their proportions.
         points[:, 0] *= ink.shape[0] / ink.shape[1]
         points = points[:per_letter_point_count]
@@ -271,38 +256,21 @@ def _(mo):
     return
 
 @app.cell
-def _(LETTER_COLORS, px):
+def _(LETTER_COLORS, go):
     def draw_letters(frame, title):
-        """Scatter the letters coloured by glyph, with a 1:1 aspect ratio.
-
-        Parameters
-        ----------
-        frame : pandas.DataFrame
-            Columns `x0`, `x1`, and `labels`.
-        title : str
-            Figure title.
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            The scatter, with one legend entry per glyph.
-        """
-        figure = px.scatter(
-            frame,
-            x="x0",
-            y="x1",
-            color="labels",
-            title=title,
-            category_orders={"labels": list("GOLIATH")},
-            color_discrete_map=LETTER_COLORS,
-        )
-        figure.update_traces(marker=dict(size=4, opacity=0.8))
+        """Scatter `x0`/`x1` by letter with a 1:1 aspect ratio."""
+        figure = go.Figure()
+        for letter in "GOLIATH":
+            mask = frame["labels"].to_numpy() == letter
+            figure.add_trace(go.Scatter(
+                x=frame["x0"].to_numpy()[mask], y=frame["x1"].to_numpy()[mask],
+                mode="markers", name=letter,
+                marker=dict(size=4, opacity=0.8, color=LETTER_COLORS[letter]),
+            ))
         figure.update_yaxes(scaleanchor="x", scaleratio=1)
-        figure.update_layout(
-            height=380,
+        figure.update_layout(title=title, height=380, width=700,
             margin=dict(t=55, b=40, l=45, r=20),
-            legend=dict(font=dict(size=9), itemsizing="constant", title="letter"),
-        )
+            legend=dict(font=dict(size=9), itemsizing="constant", title="letter"))
         return figure
 
     return (draw_letters,)
@@ -421,28 +389,9 @@ def _(mo):
 @app.cell
 def _(np, pd):
     def rotate_letters(frame, angle):
-        """Rotate a 2-D point cloud counter-clockwise by `angle` degrees.
-
-        Row vectors are post-multiplied by a 2×2 rotation matrix: `coords @ R`.
-        That convention matches a counter-clockwise turn in a standard
-        `x`–`y` plot.
-
-        Parameters
-        ----------
-        frame : pandas.DataFrame
-            Columns `x0`, `x1`, and optionally `labels`.
-        angle : float
-            Rotation in degrees (positive = counter-clockwise).
-
-        Returns
-        -------
-        pandas.DataFrame
-            Copy of `frame` with rotated `x0` and `x1`.
-        """
+        """Counter-clockwise rotation of row vectors ``(x0, x1)`` by ``angle`` degrees."""
         theta = np.deg2rad(angle)
-        rotation = np.array(
-            [[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]
-        )
+        rotation = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
         rotated = frame.copy()
         rotated[["x0", "x1"]] = frame[["x0", "x1"]].to_numpy() @ rotation
         return rotated
@@ -460,66 +409,24 @@ def _(mo):
 
 @app.cell
 def _(LETTER_COLORS, go, make_subplots):
-    def letters_panel(frames, captions, title="", width=1150):
-        """Place several letter clouds side by side for comparison.
-
-        Parameters
-        ----------
-        frames : list of pandas.DataFrame
-            One cloud per panel, each with `x0`, `x1`, and `labels`.
-        captions : list of str
-            Panel titles, in the same order.
-        title : str, default ""
-            Figure title.
-        width : int, default 1150
-            Figure width in pixels.
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            Side-by-side panels sharing one colour legend.
-        """
+    def letters_panel(frames, captions, title="", width=880):
+        """Side-by-side letter scatters with one shared legend (width capped for marimo)."""
         count = len(frames)
-        figure = make_subplots(
-            rows=1,
-            cols=count,
-            subplot_titles=captions,
-            horizontal_spacing=0.04,
-        )
+        width = min(width, min(880, 220 * count + 80))
+        figure = make_subplots(rows=1, cols=count, subplot_titles=captions, horizontal_spacing=0.04)
         for index, frame in enumerate(frames, start=1):
             for letter in "GOLIATH":
                 mask = frame["labels"].to_numpy() == letter
-                figure.add_trace(
-                    go.Scatter(
-                        x=frame["x0"].to_numpy()[mask],
-                        y=frame["x1"].to_numpy()[mask],
-                        mode="markers",
-                        name=letter,
-                        legendgroup=letter,
-                        showlegend=index == 1,
-                        marker=dict(
-                            size=4,
-                            opacity=0.8,
-                            color=LETTER_COLORS[letter],
-                        ),
-                    ),
-                    row=1,
-                    col=index,
-                )
+                figure.add_trace(go.Scatter(
+                    x=frame["x0"].to_numpy()[mask], y=frame["x1"].to_numpy()[mask],
+                    mode="markers", name=letter, legendgroup=letter, showlegend=index == 1,
+                    marker=dict(size=4, opacity=0.8, color=LETTER_COLORS[letter]),
+                ), row=1, col=index)
             axis_suffix = "" if index == 1 else str(index)
-            figure.update_yaxes(
-                scaleanchor=f"x{axis_suffix}",
-                scaleratio=1,
-                row=1,
-                col=index,
-            )
-        figure.update_layout(
-            width=width,
-            height=340,
-            title=title,
+            figure.update_yaxes(scaleanchor=f"x{axis_suffix}", scaleratio=1, row=1, col=index)
+        figure.update_layout(width=width, height=340, title=title,
             margin=dict(t=70, b=35, l=45, r=20),
-            legend=dict(font=dict(size=9), itemsizing="constant", orientation="h", title="letter"),
-        )
+            legend=dict(font=dict(size=9), itemsizing="constant", orientation="h", title="letter"))
         return figure
 
     return (letters_panel,)
@@ -535,52 +442,23 @@ def _(mo):
 
 @app.cell
 def _(go, make_subplots, np):
-    def distance_matrix_figure(matrices, captions, title="Pairwise distance matrices"):
-        """Draw heatmaps for one or more distance matrices.
-
-        Parameters
-        ----------
-        matrices : list of numpy.ndarray
-            Square distance matrices, points ordered left-to-right.
-        captions : list of str
-            Subplot titles.
-        title : str, default "Pairwise distance matrices"
-            Overall figure title.
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            Heatmaps with a shared colour bar and reversed row axis.
-        """
+    def distance_matrix_figure(matrices, captions, title="Pairwise distance matrices", max_points=200):
+        """Blues heatmaps of distance matrices (evenly subsampled for display)."""
         count = len(matrices)
-        figure = make_subplots(
-            rows=1,
-            cols=count,
-            subplot_titles=captions,
-            horizontal_spacing=0.06,
-        )
+        figure = make_subplots(rows=1, cols=count, subplot_titles=captions, horizontal_spacing=0.06)
         zmax = max(float(m.max()) for m in matrices)
         for index, matrix in enumerate(matrices, start=1):
-            figure.add_trace(
-                go.Heatmap(
-                    z=matrix,
-                    colorscale="Blues",
-                    zmin=0,
-                    zmax=zmax,
-                    colorbar=dict(title="distance") if index == count else None,
-                    showscale=index == count,
-                ),
-                row=1,
-                col=index,
-            )
+            n = matrix.shape[0]
+            if n > max_points:
+                pick = np.linspace(0, n - 1, max_points, dtype=int)
+                matrix = matrix[np.ix_(pick, pick)]
+            figure.add_trace(go.Heatmap(z=matrix, colorscale="Blues", zmin=0, zmax=zmax,
+                colorbar=dict(title="distance") if index == count else None,
+                showscale=index == count), row=1, col=index)
             figure.update_yaxes(autorange="reversed", row=1, col=index)
             figure.update_xaxes(visible=False, row=1, col=index)
-        figure.update_layout(
-            width=min(320 * count + 120, 980),
-            height=330,
-            title=title,
-            margin=dict(t=60, b=25, l=25, r=20),
-        )
+        figure.update_layout(width=min(240 * count + 80, 880), height=330, title=title,
+            margin=dict(t=60, b=25, l=25, r=20))
         return figure
 
     return (distance_matrix_figure,)
@@ -635,7 +513,6 @@ def _(
         [letters, _rotated],
         ["Original", f"Rotated { _angle:.0f}°"],
         title=f"Rotation preserves shape (max distance change {_gap:.2e})",
-        width=780,
     )
     rotation_slider_figure
     return
@@ -648,34 +525,22 @@ def _(mo):
     return
 
 @app.cell
-def _(letters, letters_panel, rotate_letters):
+def _(letters, np, pairwise_distances, rotate_letters):
+    distances = pairwise_distances(letters[["x0", "x1"]])
     turned_down = rotate_letters(letters, -20)
     turned_up = rotate_letters(letters, 50)
-    rotation_triple_figure = letters_panel(
-        [letters, turned_down, turned_up],
-        ["Original", "Rotated by -20°", "Rotated by 50°"],
-        title="Three orientations, identical distances",
-    )
-    rotation_triple_figure
-    return turned_down, turned_up
-
-@app.cell
-def _(letters, np, pairwise_distances, turned_down, turned_up):
-    distances = pairwise_distances(letters[["x0", "x1"]])
     distances_down = pairwise_distances(turned_down[["x0", "x1"]])
     distances_up = pairwise_distances(turned_up[["x0", "x1"]])
-    distance_gap = float(
-        max(
-            np.max(np.abs(distances - distances_down)),
-            np.max(np.abs(distances - distances_up)),
-        )
-    )
-    return distance_gap, distances
+    distance_gap = float(max(
+        np.max(np.abs(distances - distances_down)),
+        np.max(np.abs(distances - distances_up)),
+    ))
+    return distance_gap, distances, distances_down, distances_up
 
 @app.cell(hide_code=True)
 def _(distance_gap, letters, mo):
     mo.md(f"""
-    Across {len(letters) * (len(letters) - 1) // 2:,} pairs, the **largest distance change** under rotation is **{distance_gap:.2e}** — essentially zero. The three clouds are the same data in different coordinates.
+    Across {len(letters) * (len(letters) - 1) // 2:,} pairs, the **largest distance change** under rotation is **{distance_gap:.2e}** — essentially zero. Orientation changes coordinates, not the distance matrix.
     """)
     return
 
@@ -781,21 +646,7 @@ def _(mo):
 @app.cell
 def _(np):
     def along_word(position, embedded):
-        """Absolute correlation between word order and an embedding axis.
-
-        Parameters
-        ----------
-        position : array-like of shape (n,)
-            Original left-to-right order (here, sorted `x0` or row index).
-        embedded : array-like of shape (n, k)
-            MDS coordinates.
-
-        Returns
-        -------
-        float
-            |correlation| between `position` and the embedded axis with largest
-            variance (sign is ignored because MDS may flip an axis).
-        """
+        """|Correlation| between ``position`` and the highest-variance embedding axis."""
         embedded = np.asarray(embedded)
         longest = embedded[:, int(np.argmax(np.var(embedded, axis=0)))]
         return abs(float(np.corrcoef(position, longest)[0, 1]))
@@ -836,7 +687,6 @@ def _(MDS, along_word, distances, letters, letters_panel, mds_seed_slider, pd):
         [letters, _layout],
         ["Original coordinates", f"MDS seed {_seed} (stress {_model.stress_:.4f})"],
         title=f"Flat word from distances alone (along-word {_score:.3f})",
-        width=820,
     )
     mds_seed_figure
     return
@@ -873,7 +723,6 @@ def _(MDS, along_word, distances, letters, letters_panel, pd):
             f"MDS seed 5 (raw stress {flat_stress['seed 5']:.2f})",
         ],
         title="Two seeds, the same flat distances",
-        width=900,
     )
     flat_seeds_figure
     return flat_agreement, flat_layouts, flat_stress
@@ -937,32 +786,16 @@ def _(mo):
 @app.cell
 def _(np, pd):
     def random_projection(frame, n=3, random_state=42):
-        """Embed flat coordinates in `n` dimensions by a random orthogonal mix.
-
-        Parameters
-        ----------
-        frame : pandas.DataFrame
-            Columns `x0`, `x1`, and `labels`.
-        n : int, default 3
-            Target dimension (must be at least the input dimension).
-        random_state : int, default 42
-            Seed for the random orthogonal matrix.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns `x0` … `x{n-1}` plus `labels`.
-        """
-        labels = frame["labels"]
+        """Random orthogonal lift of ``(x0, x1)`` to ``n`` coordinates (distances preserved)."""
         coords = frame[["x0", "x1"]].to_numpy()
         assert n >= coords.shape[1]
         rng = np.random.RandomState(random_state)
         random_matrix = rng.randn(n, n)
         _, vectors = np.linalg.eigh(random_matrix @ random_matrix.T)
         projected = coords @ vectors[: coords.shape[1]]
-        columns = {f"x{j}": projected[:, j] for j in range(projected.shape[1])}
-        columns["labels"] = labels.to_numpy()
-        return pd.DataFrame(columns)
+        out = {f"x{j}": projected[:, j] for j in range(projected.shape[1])}
+        out["labels"] = frame["labels"].to_numpy()
+        return pd.DataFrame(out)
 
     return (random_projection,)
 
@@ -1024,11 +857,10 @@ def _(
     linear_3d_figure = letters_panel(
         [layouts_3d["seed 9"], layouts_3d["seed 5"]],
         [
-            f"3-D distances → MDS, seed 9 ({agree_3d['seed 9']:.3f})",
-            f"3-D distances → MDS, seed 5 ({agree_3d['seed 5']:.3f})",
+            f"Seed 9 · {agree_3d['seed 9']:.3f}",
+            f"Seed 5 · {agree_3d['seed 5']:.3f}",
         ],
         title="Linear 3-D embedding recovered in 2-D",
-        width=900,
     )
     linear_3d_figure
     return agree_3d, dist_3d, layouts_3d
@@ -1036,28 +868,9 @@ def _(
 @app.cell
 def _(np, scipy_procrustes):
     def procrustes_align(source, target):
-        """Orthogonally align `target` to `source`, allowing reflection.
-
-        Wraps ``scipy.spatial.procrustes``: both clouds are centred and scaled
-        to unit Frobenius norm, then `target` is rotated/reflected to match
-        `source`.
-
-        Parameters
-        ----------
-        source, target : array-like of shape (n, 2)
-            Two layouts of the same points.
-
-        Returns
-        -------
-        aligned : numpy.ndarray
-            Procrustes-transformed `target` coordinates.
-        disparity : float
-            Procrustes disparity (0 = perfect match up to similarity transform).
-        """
+        """Procrustes-align ``target`` to ``source``; returns ``(aligned, disparity)``."""
         _, aligned, disparity = scipy_procrustes(
-            np.asarray(source, dtype=float),
-            np.asarray(target, dtype=float),
-        )
+            np.asarray(source, dtype=float), np.asarray(target, dtype=float))
         return aligned, float(disparity)
 
     return (procrustes_align,)
@@ -1209,20 +1022,7 @@ def _(mo):
 @app.cell
 def _(np):
     def monotonic_distortion(distance_matrix, exponent=1.7):
-        """Distort distance values while preserving their rank order.
-
-        Parameters
-        ----------
-        distance_matrix : numpy.ndarray
-            Symmetric matrix of distances.
-        exponent : float, default 1.7
-            Power applied to off-diagonal entries (1 preserves values).
-
-        Returns
-        -------
-        numpy.ndarray
-            Distorted symmetric matrix with the same ordering but wrong intervals.
-        """
+        """Raise off-diagonal distances to ``exponent`` (order preserved, scale wrong)."""
         distorted = distance_matrix.astype(float).copy()
         mask = ~np.eye(distorted.shape[0], dtype=bool)
         distorted[mask] = distorted[mask] ** exponent
@@ -1241,77 +1041,24 @@ def _(mo):
 
 @app.cell
 def _(go, np):
-    def shepard_figure(
-        input_distances,
-        embedded_coords,
-        title="Shepard diagram",
-        max_pairs=6000,
-        seed=42,
-        show_reference_line=True,
-    ):
-        """Plot input distances against distances in the embedding.
-
-        Parameters
-        ----------
-        input_distances : numpy.ndarray
-            Square matrix of input distances.
-        embedded_coords : numpy.ndarray of shape (n, k)
-            Coordinates returned by MDS.
-        title : str, default "Shepard diagram"
-            Figure title.
-        max_pairs : int, default 6000
-            Maximum number of upper-triangle pairs to draw (random subsample).
-        seed : int, default 42
-            Subsample seed.
-        show_reference_line : bool, default True
-            If True, draw the ``y = x`` line (meaningful for metric MDS only).
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            Scatter of input vs embedded distances.
-        """
-        embedded_distances = np.linalg.norm(
-            embedded_coords[:, None, :] - embedded_coords[None, :, :],
-            axis=-1,
-        )
-        indices = np.triu_indices(input_distances.shape[0], k=1)
-        original = input_distances[indices]
-        embedded = embedded_distances[indices]
+    def shepard_figure(input_distances, embedded_coords, title="Shepard diagram",
+            max_pairs=4000, seed=42, show_reference_line=True):
+        """Input vs embedded distances (subsampled pairs; optional ``y = x`` line)."""
+        emb_d = np.linalg.norm(embedded_coords[:, None, :] - embedded_coords[None, :, :], axis=-1)
+        idx = np.triu_indices(input_distances.shape[0], k=1)
+        original, embedded = input_distances[idx], emb_d[idx]
         if original.size > max_pairs:
-            rng = np.random.RandomState(seed)
-            pick = rng.choice(original.size, max_pairs, replace=False)
-            original = original[pick]
-            embedded = embedded[pick]
+            pick = np.random.RandomState(seed).choice(original.size, max_pairs, replace=False)
+            original, embedded = original[pick], embedded[pick]
         limit = float(max(original.max(), embedded.max()))
         figure = go.Figure()
-        figure.add_trace(
-            go.Scatter(
-                x=original,
-                y=embedded,
-                mode="markers",
-                marker=dict(size=3, opacity=0.35),
-                name="pairs",
-            )
-        )
+        figure.add_trace(go.Scatter(x=original, y=embedded, mode="markers",
+            marker=dict(size=3, opacity=0.35), name="pairs"))
         if show_reference_line:
-            figure.add_trace(
-                go.Scatter(
-                    x=[0, limit],
-                    y=[0, limit],
-                    mode="lines",
-                    name="y = x (metric target)",
-                    line=dict(dash="dash"),
-                )
-            )
-        figure.update_layout(
-            width=520,
-            height=420,
-            title=title,
-            xaxis_title="input distance",
-            yaxis_title="embedded distance",
-            margin=dict(t=55, b=45, l=55, r=20),
-        )
+            figure.add_trace(go.Scatter(x=[0, limit], y=[0, limit], mode="lines",
+                name="y = x (metric target)", line=dict(dash="dash")))
+        figure.update_layout(width=520, height=420, title=title, xaxis_title="input distance",
+            yaxis_title="embedded distance", margin=dict(t=55, b=45, l=55, r=20))
         return figure
 
     return (shepard_figure,)
@@ -1403,30 +1150,10 @@ def _(mo):
 @app.cell
 def _(np, pd):
     def make_goliath_s_curve(frame, fold_tightness=1.0):
-        """Wrap the flat word onto an S-shaped surface in three dimensions.
-
-        Parameters
-        ----------
-        frame : pandas.DataFrame
-            Flat cloud with `x0`, `x1`, and `labels`.
-        fold_tightness : float, default 1.0
-            Multiplier on the parameter along the word; values above 1 wind the
-            S more tightly (letters can come closer in space through the air).
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns `x0`, `x1`, `x2`, and `labels` on the bent surface.
-        """
-        parameter = (frame.x0 - 2) * 0.78 * np.pi * fold_tightness
-        return pd.DataFrame(
-            {
-                "x0": np.sin(parameter),
-                "x1": frame.x1 * 1.5,
-                "x2": np.sign(parameter) * (np.cos(parameter) - 1) * 1.5,
-                "labels": frame.labels.to_numpy(),
-            }
-        )
+        """Bend flat GOLIATH onto an S surface in ``(x0, x1, x2)`` (`fold_tightness` scales winding)."""
+        t = (frame.x0 - 2) * 0.78 * np.pi * fold_tightness
+        return pd.DataFrame({"x0": np.sin(t), "x1": frame.x1 * 1.5,
+            "x2": np.sign(t) * (np.cos(t) - 1) * 1.5, "labels": frame.labels.to_numpy()})
 
     return (make_goliath_s_curve,)
 
@@ -1467,7 +1194,7 @@ def _(LETTER_COLORS, curve, px):
     )
     _figure.update_traces(marker=dict(size=2, opacity=0.85))
     _figure.update_layout(
-        width=760,
+        width=700,
         height=480,
         margin=dict(t=55, b=20, l=20, r=20),
         legend=dict(font=dict(size=9), itemsizing="constant", title="letter"),
@@ -1482,23 +1209,7 @@ def _(LETTER_COLORS, curve, px):
 @app.cell
 def _(np):
     def letter_shape_ratio(frame, embedded):
-        """Mean within-letter ``sigma_2 / sigma_1`` from an SVD of each glyph.
-
-        Parameters
-        ----------
-        frame : pandas.DataFrame
-            Table with a `labels` column (same row order as the embedding).
-        embedded : array-like of shape (n, 2)
-            Two-dimensional coordinates to measure.
-
-        Returns
-        -------
-        float
-            Average over letters of ``sigma_2 / sigma_1`` (0 = line, 1 = round
-            blob). Versus a flat layout the ratio **drops sharply** on a
-            moderate S-bend; at **extreme** folds overlapping letters can
-            **raise** it again, so it is not monotonic in tightness.
-        """
+        """Mean per-letter ``sigma_2 / sigma_1`` from SVD of centered glyph points."""
         embedded = np.asarray(embedded)
         labels = frame["labels"].to_numpy()
         ratios = []
@@ -1507,9 +1218,9 @@ def _(np):
             if mask.sum() < 3:
                 continue
             centered = embedded[mask] - embedded[mask].mean(axis=0)
-            singular = np.linalg.svd(centered, compute_uv=False)
-            if singular[0] > 0:
-                ratios.append(float(singular[1] / singular[0]))
+            s = np.linalg.svd(centered, compute_uv=False)
+            if s[0] > 0:
+                ratios.append(float(s[1] / s[0]))
         return float(np.mean(ratios)) if ratios else 0.0
 
     return (letter_shape_ratio,)
@@ -1674,7 +1385,6 @@ def _(
             f"S non-metric (ratio {curve_shape['non-metric']:.3f})",
         ],
         title="Flat recovery vs S-bend collapse",
-        width=1150,
     )
     collapse_comparison_figure
     return (
