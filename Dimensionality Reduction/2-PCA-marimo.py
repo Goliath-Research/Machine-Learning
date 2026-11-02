@@ -204,7 +204,17 @@ def _(digit_shapes, digits, mo):
 
 @app.cell
 def _(np, plt):
-    def plot_digits(images, rows, cols, title=None, labels=None, clim=(0, 16)):
+    import textwrap
+
+    def plot_digits(
+        images,
+        rows,
+        cols,
+        title=None,
+        labels=None,
+        clim=(0, 16),
+        symmetric_scale=False,
+    ):
         """Draw a grid of 8 by 8 digit images with matplotlib.
 
         Parameters
@@ -225,9 +235,16 @@ def _(np, plt):
             coordinates, so it sits inside the cell whatever the pixel values
             happen to be.
         clim : tuple of float or None, default (0, 16)
-            Fixed grey-level range shared by every panel in the lesson. A
-            shared range is what makes a noisy panel comparable with a
-            reconstructed one; `None` lets each panel autoscale.
+            Fixed grey-level range for pixel panels. A shared range is what
+            makes a noisy panel comparable with a reconstructed one; `None`
+            lets each panel autoscale. Ignored when ``symmetric_scale`` is
+            True.
+        symmetric_scale : bool, default False
+            When True, treat each panel as a signed component direction: use
+            a diverging colormap and scale each image to
+            ``[-max|value|, +max|value|]`` so negative and positive weights
+            are both visible. Use this for eigendigits, not for grey-level
+            pixels.
 
         Returns
         -------
@@ -243,12 +260,26 @@ def _(np, plt):
         data = data[:_capacity]
         if labels is not None:
             labels = np.asarray(labels)[: len(data)]
+        if title:
+            _display_title = "\n".join(textwrap.wrap(title, width=68))
+            _title_lines = _display_title.count("\n") + 1
+        else:
+            _display_title = None
+            _title_lines = 0
+        _row_inches = 1.25
+        _title_inches = 0.55 + 0.32 * _title_lines if title else 0.0
+        _figure_height = max(
+            display_rows * _row_inches + _title_inches, 2.0
+        )
         figure, axes = plt.subplots(
             display_rows,
             cols,
-            figsize=(8, display_rows),
+            figsize=(8, _figure_height),
             subplot_kw={"xticks": [], "yticks": []},
-            gridspec_kw=dict(hspace=0.1, wspace=0.1),
+            gridspec_kw=dict(
+                hspace=0.28 if display_rows > 1 else 0.18,
+                wspace=0.12,
+            ),
         )
         if display_rows == 1 and cols == 1:
             axes = np.array([[axes]])
@@ -260,12 +291,25 @@ def _(np, plt):
             if index >= len(data):
                 ax.set_visible(False)
                 continue
-            ax.imshow(
-                data[index].reshape(8, 8),
-                cmap="binary",
-                interpolation="nearest",
-                clim=clim,
-            )
+            _patch = data[index].reshape(8, 8)
+            if symmetric_scale:
+                _limit = float(np.max(np.abs(_patch)))
+                if _limit == 0:
+                    _limit = 1.0
+                ax.imshow(
+                    _patch,
+                    cmap="RdBu_r",
+                    interpolation="nearest",
+                    vmin=-_limit,
+                    vmax=_limit,
+                )
+            else:
+                ax.imshow(
+                    _patch,
+                    cmap="binary",
+                    interpolation="nearest",
+                    clim=clim,
+                )
             if labels is not None:
                 ax.text(
                     0.10,
@@ -275,8 +319,20 @@ def _(np, plt):
                     color="blue",
                     verticalalignment="bottom",
                 )
-        if title:
-            figure.suptitle(title)
+        if _display_title:
+            _grid_top = 0.92 - 0.07 * _title_lines - 0.025 * max(cols - 1, 0)
+            _grid_top = max(_grid_top, 0.68)
+            figure.subplots_adjust(
+                top=_grid_top,
+                bottom=0.06,
+                left=0.02,
+                right=0.98,
+            )
+            figure.suptitle(
+                _display_title,
+                y=min(0.98, _grid_top + (1.0 - _grid_top) * 0.72),
+                fontsize=10,
+            )
         return figure
 
     return (plot_digits,)
@@ -285,7 +341,7 @@ def _(np, plt):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    `plot_digits` accepts either an `(n, 8, 8)` stack of grids or an `(n, 64)` table of flattened rows. When the input is three-dimensional it reshapes each slice to 8 by 8 before `imshow`. The grid uses at most **four rows**, even if you pass a larger `rows` value; only the first `4 × cols` images are shown. Optional labels are drawn in **axes** coordinates near the bottom-left of each cell, so they stay readable regardless of pixel values. Extra grid slots are hidden rather than left blank. Every panel shares the same grey-level range `(0, 16)` so noisy and rebuilt images are comparable.
+    `plot_digits` accepts either an `(n, 8, 8)` stack of grids or an `(n, 64)` table of flattened rows. When the input is three-dimensional it reshapes each slice to 8 by 8 before `imshow`. The grid uses at most **four rows**, even if you pass a larger `rows` value; only the first `4 × cols` images are shown. Optional labels are drawn in **axes** coordinates near the bottom-left of each cell, so they stay readable regardless of pixel values. Extra grid slots are hidden rather than left blank. Pixel panels share the grey-level range `(0, 16)` so noisy and rebuilt images are comparable. A title reserves headroom above the grid so it does not overlap the images. Pass `symmetric_scale=True` for signed component weights (eigendigits).
     """)
     return
 
@@ -360,13 +416,14 @@ def _(digits, mo, np, plot_digits, plt):
     _figure, _axes = plt.subplots(
         1,
         2,
-        figsize=(4, 2),
+        figsize=(4.5, 2.4),
         subplot_kw={"xticks": [], "yticks": []},
     )
     _axes[0].imshow(_original, cmap="binary", interpolation="nearest", clim=(0, 16))
-    _axes[0].set_title("Original")
+    _axes[0].set_title("Original", fontsize=9, pad=6)
     _axes[1].imshow(_shifted, cmap="binary", interpolation="nearest", clim=(0, 16))
-    _axes[1].set_title("Shifted 1 px right")
+    _axes[1].set_title("Shifted 1 px right", fontsize=9, pad=6)
+    _figure.subplots_adjust(top=0.82, wspace=0.15)
     mo.vstack(
         [
             _figure,
@@ -533,6 +590,8 @@ def _(mo):
     ### Mean image and eigendigits
 
     The fit stores the average pixel values in `mean_`. Each row of `components_` is a direction; reshaped to 8 by 8 it looks like a ghostly whole-digit template — an **eigendigit**. These are the directions the variance curve ranked.
+
+    Component weights are **signed** and much smaller than grey levels 0–16, so the eigendigit grid uses `symmetric_scale=True`: **red** pixels mean a positive weight on that pixel, **blue** means negative, and **white** is near zero. The scale is symmetric per panel so each direction fills the colour range.
     """)
     return
 
@@ -556,6 +615,7 @@ def _(digit_pca, plot_digits):
         2,
         3,
         "The first six eigendigit directions (principal components 1–6)",
+        symmetric_scale=True,
     )
     _figure
     return
@@ -1218,38 +1278,39 @@ def _(digits, noisy_digits, np, plot_digits, rebuilt):
 
 
 @app.cell(hide_code=True)
-def _(components_for_80, components_for_90, digit_plane_share, mo, tiny_components):
-    mo.md(f"""
-    ## Conclusions
-
-    1. **The fit assumes the pixels are independent coordinates.** The distance PCA maximises has no notion of adjacency, so a digit shifted by one pixel is as different, to the fit, as a different digit. It cannot represent translation and cannot see a stroke. That is the real cost of using a general purpose method on images: not that the arithmetic is wrong, but that the geometry it assumes is not the geometry of a picture. The same indifference is why one fit serves cars, flowers and text equally well.
-    2. **Two components give a usable picture, but only a partial one.** The plot keeps {digit_plane_share:.1%} of the variance, and the digits do form coherent regions without the labels being used. What it does not give you is meaningful axes, literal distances, or an honest impression of overlap.
-    3. **Read the cumulative curve, not the per-component one, to choose a count.** {components_for_80} components reach 80% of the variance and {components_for_90} reach 90%. You cannot skip components, because each is defined as perpendicular to all previous ones; the choice is always "how many from the front". **Choosing the target share itself is a judgement**, not something the curve can answer: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates.
-    4. **The tail of the curve is nearly flat.** {tiny_components} components have a share below 0.0005 each, so those directions are almost constant. Whatever varies there is not the shared structure of a digit.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
 def _(
     PCA,
     best_clean_rmse,
     best_k_clean,
+    components_for_80,
+    components_for_90,
+    digit_plane_share,
     mo,
     noise_components,
     noisy_digits,
     noisy_rmse,
     recon_scores,
+    tiny_components,
 ):
     _best_k_share = float(
         PCA(n_components=best_k_clean)
         .fit(noisy_digits)
         .explained_variance_ratio_.sum()
     )
+    _r25 = recon_scores.loc["25%", "RMSE vs clean original"]
+    _r50 = recon_scores.loc["50%", "RMSE vs clean original"]
+    _r60 = recon_scores.loc["60%", "RMSE vs clean original"]
+    _r75 = recon_scores.loc["75%", "RMSE vs clean original"]
+    _mid_gap = abs(_r50 - _r60)
     mo.md(f"""
-    5. **Noise filtering works because noise has no shared direction.** Real stroke structure appears across images, so it lands in the high-variance components. Independent pixel noise spreads thinly through all 64 directions, including the negligible ones that a reconstruction discards.
-    6. **There is an optimum, and it is not at either end.** Against the clean original the error was {recon_scores.loc['25%', 'RMSE vs clean original']:.3f} at 25%, {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} at 50%, {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} at 60% and {recon_scores.loc['75%', 'RMSE vs clean original']:.3f} at 75%, against a noisy baseline of {noisy_rmse:.3f}. The full k sweep bottoms out at **k = {best_k_clean}** (RMSE **{best_clean_rmse:.3f}**, about {_best_k_share:.0%} of the noisy variance). Too few components ({noise_components[0.25]}) blur away real stroke detail; too many ({noise_components[0.75]}) carry the noise back in. The 50% and 60% grid points differ by only {abs(recon_scores.loc['50%', 'RMSE vs clean original'] - recon_scores.loc['60%', 'RMSE vs clean original']):.3f}, so the honest reading is a **band** from about half to two thirds of the variance, not a single winning share on the coarse grid.
-    7. **Judge a filter by the truth, never by its faithfulness to its input.** The 75% reconstruction changes the noisy input least of the four, and it is worse than either middle fit. Scoring against the noisy input rewards doing nothing, which is why the clean originals were kept: without them this lesson could not have found its own optimum.
+    ## Conclusions
+
+    1. **Pixels are independent coordinates.** Straight-line distance ignores adjacency, so a one-pixel shift is a large move and strokes are invisible as such — the cost of a method that fits any table equally well.
+    2. **Two components give a partial view.** They keep {digit_plane_share:.1%} of the variance; islands in the plot reflect real groupings, but axes, distances, and overlap are not trustworthy.
+    3. **Choose a prefix from the cumulative curve.** {components_for_80} components reach 80% and {components_for_90} reach 90%; you always keep components from the front. The target share itself depends on the job — plot, filter, or compress — not on a universal threshold.
+    4. **Shared stroke structure sits in high-variance directions; noise does not.** {tiny_components} components have share below 0.0005 each, so the tail is nearly flat and independent noise hides in directions a short reconstruction drops.
+    5. **Reconstruction error is U-shaped in k.** Clean RMSE was {_r25:.3f} (25%), {_r50:.3f} (50%), {_r60:.3f} (60%), {_r75:.3f} (75%) versus noisy baseline {noisy_rmse:.3f}; the sweep minimum is **k = {best_k_clean}** (RMSE **{best_clean_rmse:.3f}**, ~{_best_k_share:.0%} variance). Too few ({noise_components[0.25]}) blurs; too many ({noise_components[0.75]}) reintroduces noise. The four share grid points sit near the bottom — 50% and 60% differ by only {_mid_gap:.3f}.
+    6. **Score filters against the clean truth, not the noisy input.** The 75% fit changes the input least yet is worse than the middle fits; without clean references, "changed least" would look best.
     """)
     return
 
