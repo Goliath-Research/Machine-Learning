@@ -262,7 +262,7 @@ def _(LETTER_COLORS, go):
         figure = go.Figure()
         for letter in "GOLIATH":
             mask = frame["labels"].to_numpy() == letter
-            figure.add_trace(go.Scattergl(
+            figure.add_trace(go.Scatter(
                 x=frame["x0"].to_numpy()[mask], y=frame["x1"].to_numpy()[mask],
                 mode="markers", name=letter,
                 marker=dict(size=4, opacity=0.8, color=LETTER_COLORS[letter]),
@@ -417,7 +417,7 @@ def _(LETTER_COLORS, go, make_subplots):
         for index, frame in enumerate(frames, start=1):
             for letter in "GOLIATH":
                 mask = frame["labels"].to_numpy() == letter
-                figure.add_trace(go.Scattergl(
+                figure.add_trace(go.Scatter(
                     x=frame["x0"].to_numpy()[mask], y=frame["x1"].to_numpy()[mask],
                     mode="markers", name=letter, legendgroup=letter, showlegend=index == 1,
                     marker=dict(size=4, opacity=0.8, color=LETTER_COLORS[letter]),
@@ -790,7 +790,8 @@ def _(np, pd):
         coords = frame[["x0", "x1"]].to_numpy()
         assert n >= coords.shape[1]
         rng = np.random.RandomState(random_state)
-        _, vectors = np.linalg.eigh(rng.randn(n, n) @ rng.randn(n, n).T)
+        random_matrix = rng.randn(n, n)
+        _, vectors = np.linalg.eigh(random_matrix @ random_matrix.T)
         projected = coords @ vectors[: coords.shape[1]]
         out = {f"x{j}": projected[:, j] for j in range(projected.shape[1])}
         out["labels"] = frame["labels"].to_numpy()
@@ -1051,10 +1052,10 @@ def _(go, np):
             original, embedded = original[pick], embedded[pick]
         limit = float(max(original.max(), embedded.max()))
         figure = go.Figure()
-        figure.add_trace(go.Scattergl(x=original, y=embedded, mode="markers",
+        figure.add_trace(go.Scatter(x=original, y=embedded, mode="markers",
             marker=dict(size=3, opacity=0.35), name="pairs"))
         if show_reference_line:
-            figure.add_trace(go.Scattergl(x=[0, limit], y=[0, limit], mode="lines",
+            figure.add_trace(go.Scatter(x=[0, limit], y=[0, limit], mode="lines",
                 name="y = x (metric target)", line=dict(dash="dash")))
         figure.update_layout(width=520, height=420, title=title, xaxis_title="input distance",
             yaxis_title="embedded distance", margin=dict(t=55, b=45, l=55, r=20))
