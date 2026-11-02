@@ -279,16 +279,11 @@ class PlotBuilder:
         data = np.asarray(images)
         if data.ndim == 2:
             data = data.reshape(-1, 8, 8)
-
-        # Each cell is given a fixed 0-to-1 coordinate system rather than the
-        # heatmap's pixel indices. A label can then be placed as a fraction of
-        # the cell, the way matplotlib's transAxes works, instead of as a pixel
-        # offset that lands on the cell border and gets clipped.
         figure = make_subplots(
             rows=rows,
             cols=cols,
-            horizontal_spacing=0.02,
-            vertical_spacing=0.03,
+            horizontal_spacing=0.01,
+            vertical_spacing=0.02,
             subplot_titles=None,
         )
         shown = 0
@@ -298,9 +293,7 @@ class PlotBuilder:
                     break
                 figure.add_trace(
                     go.Heatmap(
-                        # flipud puts row 0 at the top. Plotly draws the first
-                        # row of z at the bottom, which would mirror the glyph.
-                        z=np.flipud(data[shown]),
+                        z=data[shown],
                         showscale=False,
                         colorscale="Greys",
                         hoverinfo="skip",
@@ -309,18 +302,15 @@ class PlotBuilder:
                     col=col,
                 )
                 if labels is not None:
-                    # Anchored a little inside the cell, with the text drawn up
-                    # and to the right of the anchor, and clipping switched off
-                    # so a wide label is never cut off by the cell edge.
+                    # A text trace pinned near the lower-left corner of the cell.
                     figure.add_trace(
                         go.Scatter(
-                            x=[0.04],
-                            y=[0.04],
+                            x=[0.05],
+                            y=[0.05],
                             mode="text",
                             text=[str(labels[shown])],
                             textfont=dict(color="blue", size=11),
-                            textposition="top right",
-                            cliponaxis=False,
+                            textposition="bottom left",
                             hoverinfo="skip",
                             showlegend=False,
                         ),
@@ -329,23 +319,13 @@ class PlotBuilder:
                     )
                 shown += 1
 
-        # Square cells: one cell is as wide as the plotting area divided by the
-        # number of columns, and the figure height is then set so each cell has
-        # the same height. A non-square cell stretches an 8 by 8 glyph.
+        # Square cells. The cell width follows from the figure width and the
+        # column count; the figure height is then chosen so each cell is as tall
+        # as it is wide, which keeps an 8 by 8 glyph from being stretched.
         _left, _right, _top, _bottom = 10, 10, 55, 10
-        _plot_width = self.width - _left - _right
-        _cell_width = _plot_width * (1 - 0.02 * (cols - 1)) / cols
-        _plot_height = rows * _cell_width / (1 - 0.03 * (rows - 1))
+        _cell_width = (self.width - _left - _right) * (1 - 0.01 * (cols - 1)) / cols
+        _plot_height = rows * _cell_width / (1 - 0.02 * (rows - 1))
         _height = int(_top + _bottom + _plot_height)
-
-        for _index in range(1, rows * cols + 1):
-            _suffix = "" if _index == 1 else str(_index)
-            figure.update_layout(
-                {
-                    f"xaxis{_suffix}": dict(range=[0, 1], visible=False, fixedrange=True),
-                    f"yaxis{_suffix}": dict(range=[0, 1], visible=False, fixedrange=True),
-                }
-            )
 
         figure.update_layout(
             width=self.width,
@@ -354,6 +334,8 @@ class PlotBuilder:
             margin=dict(t=_top, b=_bottom, l=_left, r=_right),
             plot_bgcolor="white",
         )
+        figure.update_xaxes(visible=False)
+        figure.update_yaxes(visible=False)
         return figure
 
     def panel(self, figure_specs, rows, cols, titles=None, titles_position="subplot"):
