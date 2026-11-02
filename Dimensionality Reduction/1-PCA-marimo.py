@@ -932,27 +932,33 @@ def _(auto_loadings, measure_columns, mo, np):
     for _component in range(3):
         _ranked = np.argsort(-np.abs(auto_loadings[_component]))
         _top = ", ".join(
-            f"`{measure_columns[_i]}` ({auto_loadings[_component, _i]:+.2f})"
+            f"{measure_columns[_i]} ({auto_loadings[_component, _i]:+.2f})"
             for _i in _ranked[:3]
         )
-        _rows.append(f"    - Component {_component + 1} is dominated by {_top}")
+        _rows.append(f"- Component {_component + 1} is dominated by {_top}")
     mo.md("\n".join([
         "What each component actually describes — the three largest weights in each:",
         "",
         *_rows,
-        "",
-        "To build that list, the cell sorts each component's weights by absolute size (`np.argsort(-np.abs(...))` gives the positions from largest to smallest) and prints the top three with their signs.",
-        "",
-        "Read these as descriptions, not as rankings. A component is a weighted mixture, and naming it is an interpretation, not a fact the algorithm reports. Since signs are arbitrary, what can be interpreted is which columns share a sign and which have opposite signs, never whether a sign is positive.",
-        "",
-        "The pattern is interpretable, which is a good sign for a PCA fit:",
-        "",
-        "- **Component 1** gives weights of one sign to all the size and power columns (curb weight, length, width, wheel base, horsepower) and the opposite sign to both mileage columns. It is a **size versus economy** axis: large, heavy, powerful cars at one end, small economical cars at the other.",
-        "- **Component 2** is led by height, with wheel base and the two mileage columns on the same side, and horsepower on the opposite side. It separates **tall, economical** cars from **low, powerful** ones.",
-        "- **Component 3** sets height against width and the two mileage columns. Once size has been accounted for by Component 1, it separates **tall, narrow** cars from **wide, economical** ones.",
-        "",
-        "Those names are ours, not the algorithm's. PCA reports directions; the labelling is where domain knowledge enters, and another analyst might name them differently. What is not negotiable is the arithmetic behind the weights. The heat map below shows every weight, not only the top three.",
     ]))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    To build that list, the cell sorts each component's weights by absolute size (`np.argsort(-np.abs(...))` gives the positions from largest to smallest) and prints the top three with their signs.
+
+    Read these as descriptions, not as rankings. A component is a weighted mixture, and naming it is an interpretation, not a fact the algorithm reports. Since signs are arbitrary, what can be interpreted is which columns share a sign and which have opposite signs, never whether a sign is positive.
+
+    The pattern is interpretable, which is a good sign for a PCA fit:
+
+    - **Component 1** gives weights of one sign to all the size and power columns (curb weight, length, width, wheel base, horsepower) and the opposite sign to both mileage columns. It is a **size versus economy** axis: large, heavy, powerful cars at one end, small economical cars at the other.
+    - **Component 2** is led by height, with wheel base and the two mileage columns on the same side, and horsepower on the opposite side. It separates **tall, economical** cars from **low, powerful** ones.
+    - **Component 3** sets height against width and the two mileage columns. Once size has been accounted for by Component 1, it separates **tall, narrow** cars from **wide, economical** ones.
+
+    Those names are ours, not the algorithm's. PCA reports directions; the labelling is where domain knowledge enters, and another analyst might name them differently. What is not negotiable is the arithmetic behind the weights. The heat map below shows every weight, not only the top three.
+    """)
     return
 
 
