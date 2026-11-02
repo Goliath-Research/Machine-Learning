@@ -305,8 +305,8 @@ class PlotBuilder:
                     # A text trace pinned near the lower-left corner of the cell.
                     figure.add_trace(
                         go.Scatter(
-                            x=[0.05],
-                            y=[0.05],
+                            x=[0.1],
+                            y=[0.1],
                             mode="text",
                             text=[str(labels[shown])],
                             textfont=dict(color="blue", size=11),
