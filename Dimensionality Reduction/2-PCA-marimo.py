@@ -204,7 +204,15 @@ def _(digit_shapes, digits, mo):
 
 @app.cell
 def _(np, plt):
-    def plot_digits(images, rows, cols, title=None, labels=None, clim=(0, 16)):
+    def plot_digits(
+        images,
+        rows,
+        cols,
+        title=None,
+        labels=None,
+        clim=(0, 16),
+        symmetric_scale=False,
+    ):
         """Draw a grid of 8 by 8 digit images with matplotlib.
 
         Parameters
@@ -225,9 +233,16 @@ def _(np, plt):
             coordinates, so it sits inside the cell whatever the pixel values
             happen to be.
         clim : tuple of float or None, default (0, 16)
-            Fixed grey-level range shared by every panel in the lesson. A
-            shared range is what makes a noisy panel comparable with a
-            reconstructed one; `None` lets each panel autoscale.
+            Fixed grey-level range for pixel panels. A shared range is what
+            makes a noisy panel comparable with a reconstructed one; `None`
+            lets each panel autoscale. Ignored when ``symmetric_scale`` is
+            True.
+        symmetric_scale : bool, default False
+            When True, treat each panel as a signed component direction: use
+            a diverging colormap and scale each image to
+            ``[-max|value|, +max|value|]`` so negative and positive weights
+            are both visible. Use this for eigendigits, not for grey-level
+            pixels.
 
         Returns
         -------
@@ -243,12 +258,15 @@ def _(np, plt):
         data = data[:_capacity]
         if labels is not None:
             labels = np.asarray(labels)[: len(data)]
+        _row_height = 1.05
+        _title_inches = 0.75 if title else 0.0
+        _figure_height = max(display_rows * _row_height + _title_inches, 1.6)
         figure, axes = plt.subplots(
             display_rows,
             cols,
-            figsize=(8, display_rows),
+            figsize=(8, _figure_height),
             subplot_kw={"xticks": [], "yticks": []},
-            gridspec_kw=dict(hspace=0.1, wspace=0.1),
+            gridspec_kw=dict(hspace=0.15, wspace=0.1),
         )
         if display_rows == 1 and cols == 1:
             axes = np.array([[axes]])
@@ -260,12 +278,25 @@ def _(np, plt):
             if index >= len(data):
                 ax.set_visible(False)
                 continue
-            ax.imshow(
-                data[index].reshape(8, 8),
-                cmap="binary",
-                interpolation="nearest",
-                clim=clim,
-            )
+            _patch = data[index].reshape(8, 8)
+            if symmetric_scale:
+                _limit = float(np.max(np.abs(_patch)))
+                if _limit == 0:
+                    _limit = 1.0
+                ax.imshow(
+                    _patch,
+                    cmap="RdBu_r",
+                    interpolation="nearest",
+                    vmin=-_limit,
+                    vmax=_limit,
+                )
+            else:
+                ax.imshow(
+                    _patch,
+                    cmap="binary",
+                    interpolation="nearest",
+                    clim=clim,
+                )
             if labels is not None:
                 ax.text(
                     0.10,
@@ -276,7 +307,8 @@ def _(np, plt):
                     verticalalignment="bottom",
                 )
         if title:
-            figure.suptitle(title)
+            figure.suptitle(title, y=1.0 - 0.35 / _figure_height)
+            figure.subplots_adjust(top=1.0 - _title_inches / _figure_height)
         return figure
 
     return (plot_digits,)
@@ -285,7 +317,7 @@ def _(np, plt):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    `plot_digits` accepts either an `(n, 8, 8)` stack of grids or an `(n, 64)` table of flattened rows. When the input is three-dimensional it reshapes each slice to 8 by 8 before `imshow`. The grid uses at most **four rows**, even if you pass a larger `rows` value; only the first `4 × cols` images are shown. Optional labels are drawn in **axes** coordinates near the bottom-left of each cell, so they stay readable regardless of pixel values. Extra grid slots are hidden rather than left blank. Every panel shares the same grey-level range `(0, 16)` so noisy and rebuilt images are comparable.
+    `plot_digits` accepts either an `(n, 8, 8)` stack of grids or an `(n, 64)` table of flattened rows. When the input is three-dimensional it reshapes each slice to 8 by 8 before `imshow`. The grid uses at most **four rows**, even if you pass a larger `rows` value; only the first `4 × cols` images are shown. Optional labels are drawn in **axes** coordinates near the bottom-left of each cell, so they stay readable regardless of pixel values. Extra grid slots are hidden rather than left blank. Pixel panels share the grey-level range `(0, 16)` so noisy and rebuilt images are comparable. A title reserves headroom above the grid so it does not overlap the images. Pass `symmetric_scale=True` for signed component weights (eigendigits).
     """)
     return
 
@@ -533,6 +565,8 @@ def _(mo):
     ### Mean image and eigendigits
 
     The fit stores the average pixel values in `mean_`. Each row of `components_` is a direction; reshaped to 8 by 8 it looks like a ghostly whole-digit template — an **eigendigit**. These are the directions the variance curve ranked.
+
+    Component weights are **signed** and much smaller than grey levels 0–16, so the eigendigit grid uses `symmetric_scale=True`: **red** pixels mean a positive weight on that pixel, **blue** means negative, and **white** is near zero. The scale is symmetric per panel so each direction fills the colour range.
     """)
     return
 
@@ -556,6 +590,7 @@ def _(digit_pca, plot_digits):
         2,
         3,
         "The first six eigendigit directions (principal components 1–6)",
+        symmetric_scale=True,
     )
     _figure
     return
