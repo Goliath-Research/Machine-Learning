@@ -881,7 +881,13 @@ def _(Image, base64, io, np):
 @app.cell
 def _(go, goliath_image):
     _channel = goliath_image[:, :, 0]
-    _figure = go.Figure(go.Heatmap(z=_channel, colorscale="Greys", showscale=False))
+    _figure = go.Figure(
+        go.Heatmap(
+            z=_channel,
+            colorscale=[[0, "rgb(0,0,0)"], [1, "rgb(255,255,255)"]],
+            showscale=False,
+        )
+    )
     _figure.update_layout(
         width=700,
         height=200,
