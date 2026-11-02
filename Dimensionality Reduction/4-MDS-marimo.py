@@ -1439,7 +1439,7 @@ def _(distances, monotonic_distortion):
 
 @app.cell
 def _(MDS, ordinal_distances, shepard_figure):
-    _metric = MDS(
+    ordinal_metric = MDS(
         n_components=2,
         metric="precomputed",
         metric_mds=True,
@@ -1448,7 +1448,7 @@ def _(MDS, ordinal_distances, shepard_figure):
         random_state=3,
         normalized_stress="auto",
     )
-    _nonmetric = MDS(
+    ordinal_nonmetric = MDS(
         n_components=2,
         metric="precomputed",
         metric_mds=False,
@@ -1457,30 +1457,30 @@ def _(MDS, ordinal_distances, shepard_figure):
         random_state=3,
         normalized_stress="auto",
     )
-    _plane_m = _metric.fit_transform(ordinal_distances)
-    _plane_n = _nonmetric.fit_transform(ordinal_distances)
+    ordinal_plane_m = ordinal_metric.fit_transform(ordinal_distances)
+    ordinal_plane_n = ordinal_nonmetric.fit_transform(ordinal_distances)
     shepard_figure(
         ordinal_distances,
-        _plane_m,
-        title=f"Shepard — metric MDS (stress {_metric.stress_:.4f})",
+        ordinal_plane_m,
+        title=f"Shepard — metric MDS (stress {ordinal_metric.stress_:.4f})",
     )
-    return _metric, _nonmetric, _plane_m, _plane_n
+    return ordinal_metric, ordinal_nonmetric, ordinal_plane_m, ordinal_plane_n
 
 
 @app.cell
-def _(ordinal_distances, shepard_figure, _plane_n, _nonmetric):
+def _(ordinal_distances, ordinal_nonmetric, ordinal_plane_n, shepard_figure):
     shepard_figure(
         ordinal_distances,
-        _plane_n,
-        title=f"Shepard — non-metric MDS (stress {_nonmetric.stress_:.4f})",
+        ordinal_plane_n,
+        title=f"Shepard — non-metric MDS (stress {ordinal_nonmetric.stress_:.4f})",
     )
     return
 
 
 @app.cell(hide_code=True)
-def _(mo, _metric, _nonmetric):
+def _(mo, ordinal_metric, ordinal_nonmetric):
     mo.md(f"""
-    **Metric stress:** {_metric.stress_:.4f}. **Non-metric stress:** {_nonmetric.stress_:.4f}. Non-metric MDS fits the **rank order** without pretending the powered values are true distances — the Shepard plot for non-metric typically hugs the monotonic trend more honestly when intervals are distorted.
+    **Metric stress:** {ordinal_metric.stress_:.4f}. **Non-metric stress:** {ordinal_nonmetric.stress_:.4f}. Non-metric MDS fits the **rank order** without pretending the powered values are true distances — the Shepard plot for non-metric typically hugs the monotonic trend more honestly when intervals are distorted.
     """)
     return
 
@@ -1619,9 +1619,8 @@ def _(
     letters_panel,
     pairwise_distances,
     pd,
-    shepard_figure,
 ):
-    _metric_model = MDS(
+    sbend_metric_model = MDS(
         n_components=2,
         metric_mds=True,
         init="random",
@@ -1629,7 +1628,7 @@ def _(
         random_state=19,
         normalized_stress="auto",
     )
-    _nm_model = MDS(
+    sbend_nm_model = MDS(
         n_components=2,
         metric_mds=False,
         init="random",
@@ -1637,31 +1636,31 @@ def _(
         random_state=19,
         normalized_stress="auto",
     )
-    _m = _metric_model.fit_transform(curve[["x0", "x1", "x2"]])
-    _n = _nm_model.fit_transform(curve[["x0", "x1", "x2"]])
+    sbend_m = sbend_metric_model.fit_transform(curve[["x0", "x1", "x2"]])
+    sbend_n = sbend_nm_model.fit_transform(curve[["x0", "x1", "x2"]])
     curve_layouts = {
         "metric": pd.DataFrame(
             {
-                "x0": _m[:, 0],
-                "x1": _m[:, 1],
+                "x0": sbend_m[:, 0],
+                "x1": sbend_m[:, 1],
                 "labels": curve.labels.to_numpy(),
             }
         ),
         "non-metric": pd.DataFrame(
             {
-                "x0": _n[:, 0],
-                "x1": _n[:, 1],
+                "x0": sbend_n[:, 0],
+                "x1": sbend_n[:, 1],
                 "labels": curve.labels.to_numpy(),
             }
         ),
     }
     curve_agreement = {
-        "metric": along_word(letters.x0.to_numpy(), _m),
-        "non-metric": along_word(letters.x0.to_numpy(), _n),
+        "metric": along_word(letters.x0.to_numpy(), sbend_m),
+        "non-metric": along_word(letters.x0.to_numpy(), sbend_n),
     }
     curve_height = {
-        "metric": letter_height_spread(letters, _m),
-        "non-metric": letter_height_spread(letters, _n),
+        "metric": letter_height_spread(letters, sbend_m),
+        "non-metric": letter_height_spread(letters, sbend_n),
     }
     flat_height = letter_height_spread(
         letters, flat_layouts["seed 9"][["x0", "x1"]].to_numpy()
@@ -1676,31 +1675,36 @@ def _(
         title="Flat recovery vs S-bend collapse",
         width=1150,
     )
-    _input_d = pairwise_distances(curve[["x0", "x1", "x2"]])
-    shepard_figure(
-        _input_d,
-        _m,
-        title=f"Shepard — metric MDS on the S-bend (stress {_metric_model.stress_:.4f})",
-    )
+    sbend_input_d = pairwise_distances(curve[["x0", "x1", "x2"]])
     return (
         curve_agreement,
         curve_height,
         curve_layouts,
         flat_height,
-        _input_d,
-        _m,
-        _n,
-        _metric_model,
-        _nm_model,
+        sbend_input_d,
+        sbend_m,
+        sbend_n,
+        sbend_metric_model,
+        sbend_nm_model,
     )
 
 
 @app.cell
-def _(shepard_figure, _input_d, _n, _nm_model):
+def _(sbend_input_d, sbend_m, sbend_metric_model, shepard_figure):
     shepard_figure(
-        _input_d,
-        _n,
-        title=f"Shepard — non-metric MDS on the S-bend (stress {_nm_model.stress_:.4f})",
+        sbend_input_d,
+        sbend_m,
+        title=f"Shepard — metric MDS on the S-bend (stress {sbend_metric_model.stress_:.4f})",
+    )
+    return
+
+
+@app.cell
+def _(sbend_input_d, sbend_n, sbend_nm_model, shepard_figure):
+    shepard_figure(
+        sbend_input_d,
+        sbend_n,
+        title=f"Shepard — non-metric MDS on the S-bend (stress {sbend_nm_model.stress_:.4f})",
     )
     return
 
