@@ -857,8 +857,8 @@ def _(
     linear_3d_figure = letters_panel(
         [layouts_3d["seed 9"], layouts_3d["seed 5"]],
         [
-            f"3-D distances → MDS, seed 9 ({agree_3d['seed 9']:.3f})",
-            f"3-D distances → MDS, seed 5 ({agree_3d['seed 5']:.3f})",
+            f"Seed 9 · {agree_3d['seed 9']:.3f}",
+            f"Seed 5 · {agree_3d['seed 5']:.3f}",
         ],
         title="Linear 3-D embedding recovered in 2-D",
     )
