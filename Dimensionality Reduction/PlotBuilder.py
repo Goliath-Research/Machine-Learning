@@ -306,7 +306,7 @@ class PlotBuilder:
                     figure.add_trace(
                         go.Scatter(
                             x=[0.1],
-                            y=[0.2],
+                            y=[0.5],
                             mode="text",
                             text=[str(labels[shown])],
                             textfont=dict(color="blue", size=11),
