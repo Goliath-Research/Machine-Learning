@@ -81,11 +81,24 @@ def _(mo):
     3. Choose a component count from the cumulative variance curve, and explain why the choice is always a prefix and never an arbitrary subset.
     4. Explain why shared stroke structure lands in the high-variance components while independent pixel noise does not.
     5. Explain why keeping *more* components can make a reconstruction worse, and why comparing the output with its noisy input cannot reveal that.
+    6. Judge when a target variance share is enough for a given purpose, knowing that no single threshold applies to every task.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## Background
 
     The previous lesson introduced PCA as a way of finding directions of variance. This lesson uses it for the two jobs it is most useful for in practice: **looking** at high-dimensional data, and **cleaning** it.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### Pictures as points
 
     A digit image here is 8 by 8 pixels, and each pixel is a grey level from 0 to 16. That is 64 numbers per image.
@@ -101,7 +114,13 @@ def _(mo):
     With 1,797 images, the data is a table of **1,797 rows and 64 columns**. Two principal components then give two columns, which you can plot. That is the entire trick behind "visualising high-dimensional data": you find the two directions that spread the cloud most, and accept whatever is lost.
 
     **What the plot shows and does not show.** Two components keep only part of the variance, so distances in the picture are shorter and some overlap is exaggerated. What you can trust is *relative* placement: digits that form separate islands really are different in the 64 original dimensions. What you cannot trust is the axes, or the exact distances between islands.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### Choosing how many components
 
     The cumulative explained variance ratio answers a practical question: **how many components do I need to keep a given share of the variance?**
@@ -109,7 +128,13 @@ def _(mo):
     Read it as a running total, not per component. If the first component holds 15% and the second 13%, the cumulative value after two is 28%. You stop when the total reaches your target.
 
     The target itself is a judgement. There is no universal answer, and 70% to 95% are all defensible depending on what the components are for. A plot needs very little; a filter needs enough to hold the signal; a compressed representation needs whatever your downstream model tolerates.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### Noise filtering, and why it works
 
     This is the subtler idea, and it rests on how variance is distributed.
@@ -126,7 +151,13 @@ def _(mo):
     - **Too many components** keep almost everything, so the noise comes back with the signal.
 
     There is a middle range that removes the most noise without destroying the digit. This lesson measures it rather than asserting it.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## Datasets used
 
     ### Handwritten digits
@@ -212,6 +243,12 @@ def _(np, plt):
             subplot_kw={"xticks": [], "yticks": []},
             gridspec_kw=dict(hspace=0.1, wspace=0.1),
         )
+        if rows == 1 and cols == 1:
+            axes = np.array([[axes]])
+        elif rows == 1:
+            axes = axes.reshape(1, -1)
+        elif cols == 1:
+            axes = axes.reshape(-1, 1)
         for index, ax in enumerate(axes.flat):
             if index >= len(data):
                 ax.set_visible(False)
@@ -238,14 +275,22 @@ def _(np, plt):
     return (plot_digits,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    `plot_digits` accepts either an `(n, 8, 8)` stack of grids or an `(n, 64)` table of flattened rows. When the input is three-dimensional it reshapes each slice to 8 by 8 before `imshow`. Optional labels are drawn in **axes** coordinates near the bottom-left of each cell, so they stay readable regardless of pixel values. Extra grid slots are hidden rather than left blank. Every panel shares the same grey-level range `(0, 16)` so noisy and rebuilt images are comparable.
+    """)
+    return
+
+
 @app.cell
 def _(digits, plot_digits):
     _figure = plot_digits(
-        digits.images,
-        4,
+        digits.images[:100],
         10,
-        "The first 40 images, with the true digit written in each cell",
-        labels=digits.target,
+        10,
+        "The first 100 images, with the true digit written in each cell",
+        labels=digits.target[:100],
     )
     _figure
     return
@@ -256,10 +301,76 @@ def _(mo):
     mo.md(r"""
     Each panel is one image. The digits are legible even at 8 by 8, which tells you that 64 numbers carry a lot of information — but not how those numbers vary across the 1,797 images, which is the question PCA answers.
 
+    ### The arithmetic on images
+
+    Write each flattened image as a vector **x** with 64 coordinates. PCA first subtracts the mean image **μ** (one average grey level per pixel), then works on the centred vectors **x** − **μ**.
+
+    Collect the kept component directions as the rows of a matrix **W** (each row is one eigendigit direction). Then:
+
+    - **Projection** (`transform`): **z** = (**x** − **μ**) **W**ᵀ. Each score tells how strongly that image uses each direction.
+    - **Reconstruction** (`inverse_transform`): **x̂** = **μ** + **z** **W**. Scores are turned back into 64 pixel values.
+
+    The **explained variance ratio** of component k is λ_k / Σλ, where λ_k is the variance along that direction. Dropping components discards exactly that share of the total variance.
+
+    **Root-mean-square error** between a reconstruction **x̂** and the clean original **x** is √(mean((**x̂** − **x**)²)), averaged over all pixels and images.
+
+    **Why isotropic noise responds to filtering.** Add independent normal noise with standard deviation σ to every pixel. That noise has covariance σ²**I** in 64 dimensions, so every eigen-direction of the noise picks up the same variance σ². Signal lives in a few shared directions with large λ; noise adds σ² everywhere. Reconstructing from the high-λ directions keeps the signal and averages out much of the noise floor.
+
+    With σ = 4 in this lesson, σ² = 16 grey levels squared per direction.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## 1. The 64-dimensional cloud, viewed in two dimensions
 
     Fit two components and plot every image at its two component values. The colour shows the true digit, added afterwards.
+
+    ### Translation and distance
+
+    The next cell rolls one example digit one pixel to the right and compares straight-line distances. That makes the independence assumption visible before the scatter plot.
     """)
+    return
+
+
+@app.cell
+def _(digits, mo, np, plot_digits, plt):
+    _demo_index = 0
+    _original = digits.images[_demo_index]
+    _shifted = np.roll(_original, 1, axis=1)
+    _shift_distance = float(
+        np.linalg.norm(digits.data[_demo_index] - _shifted.reshape(-1))
+    )
+    _same_digit_indices = np.where(digits.target == digits.target[_demo_index])[0]
+    _same_digit_distances = np.linalg.norm(
+        digits.data[_same_digit_indices] - digits.data[_demo_index],
+        axis=1,
+    )
+    _same_digit_distances = _same_digit_distances[_same_digit_distances > 0]
+    _nearest_same_digit = float(_same_digit_distances.min())
+    _figure, _axes = plt.subplots(
+        1,
+        2,
+        figsize=(4, 2),
+        subplot_kw={"xticks": [], "yticks": []},
+    )
+    _axes[0].imshow(_original, cmap="binary", interpolation="nearest", clim=(0, 16))
+    _axes[0].set_title("Original")
+    _axes[1].imshow(_shifted, cmap="binary", interpolation="nearest", clim=(0, 16))
+    _axes[1].set_title("Shifted 1 px right")
+    mo.vstack(
+        [
+            _figure,
+            mo.md(
+                f"Distance after a 1-pixel shift: **{_shift_distance:.2f}**. "
+                f"Nearest *other* image of the same digit: **{_nearest_same_digit:.2f}**. "
+                f"The shift is larger than typical variation among identical labels, "
+                f"even though the stroke is the same."
+            ),
+        ]
+    )
     return
 
 
@@ -285,7 +396,15 @@ def _(PCA, builder, digits, pd):
         equal=False,
     )
     _figure
-    return digit_plane, digit_plane_share
+    return digit_pca2, digit_plane, digit_plane_share
+
+
+@app.cell(hide_code=True)
+def _(digit_pca2, digit_plane, digits, mo):
+    mo.md(f"""
+    **Original shape** `{digits.data.shape}` — one row per image, 64 pixel columns. **Transformed shape** `{digit_plane.shape}` — two component scores per image after `transform`.
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -302,8 +421,33 @@ def _(digit_plane_share, mo):
 
     - **The axes are directions, not measurements.** Component 1 is a weighted mixture of 64 pixel values, not "the size of the writing".
     - **Overlap is exaggerated.** With {1 - digit_plane_share:.0%} of the variance missing, groups that are distinct in 64 dimensions can appear to touch here.
-    - **Distance is not literal.** Two digits far apart on the page are far apart in this 28.5% summary, which is not the same as far apart in the original image space.
+    - **Distance is not literal.** Two digits far apart on the page are far apart in this {digit_plane_share:.1%} summary, which is not the same as far apart in the original image space.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Two components keep only part of the variance. Why can two islands that overlap on the plot still be well separated in the full 64 dimensions? Work out your answer, then reveal it.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(digit_plane_share, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+Because **the plot is a lossy projection.** Only {digit_plane_share:.1%} of the variance survives, so directions that separate the digits in 64 dimensions may be absent from the plane you see. Projecting onto two axes can fold distinct groups on top of each other even when their full-dimensional distance is large.
+
+What still holds is *relative* placement along the directions that *did* survive: if two digits occupy different regions here, they differ along Component 1 or 2 in the original pixels. What fails is reading exact distances or judging overlap as if this were the full space.
+""")
+        },
+        expanded=False,
+    )
     return
 
 
@@ -379,6 +523,40 @@ def _(digit_ratio, mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### Mean image and eigendigits
+
+    The fit stores the average pixel values in `mean_`. Each row of `components_` is a direction; reshaped to 8 by 8 it looks like a ghostly whole-digit template — an **eigendigit**. These are the directions the variance curve ranked.
+    """)
+    return
+
+
+@app.cell
+def _(digit_pca, plot_digits):
+    _figure = plot_digits(
+        digit_pca.mean_.reshape(1, -1),
+        1,
+        1,
+        "Mean digit (average grey level at each pixel)",
+    )
+    _figure
+    return
+
+
+@app.cell
+def _(digit_pca, plot_digits):
+    _figure = plot_digits(
+        digit_pca.components_[:6],
+        2,
+        3,
+        "The first six eigendigit directions (principal components 1–6)",
+    )
+    _figure
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### The running total
 
     This is the curve you actually use to choose a number of components. Each point answers: **if I stop here, how much of the variance have I kept?**
@@ -417,6 +595,26 @@ def _(builder, digit_cumulative, digit_ratio, np, px):
         yaxis_range=[0, 1.02],
     )
     _figure
+    return
+
+
+@app.cell
+def _(digit_cumulative, digit_ratio, mo, np, pd):
+    _variance_table = pd.DataFrame(
+        {
+            "component": np.arange(1, len(digit_ratio) + 1),
+            "share": digit_ratio,
+            "cumulative share": digit_cumulative,
+        }
+    )
+    mo.accordion(
+        {
+            "Show full variance table (all 64 components)": mo.Html(
+                _variance_table.round(4).to_html(index=False)
+            )
+        },
+        expanded=False,
+    )
     return
 
 
@@ -467,19 +665,20 @@ def _(digit_cumulative, digit_ratio):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(components_for_90, digit_cumulative, digit_ratio, mo):
+    _more_for_90 = components_for_90 - 13
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(f"""
 ```python
 student_running_total = digit_cumulative[12]
 student_share_13 = digit_ratio[12]
 ```
-The running total after 13 components is about **0.801**, and the 13th component alone contributes only about **0.005**.
+The running total after 13 components is **{digit_cumulative[12]:.3f}**, and the 13th component alone contributes **{digit_ratio[12]:.3f}** ({digit_ratio[12]:.1%}).
 
 The index is **12**, not 13, because Python counts from zero: `digit_cumulative[0]` is the total after one component. That off-by-one is the most common mistake with these arrays, which is why `np.searchsorted(...) + 1` is used elsewhere in the notebook.
 
-The two numbers together show why the curve flattens: by the 13th component each new one adds only half a percent, so reaching 90% takes {8} more of them.
+The two numbers together show why the curve flattens: by the 13th component each new one adds only about {digit_ratio[12]:.1%}, so reaching 90% takes **{_more_for_90}** more of them.
 """)
         },
         expanded=False,
@@ -492,7 +691,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    The two panels plot the same numbers. Explain why only the right one is used to choose a number of components. Work out your answer, then reveal it.
+    The per-component scatter and the cumulative line plot the same underlying numbers in two different figures. Explain why only the cumulative one is used to choose a number of components. Work out your answer, then reveal it.
     """)
     return
 
@@ -502,12 +701,12 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-Because **the left panel answers a different question.**
+Because **the per-component figure answers a different question.**
 
 - The **per-component share** says how much *one* component adds. Comparing the 13th to the 14th tells you which is more important, not how much of the data you have kept.
 - The **cumulative share** says how much you keep *in total* if you stop there. That is exactly what "keeping k components" means, so it is the curve that maps a component count to retained information.
 
-A concrete trap: a component in the middle of the left curve might keep only 1%, which looks negligible. But you cannot skip it — components must be taken in order, because each is defined as perpendicular to all the earlier ones. You cannot keep component 40 without 39.
+A concrete trap: a component in the middle of the per-component curve might keep only 1%, which looks negligible. But you cannot skip it — components must be taken in order, because each is defined as perpendicular to all the earlier ones. You cannot keep component 40 without 39.
 
 So the choice is always "how many, from the front", and that is a cumulative question.
 """)
@@ -531,16 +730,17 @@ def _(mo):
 
 @app.cell
 def _(digits, np, plot_digits):
-    noisy_digits = np.random.RandomState(42).normal(digits.data, 4)
+    noise_draw = np.random.RandomState(42).normal(0, 1, digits.data.shape)
+    noisy_digits = digits.data + 4 * noise_draw
     _figure = plot_digits(
-        noisy_digits,
-        4,
+        noisy_digits[:100],
         10,
-        "The same 40 images with pixel noise added, labelled with their true digit",
-        labels=digits.target,
+        10,
+        "The same 100 images with pixel noise added, labelled with their true digit",
+        labels=digits.target[:100],
     )
     _figure
-    return (noisy_digits,)
+    return noise_draw, noisy_digits
 
 
 @app.cell(hide_code=True)
@@ -562,17 +762,64 @@ def _(digits, mo, noisy_digits, np):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. Reconstructing from four shares
+    ### Clean versus noisy variance spectra
 
-    For each target share, PCA is fitted on the noisy table, the images are reduced and then rebuilt. Two errors are recorded for each: against the noisy input, and against the clean original.
-
-    The second one is the one that matters. An error against the noisy input only says how much you changed it; an error against the clean original says whether the change was in the right direction.
+    The next figure overlays each component's variance on the clean data with the variance after adding noise. Independent pixel noise adds the same amount to every direction.
     """)
     return
 
 
 @app.cell
-def _(PCA, digits, noisy_digits, np):
+def _(PCA, builder, digit_pca, noisy_digits, np, px):
+    noisy_pca = PCA().fit(noisy_digits)
+    _components = np.arange(1, len(digit_pca.explained_variance_) + 1)
+    _figure = px.line(
+        x=_components,
+        y=digit_pca.explained_variance_,
+        title="Variance per component: clean data and noisy data",
+        labels={"x": "Component number", "y": "Variance along component"},
+    )
+    _figure.update_traces(line=dict(color="#2E86C1", width=2.5), name="clean")
+    _figure.add_scatter(
+        x=_components,
+        y=noisy_pca.explained_variance_,
+        mode="lines",
+        name="noisy",
+        line=dict(color="#C0392B", width=2),
+    )
+    _noise_floor = 4**2
+    _figure.add_hline(
+        y=_noise_floor,
+        line_dash="dash",
+        line_color="grey",
+        annotation_text=f"σ² = {_noise_floor}",
+        annotation_position="right",
+    )
+    _figure.update_layout(
+        width=builder.width,
+        height=380,
+        margin=dict(t=60, b=55, l=70, r=40),
+    )
+    _figure
+    return (noisy_pca,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 4. Reconstructing from four shares
+
+    For each target share, PCA is fitted on the noisy table, the images are reduced and then rebuilt. Two errors are recorded for each: against the noisy input, and against the clean original.
+
+    The second one is the one that matters. An error against the noisy input only says how much you changed it; an error against the clean original says whether the change was in the right direction.
+
+    The loop passes a **float** to `PCA(...)`: that is scikit-learn's "keep enough components to reach this cumulative variance share" mode. Each iteration fits on the noisy table, projects with `transform`, then rebuilds with `inverse_transform`.
+    """)
+    return
+
+
+@app.cell
+def _(PCA, digits, noisy_digits, np, pd):
     rebuilt = {}
     noise_components = {}
     _rows = []
@@ -595,6 +842,37 @@ def _(PCA, digits, noisy_digits, np):
         )
     recon_scores = pd.DataFrame(_rows).set_index("share")
     return noise_components, rebuilt, recon_scores
+
+
+@app.cell
+def _(PCA, builder, digits, noisy_digits, np, pd, px):
+    _ks = np.arange(1, 65)
+    _clean_rmse = []
+    _noisy_rmse = []
+    for _k in _ks:
+        _model = PCA(n_components=_k).fit(noisy_digits)
+        _restored = _model.inverse_transform(_model.transform(noisy_digits))
+        _clean_rmse.append(float(np.sqrt(((_restored - digits.data) ** 2).mean())))
+        _noisy_rmse.append(float(np.sqrt(((_restored - noisy_digits) ** 2).mean())))
+    best_k_clean = int(_ks[int(np.argmin(_clean_rmse))])
+    best_clean_rmse = float(np.min(_clean_rmse))
+    rmse_sweep = pd.DataFrame(
+        {"k": _ks, "RMSE vs clean original": _clean_rmse, "RMSE vs noisy input": _noisy_rmse}
+    )
+    _figure = px.line(
+        rmse_sweep,
+        x="k",
+        y=["RMSE vs clean original", "RMSE vs noisy input"],
+        title="Reconstruction error versus number of components kept",
+        labels={"k": "Components kept", "value": "RMSE (grey levels)", "variable": "Compared to"},
+    )
+    _figure.update_layout(
+        width=builder.width,
+        height=400,
+        margin=dict(t=60, b=55, l=70, r=20),
+    )
+    _figure
+    return best_clean_rmse, best_k_clean, rmse_sweep
 
 
 @app.cell
@@ -666,42 +944,50 @@ def _(mo, noise_components):
 
 @app.cell(hide_code=True)
 def _(mo, noisy_rmse, recon_scores):
-    _rows = "\n".join(
-        f"    | {_share} | {int(recon_scores.loc[_share, 'components'])} | "
-        f"{recon_scores.loc[_share, 'RMSE vs noisy input']:.3f} | "
-        f"{recon_scores.loc[_share, 'RMSE vs clean original']:.3f} |"
-        for _share in recon_scores.index
-    )
     mo.md(f"""
     Read the two error columns together, and against the noise baseline of **{noisy_rmse:.3f}**.
-
-    | Share | Components | vs noisy | vs clean |
-    | :--- | ---: | ---: | ---: |
-    {_rows}
-    | (noisy input) | none | — | {noisy_rmse:.3f} |
     """)
     return
 
 
+@app.cell
+def _(mo, recon_scores):
+    mo.Html(recon_scores.round(3).to_html())
+    return
+
+
 @app.cell(hide_code=True)
-def _(mo, noisy_rmse, recon_scores):
+def _(
+    PCA,
+    best_clean_rmse,
+    best_k_clean,
+    mo,
+    noisy_digits,
+    noisy_rmse,
+    recon_scores,
+):
     _best = recon_scores["RMSE vs clean original"].idxmin()
     _best_value = recon_scores.loc[_best, "RMSE vs clean original"]
     _r25 = recon_scores.loc["25%", "RMSE vs clean original"]
     _r50 = recon_scores.loc["50%", "RMSE vs clean original"]
     _r60 = recon_scores.loc["60%", "RMSE vs clean original"]
     _r75 = recon_scores.loc["75%", "RMSE vs clean original"]
+    _best_k_share = float(
+        PCA(n_components=best_k_clean)
+        .fit(noisy_digits)
+        .explained_variance_ratio_.sum()
+    )
     mo.md(f"""
-    **Every reconstruction beats the noisy input**, which is the filter working. But they are not equally good: the best is **{_best}**, at an error of **{_best_value:.3f}**.
+    **Every reconstruction beats the noisy input**, which is the filter working. Among the four tested shares, the lowest error against the clean original is **{_best}**, at **{_best_value:.3f}**.
 
-    The shape of that result is the lesson:
+    The RMSE-versus-k curve above tells the fuller story. The minimum against the clean original is at **k = {best_k_clean}** (RMSE **{best_clean_rmse:.3f}**). That is the bottom of a shallow U: too few components blur the strokes, too many let noise return. The four share targets are a **coarse grid** on that curve; they land near the bottom but do not pin the exact k.
 
     - **At 25%**, the error against the clean original is **{_r25:.3f}**, higher than at 50%. Removing more components did not help; it removed real stroke detail. The error against the *noisy input* is large, which is why "how much did it change?" is the wrong question.
     - **At 50%**, the error against the clean original is **{_r50:.3f}**.
     - **At 60%**, it is **{_r60:.3f}**, against **{_r50:.3f}** at 50%. The two are **effectively tied** — a difference of {abs(_r60 - _r50):.3f}, far smaller than the gaps to the 25% or 75% rows. The extra components brought back some stroke detail and some noise, and the two roughly cancelled.
     - **At 75%**, the error against the noisy input is smallest — the output is closest to its input — but the error against the clean original is **{_r75:.3f}**, higher again, because the noise was kept.
 
-    The 50% and 60% rows are therefore worth reading together. **The best share is a region, not a single value**: anywhere from about half to about two thirds of the variance gives a similar result, and the choice inside that band hardly matters. The 25% and 75% rows are the clear failures on either side.
+    The 50% and 60% rows are therefore worth reading together. **The best share is a region, not a single value**: anywhere from about half to about two thirds of the variance gives a similar result on this grid, and the true minimum in k is **{best_k_clean}** components (about {_best_k_share:.0%} of the noisy variance). The 25% and 75% rows are the clear failures on either side.
 
     That last row is the trap in miniature: **the reconstruction that changed the data least was not the most accurate one.** Judging a filter by how faithful it is to its noisy input rewards doing nothing.
     """)
@@ -726,18 +1012,22 @@ def _(recon_scores):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(mo, recon_scores):
+    _best = recon_scores["RMSE vs clean original"].idxmin()
+    _best_value = recon_scores.loc[_best, "RMSE vs clean original"]
+    _second = recon_scores["RMSE vs clean original"].sort_values().index[1]
+    _second_value = recon_scores.loc[_second, "RMSE vs clean original"]
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(f"""
 ```python
 student_best_share = recon_scores["RMSE vs clean original"].idxmin()
 ```
-The answer is **"50%"** — but only just. Its error is 2.692 and the 60% fit scores 2.693, a difference of 0.001.
+The answer is **"{_best}"** — but only just. Its error is {_best_value:.3f} and the {_second} fit scores {_second_value:.3f}, a difference of {abs(_best_value - _second_value):.3f}.
 
 `idxmin()` returns the index label of the smallest value, which here is one of the strings `"25%"`, `"50%"`, `"60%"`, or `"75%"`. That is why the answer is a string rather than a number.
 
-That near-tie is the point worth taking away: **`idxmin()` picks a winner, but the table shows a plateau.** Reporting "50% is best" without noting that 60% is indistinguishable would overstate what the numbers support.
+That near-tie is the point worth taking away: **`idxmin()` picks a winner, but the table shows a plateau.** Reporting "{_best} is best" without noting that {_second} is indistinguishable would overstate what the numbers support.
 
 Note also which column is used. `idxmin()` on the `"RMSE vs noisy input"` column would return `"75%"`, because reconstructing with most components changes the input least. That column measures fidelity to the noise, not accuracy.
 """)
@@ -758,13 +1048,15 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(mo, noise_components):
+    _k75 = noise_components[0.75]
+    _discarded = 64 - _k75
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(f"""
 Because **the two measurements compare against different things.**
 
-- **Changing the input a little** means the output stays close to what you fed in. With 31 components out of 64, only a third of the directions are discarded, so most of the noise survives untouched. The output is a lightly softened copy of the noisy image.
+- **Changing the input a little** means the output stays close to what you fed in. With {_k75} components out of 64, about half of the directions are discarded ({_discarded} of 64), so much of the noise survives. The output is a lightly softened copy of the noisy image.
 - **Being accurate** means the output is close to the *clean* image. The noisy input is itself far from the clean image, so staying close to it means inheriting its errors.
 
 So a filter that does almost nothing scores well on "faithfulness to the input" and poorly on "closeness to the truth". The two goals point in opposite directions, and only the second one is the point of filtering.
@@ -778,27 +1070,167 @@ This is a general principle beyond PCA: **when you evaluate a denoiser, you need
 
 
 @app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Replace `None` so that `student_best_k` is the value of `k` that minimizes `"RMSE vs clean original"` in `rmse_sweep`.
+    """)
+    return
+
+
+@app.cell
+def _(rmse_sweep):
+    student_best_k = None
+    print(student_best_k)
+    return (student_best_k,)
+
+
+@app.cell(hide_code=True)
+def _(best_k_clean, mo, rmse_sweep):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+```python
+student_best_k = int(
+    rmse_sweep.loc[rmse_sweep["RMSE vs clean original"].idxmin(), "k"]
+)
+```
+The answer is **{best_k_clean}**. Use the `"RMSE vs clean original"` column, not the noisy one: the latter is minimized when you change the input least, which is the wrong goal for denoising.
+
+`idxmin()` on a column returns the row index; here the row index equals `k - 1`, but selecting the `"k"` column is clearer than relying on that.
+""")
+        },
+        expanded=False,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Explore reconstructions interactively
+
+    Move the sliders to change the noise level, the number of components kept, and which image is shown. The row below places clean, noisy, and rebuilt versions side by side; the RMSE lines summarize error over all images at those settings.
+    """)
+    return
+
+
+@app.cell
+def _(mo):
+    k_recon_slider = mo.ui.slider(
+        1, 64, value=14, label="Components kept", show_value=True
+    )
+    sigma_slider = mo.ui.slider(
+        1.0, 8.0, value=4.0, step=0.5, label="Noise σ", show_value=True
+    )
+    digit_picker = mo.ui.slider(
+        0, 1796, value=0, label="Image index", show_value=True
+    )
+    mo.vstack([k_recon_slider, sigma_slider, digit_picker])
+    return digit_picker, k_recon_slider, sigma_slider
+
+
+@app.cell
 def _(
-    components_for_80,
-    components_for_90,
-    digit_plane_share,
+    PCA,
+    digit_picker,
+    digits,
+    k_recon_slider,
     mo,
-    noise_components,
-    noisy_rmse,
-    recon_scores,
-    tiny_components,
+    noise_draw,
+    np,
+    plot_digits,
+    sigma_slider,
 ):
+    _noisy = digits.data + sigma_slider.value * noise_draw
+    _model = PCA(n_components=k_recon_slider.value).fit(_noisy)
+    _rebuilt = _model.inverse_transform(_model.transform(_noisy))
+    _idx = digit_picker.value
+    _clean_rmse = float(np.sqrt(((_rebuilt - digits.data) ** 2).mean()))
+    _noisy_rmse_live = float(np.sqrt(((_rebuilt - _noisy) ** 2).mean()))
+    _row = np.vstack([digits.data[_idx], _noisy[_idx], _rebuilt[_idx]])
+    _figure = plot_digits(
+        _row,
+        1,
+        3,
+        f"Image {_idx}: clean | noisy (σ={sigma_slider.value}) | rebuilt (k={k_recon_slider.value})",
+    )
+    mo.vstack(
+        [
+            _figure,
+            mo.md(
+                f"RMSE over all images: vs clean **{_clean_rmse:.3f}**, "
+                f"vs noisy **{_noisy_rmse_live:.3f}**."
+            ),
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### One image across clean, noisy, and filtered
+
+    The next row fixes the 50% share reconstruction and lines up the same index in all three versions for a direct comparison.
+    """)
+    return
+
+
+@app.cell
+def _(digits, noisy_digits, np, plot_digits, rebuilt):
+    _compare_index = 0
+    _row = np.vstack(
+        [
+            digits.data[_compare_index],
+            noisy_digits[_compare_index],
+            rebuilt[0.50][_compare_index],
+        ]
+    )
+    _figure = plot_digits(
+        _row,
+        1,
+        3,
+        f"Image {_compare_index}: clean | noisy (σ=4) | rebuilt (50% variance share)",
+    )
+    _figure
+    return
+
+
+@app.cell(hide_code=True)
+def _(components_for_80, components_for_90, digit_plane_share, mo, tiny_components):
     mo.md(f"""
     ## Conclusions
 
     1. **The fit assumes the pixels are independent coordinates.** The distance PCA maximises has no notion of adjacency, so a digit shifted by one pixel is as different, to the fit, as a different digit. It cannot represent translation and cannot see a stroke. That is the real cost of using a general purpose method on images: not that the arithmetic is wrong, but that the geometry it assumes is not the geometry of a picture. The same indifference is why one fit serves cars, flowers and text equally well.
     2. **Two components give a usable picture, but only a partial one.** The plot keeps {digit_plane_share:.1%} of the variance, and the digits do form coherent regions without the labels being used. What it does not give you is meaningful axes, literal distances, or an honest impression of overlap.
-    3. **Read the cumulative curve, not the per-component one, to choose a count.** {components_for_80} components reach 80% of the variance and {components_for_90} reach 90%. You cannot skip components, because each is defined as perpendicular to all previous ones; the choice is always "how many from the front".
+    3. **Read the cumulative curve, not the per-component one, to choose a count.** {components_for_80} components reach 80% of the variance and {components_for_90} reach 90%. You cannot skip components, because each is defined as perpendicular to all previous ones; the choice is always "how many from the front". **Choosing the target share itself is a judgement**, not something the curve can answer: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates.
     4. **The tail of the curve is nearly flat.** {tiny_components} components have a share below 0.0005 each, so those directions are almost constant. Whatever varies there is not the shared structure of a digit.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    PCA,
+    best_clean_rmse,
+    best_k_clean,
+    mo,
+    noise_components,
+    noisy_digits,
+    noisy_rmse,
+    recon_scores,
+):
+    _best_k_share = float(
+        PCA(n_components=best_k_clean)
+        .fit(noisy_digits)
+        .explained_variance_ratio_.sum()
+    )
+    mo.md(f"""
     5. **Noise filtering works because noise has no shared direction.** Real stroke structure appears across images, so it lands in the high-variance components. Independent pixel noise spreads thinly through all 64 directions, including the negligible ones that a reconstruction discards.
-    6. **There is an optimum, and it is not at either end.** Against the clean original the error was {recon_scores.loc['25%', 'RMSE vs clean original']:.3f} at 25%, {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} at 50%, {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} at 60% and {recon_scores.loc['75%', 'RMSE vs clean original']:.3f} at 75%, against a noisy baseline of {noisy_rmse:.3f}. Too few components ({noise_components[0.25]}) blur away real stroke detail; too many ({noise_components[0.75]}) carry the noise back in. The 50% and 60% fits differ by only {abs(recon_scores.loc['50%', 'RMSE vs clean original'] - recon_scores.loc['60%', 'RMSE vs clean original']):.3f}, so the honest reading is a **band** from about half to two thirds of the variance, not a single winning number.
+    6. **There is an optimum, and it is not at either end.** Against the clean original the error was {recon_scores.loc['25%', 'RMSE vs clean original']:.3f} at 25%, {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} at 50%, {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} at 60% and {recon_scores.loc['75%', 'RMSE vs clean original']:.3f} at 75%, against a noisy baseline of {noisy_rmse:.3f}. The full k sweep bottoms out at **k = {best_k_clean}** (RMSE **{best_clean_rmse:.3f}**, about {_best_k_share:.0%} of the noisy variance). Too few components ({noise_components[0.25]}) blur away real stroke detail; too many ({noise_components[0.75]}) carry the noise back in. The 50% and 60% grid points differ by only {abs(recon_scores.loc['50%', 'RMSE vs clean original'] - recon_scores.loc['60%', 'RMSE vs clean original']):.3f}, so the honest reading is a **band** from about half to two thirds of the variance, not a single winning share on the coarse grid.
     7. **Judge a filter by the truth, never by its faithfulness to its input.** The 75% reconstruction changes the noisy input least of the four, and it is worse than either middle fit. Scoring against the noisy input rewards doing nothing, which is why the clean originals were kept: without them this lesson could not have found its own optimum.
-    8. **Choosing the share is a judgement, not a calculation.** The target depends on the purpose: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates. No threshold such as 90% is universal.
     """)
     return
 
@@ -821,17 +1253,25 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(
+    best_clean_rmse,
+    best_k_clean,
+    mo,
+    recon_scores,
+):
+    _best = recon_scores["RMSE vs clean original"].idxmin()
+    _r50 = recon_scores.loc["50%", "RMSE vs clean original"]
+    _r60 = recon_scores.loc["60%", "RMSE vs clean original"]
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(f"""
 1. **It assumes the coordinates are independent.** Straight-line distance treats each pixel as its own axis with no relation to its neighbours, so the fit has no idea that pixel 1 is next to pixel 2. It therefore cannot represent **translation**: the same digit shifted one pixel right is a distant point, because every one of its 64 coordinates moved. Nor can it see a stroke or an edge, only whole-image patterns. The trade is that the same assumption makes the method work on any table of numbers.
 2. **Trust the relative placement:** digits forming separate islands really do differ in the 64 original dimensions. **Do not trust the axes**, which are mixtures rather than measurements, the exact distances, or the apparent overlap, which is exaggerated because most of the variance is missing.
 3. **Because keeping k components is a cumulative question.** The per-component ratio says how much one component adds; the cumulative ratio says how much you retain in total if you stop there. Only the second maps a component count to retained information.
 4. **Because each component is defined as perpendicular to all the earlier ones.** The 40th direction depends on the previous 39 having been removed from consideration, so the set of components is ordered by construction. You always keep a prefix.
 5. **Because it has no shared direction.** Real stroke structure appears consistently across images and therefore lines up in a direction where the data genuinely varies. Independent noise varies differently in every image, so it spreads thinly across all 64 directions, most of which have negligible variance.
 6. **The two statements compare against different references.** Changing the input little means staying close to the noisy image; being accurate means staying close to the clean image. The noisy input is itself far from the clean one, so fidelity to it means inheriting its errors.
-7. **50% and 60% are tied**, at 2.692 and 2.693 against the **clean original**. "Best" here means closest to the truth, not closest to the input, and it is measurable only because the clean digits were kept. A difference of 0.001 does not pick a winner: the honest answer is that anything from about half to two thirds of the variance works equally well on this data.
+7. **On the four-share grid, {_best} wins** at {_r50:.3f} against the **clean original**, with 60% at {_r60:.3f} (difference {abs(_r50 - _r60):.3f}). The full k sweep minimum is **k = {best_k_clean}** at **{best_clean_rmse:.3f}**. "Best" means closest to the truth, not closest to the input.
 8. **Because the right share depends on what the components are for.** A visualisation tolerates a lot of loss; a filter needs enough to hold the signal; a compressed representation needs whatever the downstream model can work with. The required share also depends on the noise level and on how the variance is distributed in the particular data.
 """)
         },
