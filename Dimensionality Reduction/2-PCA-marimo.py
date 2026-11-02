@@ -513,7 +513,7 @@ def _(digits, mo, noisy_digits, np):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. Reconstructing from three shares
+    ## 4. Reconstructing from four shares
 
     For each target share, PCA is fitted on the noisy table, the images are reduced and then rebuilt. Two errors are recorded for each: against the noisy input, and against the clean original.
 
@@ -527,7 +527,7 @@ def _(PCA, digits, noisy_digits, np):
     rebuilt = {}
     noise_components = {}
     _rows = []
-    for _share in (0.25, 0.50, 0.75):
+    for _share in (0.25, 0.50, 0.60, 0.75):
         _model = PCA(_share).fit(noisy_digits)
         _restored = _model.inverse_transform(_model.transform(noisy_digits))
         rebuilt[_share] = _restored
@@ -581,6 +581,18 @@ def _(digits, plot_digits, rebuilt):
 @app.cell
 def _(digits, plot_digits, rebuilt):
     plot_digits(
+        rebuilt[0.60],
+        4,
+        10,
+        "Rebuilt from 60% of the noisy variance",
+        labels=digits.target,
+    )
+    return
+
+
+@app.cell
+def _(digits, plot_digits, rebuilt):
+    plot_digits(
         rebuilt[0.75],
         4,
         10,
@@ -591,13 +603,14 @@ def _(digits, plot_digits, rebuilt):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    Compare the three panels against the noisy one above, then against the clean one at the top of the lesson.
+def _(mo, noise_components):
+    mo.md(f"""
+    Compare the four panels against the noisy one above, then against the clean one at the top of the lesson.
 
-    - **25%** removes almost all the speckle, and also softens the strokes. Some digits lose the detail that made them identifiable. This is **over-smoothing**: real signal went out with the noise.
-    - **50%** is the middle. The speckle is largely gone and the digits are still clearly themselves.
-    - **75%** looks close to the noisy input, because most of the components were kept. This is **under-filtering**.
+    - **25%** ({noise_components[0.25]} components) removes almost all the speckle, and also softens the strokes. Some digits lose the detail that made them identifiable. This is **over-smoothing**: real signal went out with the noise.
+    - **50%** ({noise_components[0.50]} components) is a clear improvement: the speckle is largely gone and the digits are still clearly themselves.
+    - **60%** ({noise_components[0.60]} components) is the interesting comparison. It keeps six components more than 50%, so it should preserve finer stroke detail while letting a little more noise through. Look for whether the extra detail helps or whether it is mostly speckle coming back.
+    - **75%** ({noise_components[0.75]} components) looks close to the noisy input, because most of the components were kept. This is **under-filtering**.
 
     That is the trade the background section described, made visible. The next cell turns it into numbers.
     """)
@@ -608,26 +621,35 @@ def _(mo):
 def _(mo, noisy_rmse, recon_scores):
     _best = recon_scores["RMSE vs clean original"].idxmin()
     _best_value = recon_scores.loc[_best, "RMSE vs clean original"]
+    _rows = "\n".join(
+        f"    | {_share} | {int(recon_scores.loc[_share, 'components'])} | "
+        f"{recon_scores.loc[_share, 'RMSE vs noisy input']:.3f} | "
+        f"{recon_scores.loc[_share, 'RMSE vs clean original']:.3f} |"
+        for _share in recon_scores.index
+    )
     _r25 = recon_scores.loc["25%", "RMSE vs clean original"]
     _r50 = recon_scores.loc["50%", "RMSE vs clean original"]
+    _r60 = recon_scores.loc["60%", "RMSE vs clean original"]
     _r75 = recon_scores.loc["75%", "RMSE vs clean original"]
     mo.md(f"""
     Read the two error columns together, and against the noise baseline of **{noisy_rmse:.3f}**.
 
     | Share | Components | vs noisy | vs clean |
     | :--- | ---: | ---: | ---: |
-    | 25% | {int(recon_scores.loc['25%', 'components'])} | {recon_scores.loc['25%', 'RMSE vs noisy input']:.3f} | {_r25:.3f} |
-    | 50% | {int(recon_scores.loc['50%', 'components'])} | {recon_scores.loc['50%', 'RMSE vs noisy input']:.3f} | {_r50:.3f} |
-    | 75% | {int(recon_scores.loc['75%', 'components'])} | {recon_scores.loc['75%', 'RMSE vs noisy input']:.3f} | {_r75:.3f} |
+    {_rows}
     | (noisy input) | none | — | {noisy_rmse:.3f} |
 
-    **All three reconstructions beat the noisy input**, which is the filter working. But they are not equally good: the best is **{_best}**, at an error of **{_best_value:.3f}**.
+    **Every reconstruction beats the noisy input**, which is the filter working. But they are not equally good: the best is **{_best}**, at an error of **{_best_value:.3f}**.
 
     The shape of that result is the lesson:
 
-    - **At 25%**, the error against the clean original is **higher** than at 50%. Removing more components did not help; it removed real stroke detail. The error against the *noisy input* is large, which is why "how much did it change?" is the wrong question.
-    - **At 50%**, the error against the clean original is lowest of the three. This is the balance point for this particular noise level.
-    - **At 75%**, the error against the noisy input is smallest — the output is closest to its input — but the error against the clean original is **higher** again, because the noise was kept.
+    - **At 25%**, the error against the clean original is **{_r25:.3f}**, higher than at 50%. Removing more components did not help; it removed real stroke detail. The error against the *noisy input* is large, which is why "how much did it change?" is the wrong question.
+    - **At 50%**, the error against the clean original is **{_r50:.3f}**.
+    - **At 60%**, it is **{_r60:.3f}**, against **{_r50:.3f}** at 50%. The two are **effectively tied** — a difference of {abs(_r60 - _r50):.3f}, far smaller than the gaps to the 25% or 75% rows. The extra components brought back some stroke detail and some noise, and the two roughly cancelled.
+
+    - **At 75%**, the error against the noisy input is smallest — the output is closest to its input — but the error against the clean original is **{_r75:.3f}**, higher again, because the noise was kept.
+
+    The 50% and 60% rows are therefore worth reading together. **The best share is a region, not a single value**: anywhere from about half to about two thirds of the variance gives a similar result, and the choice inside that band hardly matters. The 25% and 75% rows are the clear failures on either side.
 
     That last row is the trap in miniature: **the reconstruction that changed the data least was not the most accurate one.** Judging a filter by how faithful it is to its noisy input rewards doing nothing.
     """)
@@ -659,11 +681,13 @@ def _(mo):
 ```python
 student_best_share = recon_scores["RMSE vs clean original"].idxmin()
 ```
-The answer is **"50%"**.
+The answer is **"50%"** — but only just. Its error is 2.692 and the 60% fit scores 2.693, a difference of 0.001.
 
-`idxmin()` returns the index label of the smallest value, which here is one of the strings `"25%"`, `"50%"`, or `"75%"`. That is why the answer is a string rather than a number.
+`idxmin()` returns the index label of the smallest value, which here is one of the strings `"25%"`, `"50%"`, `"60%"`, or `"75%"`. That is why the answer is a string rather than a number.
 
-Note which column is used. `idxmin()` on the `"RMSE vs noisy input"` column would return `"75%"`, because reconstructing with most components changes the input least. That column measures fidelity to the noise, not accuracy.
+That near-tie is the point worth taking away: **`idxmin()` picks a winner, but the table shows a plateau.** Reporting "50% is best" without noting that 60% is indistinguishable would overstate what the numbers support.
+
+Note also which column is used. `idxmin()` on the `"RMSE vs noisy input"` column would return `"75%"`, because reconstructing with most components changes the input least. That column measures fidelity to the noise, not accuracy.
 """)
         },
         expanded=False,
@@ -724,10 +748,11 @@ def _(
     3. **Read the cumulative curve, not the per-component one, to choose a count.** {components_for_80} components reach 80% of the variance and {components_for_90} reach 90%. You cannot skip components, because each is defined as perpendicular to all previous ones; the choice is always "how many from the front".
     4. **The tail of the curve is nearly flat.** {tiny_components} components have a share below 0.0005 each, so those directions are almost constant. Whatever varies there is not the shared structure of a digit.
     5. **Noise filtering works because noise has no shared direction.** Real stroke structure appears across images, so it lands in the high-variance components. Independent pixel noise spreads thinly through all 64 directions, including the negligible ones that a reconstruction discards.
-    6. **More components is not better.** On this data the reconstruction error against the clean original was {recon_scores.loc['25%', 'RMSE vs clean original']:.3f} at 25%, {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} at 50%, and {recon_scores.loc['75%', 'RMSE vs clean original']:.3f} at 75%. The best was **{_best}**, at {_best_value:.3f}, against a noisy baseline of {noisy_rmse:.3f}.
+    6. **More components is not better.** On this data the reconstruction error against the clean original was {recon_scores.loc['25%', 'RMSE vs clean original']:.3f} at 25%, {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} at 50%, {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} at 60%, and {recon_scores.loc['75%', 'RMSE vs clean original']:.3f} at 75%. The best was **{_best}**, at {_best_value:.3f}, against a noisy baseline of {noisy_rmse:.3f}.
     7. **Too few components destroys signal, too many keeps noise.** At 25% ({noise_components[0.25]} components) the strokes soften and detail is lost. At 75% ({noise_components[0.75]} components) most of the noise survives. The middle is where the filter does its job.
-    8. **Never judge a filter by its faithfulness to its input.** Reconstructed from 75%, the output changes the input least, and it is the second-least accurate. Judging by closeness to the noisy input rewards doing nothing. That is why the clean originals were kept in this lesson.
-    9. **Choosing the share is a judgement, not a calculation.** The target depends on the purpose: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates. No threshold is universal.
+    8. **The best share is a band, not a point.** The 50% and 60% fits score {recon_scores.loc['50%', 'RMSE vs clean original']:.3f} and {recon_scores.loc['60%', 'RMSE vs clean original']:.3f} — a difference of {abs(recon_scores.loc['50%', 'RMSE vs clean original'] - recon_scores.loc['60%', 'RMSE vs clean original']):.3f}. Reporting a single winner would overstate what the numbers support: anything from about half to two thirds of the variance gives essentially the same result.
+    9. **Never judge a filter by its faithfulness to its input.** Reconstructed from 25%, the output strays furthest from the input, and it is also the least accurate of the four. But the ordering does not hold in general: 75% stays closest to the noisy input while being worse than 50% or 60%. Judging by closeness to the noisy input rewards doing nothing. That is why the clean originals were kept in this lesson.
+    10. **Choosing the share is a judgement, not a calculation.** The target depends on the purpose: a picture needs little, a filter needs enough to hold the signal, and a compressed representation needs whatever the downstream task tolerates. No threshold is universal.
     """)
     return
 
@@ -760,7 +785,7 @@ def _(mo):
 4. **Because each component is defined as perpendicular to all the earlier ones.** The 40th direction depends on the previous 39 having been removed from consideration, so the set of components is ordered by construction. You always keep a prefix.
 5. **Because it has no shared direction.** Real stroke structure appears consistently across images and therefore lines up in a direction where the data genuinely varies. Independent noise varies differently in every image, so it spreads thinly across all 64 directions, most of which have negligible variance.
 6. **The two statements compare against different references.** Changing the input little means staying close to the noisy image; being accurate means staying close to the clean image. The noisy input is itself far from the clean one, so fidelity to it means inheriting its errors.
-7. **50%**, with the lowest root-mean-square error against the **clean original**. "Best" here means closest to the truth, not closest to the input, and it is measurable only because the clean digits were kept.
+7. **50% and 60% are tied**, at 2.692 and 2.693 against the **clean original**. "Best" here means closest to the truth, not closest to the input, and it is measurable only because the clean digits were kept. A difference of 0.001 does not pick a winner: the honest answer is that anything from about half to two thirds of the variance works equally well on this data.
 8. **Because the right share depends on what the components are for.** A visualisation tolerates a lot of loss; a filter needs enough to hold the signal; a compressed representation needs whatever the downstream model can work with. The required share also depends on the noise level and on how the variance is distributed in the particular data.
 """)
         },
