@@ -172,13 +172,13 @@ def _(mo):
 
     **Raw stress** (badness of fit) is often written
 
-    \\[
-    \\sigma = \\sum_{i<j} \\bigl(d_{ij} - \\hat d_{ij}\\bigr)^2
-    \\]
+    $$
+    \sigma = \sum_{i<j} \bigl(d_{ij} - \hat d_{ij}\bigr)^2
+    $$
 
-    where \\(d_{ij}\\) is the input distance and \\(\\hat d_{ij}\\) is the distance in the layout. With **`normalized_stress="auto"`**, **metric** MDS reports this **raw** stress; **non-metric** MDS reports **Kruskal stress-1** (normalised). Do not compare the two numbers directly.
+    where \(d_{ij}\) is the input distance and \(\hat d_{ij}\) is the distance in the layout. With **`normalized_stress="auto"`**, **metric** MDS reports this **raw** stress; **non-metric** MDS reports **Kruskal stress-1** (normalised). Do not compare the two numbers directly.
 
-    The algorithm is **SMACOF**: starting from coordinates (here `init="random"` with `n_init=1` so you can see seed sensitivity), it alternates updates that pull embedded distances toward the input distances. Non-metric SMACOF replaces \\(d_{ij}\\) by **disparities** from **isotonic regression** on the rank order, then embeds those disparities.
+    The algorithm is **SMACOF**: starting from coordinates (here `init="random"` with `n_init=1` so you can see seed sensitivity), it alternates updates that pull embedded distances toward the input distances. Non-metric SMACOF replaces \(d_{ij}\) by **disparities** from **isotonic regression** on the rank order, then embeds those disparities.
     """)
     return
 
@@ -189,11 +189,11 @@ def _(mo):
 
     For **Euclidean** input distances, **classical MDS** double-centres the squared distances,
 
-    \\[
-    B = -\\tfrac12 J D^{(2)} J, \\quad J = I - \\tfrac1n \\mathbf 1\\mathbf 1^\\top,
-    \\]
+    $$
+    B = -\tfrac12 J D^{(2)} J, \quad J = I - \tfrac1n \mathbf 1\mathbf 1^\top,
+    $$
 
-    and takes eigenvectors of \\(B\\). That is the same geometry as **PCA on the original coordinates** when those coordinates exist — a useful link back to lesson 1.
+    and takes eigenvectors of \(B\). That is the same geometry as **PCA on the original coordinates** when those coordinates exist — a useful link back to lesson 1.
     """)
     return
 
