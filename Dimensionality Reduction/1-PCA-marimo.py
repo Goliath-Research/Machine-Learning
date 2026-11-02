@@ -211,7 +211,7 @@ def _(cars, mileage, mo):
     mo.vstack(
         [
             mo.md(f"Full table: **{cars.shape[0]} rows x {cars.shape[1]} columns**. Mileage table: **{mileage.shape[0]} rows x {mileage.shape[1]} columns**."),
-            mo.ui.table(cars.head(10), selection=None),
+            mo.Html(cars.head(10).to_html()),
         ]
     )
     return
@@ -486,36 +486,10 @@ def _(mileage_pca):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    The next cell checks your answer. It compares your values with the fitted model using `np.allclose`, which allows for tiny rounding differences, and also accepts the weights with every sign flipped, since that describes the same direction.
-    """)
-    return
-
-
-@app.cell
-def _(mileage_pca, mo, np, student_component_1, student_first_share):
-    if student_component_1 is None or student_first_share is None:
-        _message = "Replace both `None` values above, then this cell will check them."
-    elif (
-        (
-            np.allclose(student_component_1, mileage_pca.components_[0])
-            or np.allclose(student_component_1, -mileage_pca.components_[0])
-        )
-        and np.isclose(student_first_share, mileage_pca.explained_variance_ratio_[0])
-    ):
-        _message = "✓ Correct: those are the first component's weights and its share."
-    else:
-        _message = "✗ Not yet. Check which row of `components_` and which attribute you used."
-    mo.md(_message)
-    return
-
-
-@app.cell(hide_code=True)
 def _(mileage_pca, mo):
     mo.accordion(
         {
-            "Show answer": mo.md(rf"""
+            "Show answers": mo.md(rf"""
 ```python
 student_component_1 = mileage_pca.components_[0]
 student_first_share = mileage_pca.explained_variance_ratio_[0]
@@ -546,7 +520,7 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answer": mo.md(r"""
+            "Show answers": mo.md(r"""
 Because **both columns are already in the same unit and have similar spread.**
 
 City mileage and highway mileage are both miles per gallon, and both range over roughly 10 to 50. Neither can dominate the other, so the components found on the raw data describe the actual relationship between the two variables.
@@ -658,7 +632,7 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answer": mo.md(r"""
+            "Show answers": mo.md(r"""
 Because **only one direction survived the inverse transform.**
 
 Each car was reduced to a single number: its position along Component 1. The inverse transform then reconstructs two coordinates from that one number, using only the first component's direction. A single number multiplied by a fixed direction can only produce points along that direction, so every rebuilt car lands on the same line.
@@ -694,33 +668,12 @@ def _(mileage, mileage_pca, mileage_restored, np):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    The next cell checks your value against the exact answer, computed independently.
-    """)
-    return
-
-
-@app.cell
-def _(mileage, mileage_restored, mo, np, student_reconstruction_error):
-    _expected = np.mean(np.sum((mileage.to_numpy() - mileage_restored) ** 2, axis=1))
-    if student_reconstruction_error is None:
-        _message = "Replace `None` above, then this cell will check it."
-    elif np.isclose(student_reconstruction_error, _expected):
-        _message = "✓ Correct."
-    else:
-        _message = "✗ Not yet. Square the differences, add them across the two columns, then average over the cars."
-    mo.md(_message)
-    return
-
-
-@app.cell(hide_code=True)
 def _(mileage, mileage_pca, mileage_restored, mo, np):
     _error = np.mean(np.sum((mileage.to_numpy() - mileage_restored) ** 2, axis=1))
     _n = len(mileage)
     mo.accordion(
         {
-            "Show answer": mo.md(rf"""
+            "Show answers": mo.md(rf"""
 ```python
 student_reconstruction_error = np.mean(
     np.sum((mileage.to_numpy() - mileage_restored) ** 2, axis=1)
@@ -873,31 +826,9 @@ def _(PCA, measures_complete, np):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    The next cell checks your answer by fitting the raw PCA itself and comparing column names.
-    """)
-    return
-
-
-@app.cell
-def _(PCA, measure_columns, measures_complete, mo, np, student_raw_top_column):
-    _raw = PCA(n_components=1).fit(measures_complete)
-    _expected = measure_columns[int(np.argmax(np.abs(_raw.components_[0])))]
-    if student_raw_top_column is None:
-        _message = "Replace `None` above, then this cell will check it."
-    elif student_raw_top_column == _expected:
-        _message = "✓ Correct."
-    else:
-        _message = "✗ Not yet. Use the absolute value of the weights, and turn the position into a column name."
-    mo.md(_message)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
     mo.accordion(
         {
-            "Show answer": mo.md(r"""
+            "Show answers": mo.md(r"""
 ```python
 _raw = PCA(n_components=1).fit(measures_complete)
 student_raw_top_column = measures_complete.columns[np.argmax(np.abs(_raw.components_[0]))]
@@ -1119,33 +1050,11 @@ def _(PCA, measures_z, np):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    The next cell checks your count against a full fit.
-    """)
-    return
-
-
-@app.cell
-def _(PCA, measures_z, mo, np, student_components_for_80):
-    _cumulative = np.cumsum(PCA().fit(measures_z).explained_variance_ratio_)
-    _expected = int(np.searchsorted(_cumulative, 0.80) + 1)
-    if student_components_for_80 is None:
-        _message = "Replace `None` above, then this cell will check it."
-    elif student_components_for_80 == _expected:
-        _message = "✓ Correct."
-    else:
-        _message = "✗ Not yet. Look at the running total, not at the individual shares."
-    mo.md(_message)
-    return
-
-
-@app.cell(hide_code=True)
 def _(PCA, measures_z, mo, np):
     _shares = np.cumsum(PCA().fit(measures_z).explained_variance_ratio_)
     mo.accordion(
         {
-            "Show answer": mo.md(rf"""
+            "Show answers": mo.md(rf"""
 ```python
 _full = PCA().fit(measures_z)
 _cumulative = np.cumsum(_full.explained_variance_ratio_)
@@ -1262,7 +1171,7 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answer": mo.md(r"""
+            "Show answers": mo.md(r"""
 Because **standardizing changes the relative spreads, and PCA selects directions by spread.**
 
 In the mileage case, both columns were already in the same unit with nearly the same standard deviation. Dividing each by a similar number rescales the cloud without reshaping it, so the directions of maximum variance stay where they were.
@@ -1325,7 +1234,7 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answer": mo.md(r"""
+            "Show answers": mo.md(r"""
 1. **A direction through the cloud.** It is a weighted mixture of the original columns, chosen so the data spreads most along it. Each new component is perpendicular to all the earlier ones.
 2. **`explained_variance_` is a variance, in squared units of the data** (miles-per-gallon squared, for the mileage fit); `explained_variance_ratio_` is that variance divided by the total, so it is a **fraction with no units**. The ratio is the interpretable one, and the ratios sum to 1 across all components.
 3. **Because of relative spread.** The mileage columns share a unit and vary over similar ranges, so rescaling both changes the cloud's size but not its shape. The eight measurements differ by hundreds of units, so without standardizing the widest column would decide the first component by itself.
