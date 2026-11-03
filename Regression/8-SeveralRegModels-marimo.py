@@ -191,8 +191,8 @@ def _(cars, plt, sns):
     sns.countplot(x=cars["body_style"], ax=_axes[1], color="steelblue")
     _axes[1].set_title("Body style")
     _axes[1].tick_params(axis="x", rotation=30)
-    _figure.subplots_adjust(wspace=0.45)
     _figure.tight_layout()
+    _figure.subplots_adjust(wspace=0.45)
     _figure
     return _figure
 
