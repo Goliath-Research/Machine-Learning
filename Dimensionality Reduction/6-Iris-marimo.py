@@ -160,6 +160,19 @@ def _(SPECIES_ORDER, go, px):
     return (species_scatter,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "About `species_scatter`": mo.md(
+                "One trace per species with shared colours across embeddings; plot size is capped for the notebook layout."
+            )
+        },
+        expanded=False,
+    )
+    return
+
+
 @app.cell
 def _(SPECIES_ORDER, go, np, px):
     def pca_biplot(scores, species, loadings, names, share, title="", width=840, height=500):
@@ -179,6 +192,10 @@ def _(SPECIES_ORDER, go, np, px):
                 )
             )
         _scale = 3.0 * np.sqrt(float(np.sum(share)))
+        _LOADING_LABEL_SHIFT = {
+            "petal length (cm)": {"yshift": -14},
+            "petal width (cm)": {"yshift": 14},
+        }
         for index, name in enumerate(names):
             _xl = loadings[0, index] * _scale
             _yl = loadings[1, index] * _scale
@@ -190,9 +207,10 @@ def _(SPECIES_ORDER, go, np, px):
                     name=name,
                     line=dict(width=2, color="dimgray"),
                     marker=dict(size=6, color="dimgray"),
-                    showlegend=True,
+                    showlegend=False,
                 )
             )
+            _shift = _LOADING_LABEL_SHIFT.get(name, {})
             figure.add_annotation(
                 x=_xl,
                 y=_yl,
@@ -201,18 +219,33 @@ def _(SPECIES_ORDER, go, np, px):
                 font=dict(color="dimgray", size=10),
                 xanchor="left" if _xl >= 0 else "right",
                 yanchor="bottom" if _yl >= 0 else "top",
+                xshift=int(_shift.get("xshift", 0)),
+                yshift=int(_shift.get("yshift", 0)),
             )
         figure.update_layout(
             width=width,
             height=height,
             title=title,
             margin=dict(t=55, b=45, l=55, r=20),
-            legend_title_text="species / loadings",
+            legend_title_text="species",
         )
         figure.update_yaxes(scaleanchor="x", scaleratio=1)
         return figure
 
     return (pca_biplot,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "About `pca_biplot`": mo.md(
+                "Scores plus grey loading arrows from the origin; length reflects variance share and labels sit at each arrow tip."
+            )
+        },
+        expanded=False,
+    )
+    return
 
 
 @app.cell
@@ -229,15 +262,9 @@ def _(scipy_procrustes):
 def _(mo):
     mo.accordion(
         {
-            "About `species_scatter`": mo.md(
-                "One trace per species with shared colours across embeddings; plot size is capped for the notebook layout."
-            ),
-            "About `pca_biplot`": mo.md(
-                "Scores plus grey loading arrows from the origin; length reflects variance share and labels sit at each arrow tip."
-            ),
             "About `layout_shift`": mo.md(
                 "Procrustes disparity after aligning two layouts — near zero when shapes match, larger when settings rearrange the map."
-            ),
+            )
         },
         expanded=False,
     )
