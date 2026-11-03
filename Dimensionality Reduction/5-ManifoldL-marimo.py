@@ -573,7 +573,7 @@ def _(
 def _(isomap_agreement, lle_agreement, mo, pca_along, tsne_agreement):
     _tsne_vals = list(tsne_agreement.values())
     mo.md(f"""
-    PCA **{pca_along:.3f}**; LLE/Isomap **{min(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**–**{max(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}** (mirrored LLE 80 **{lle_agreement[80]:.3f}**). t-SNE is **uneven** (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}**): **{tsne_agreement[10]:.3f}** at 10, **{tsne_agreement[20]:.3f}** at 20, **{tsne_agreement[100]:.3f}** vs **{tsne_agreement[120]:.3f}** at 100 vs 120.
+    PCA **{pca_along:.3f}**; LLE/Isomap **{min(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**–**{max(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}** (mirrored LLE 80 **{lle_agreement[80]:.3f}**). t-SNE is **uneven** (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}**): **{tsne_agreement[40]:.3f}** at 40, **{tsne_agreement[50]:.3f}** at 50, **{tsne_agreement[100]:.3f}** vs **{tsne_agreement[120]:.3f}** at 100 vs 120.
     """)
     return
 
@@ -752,7 +752,6 @@ def _(mo):
     """)
     return
 
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
@@ -806,7 +805,6 @@ def _(mo):
     """)
     return
 
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
@@ -843,7 +841,7 @@ def _(
 
     1. **Manifold geometry:** PCA on the S-curve reaches along-word **{pca_along:.3f}**; tuned LLE and Isomap reach up to **{_manifold_high:.3f}**, including a mirrored GOLIATH at 80 neighbours (**{lle_agreement[80]:.3f}**), well above PCA.
     2. **No single winner on this file:** Isomap **{isomap_agreement[62]:.3f}**–**{isomap_agreement[100]:.3f}**, LLE at 100 neighbours **{lle_agreement[100]:.3f}**, and t-SNE at 120 **{tsne_agreement[120]:.3f}** all recover order — compare layouts, not just decimals.
-    3. **Perplexity and neighbours matter:** t-SNE along-word is uneven (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}** across the slider cache), e.g. **{tsne_agreement[10]:.3f}** at perplexity 10, **{tsne_agreement[20]:.3f}** at 20, with **{tsne_agreement[100]:.3f}** at 100 beating **{tsne_agreement[120]:.3f}** at 120; LLE at 105 is **{lle_agreement[105]:.3f}** on a clean arc.
+    3. **Perplexity and neighbours matter:** t-SNE along-word is uneven (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}** across the slider cache), e.g. **{tsne_agreement[40]:.3f}** at perplexity 40, **{tsne_agreement[50]:.3f}** at 50, with **{tsne_agreement[100]:.3f}** at 100 beating **{tsne_agreement[120]:.3f}** at 120; LLE at 105 is **{lle_agreement[105]:.3f}** on a clean arc.
     4. **Scores ≠ readable letters:** along-word tracks global monotonicity (either orientation); overlapping letters can still look wrong while scoring moderately (PCA **{pca_along:.3f}**).
     5. **Reuse vs refit:** PCA **`transform`** maps held-out digits in the scatter above; t-SNE has no equivalent — every new point set needs a new fit and a new layout.
     """)
