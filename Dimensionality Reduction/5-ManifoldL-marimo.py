@@ -573,7 +573,7 @@ def _(
 def _(isomap_agreement, lle_agreement, mo, pca_along, tsne_agreement):
     _tsne_vals = list(tsne_agreement.values())
     mo.md(f"""
-    PCA stays at **{pca_along:.3f}**; LLE and Isomap settings shown here reach **{min(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**–**{max(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**, including mirrored LLE at 80 (**{lle_agreement[80]:.3f}**). t-SNE along-word is **uneven** across perplexity (slider cache **{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}**): e.g. **{tsne_agreement[10]:.3f}** at 10, **{tsne_agreement[20]:.3f}** at 20, **{tsne_agreement[100]:.3f}** at 100 vs **{tsne_agreement[120]:.3f}** at 120.
+    PCA **{pca_along:.3f}**; LLE/Isomap **{min(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**–**{max(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}** (mirrored LLE 80 **{lle_agreement[80]:.3f}**). t-SNE is **uneven** (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}**): **{tsne_agreement[10]:.3f}** at 10, **{tsne_agreement[20]:.3f}** at 20, **{tsne_agreement[100]:.3f}** vs **{tsne_agreement[120]:.3f}** at 100 vs 120.
     """)
     return
 
