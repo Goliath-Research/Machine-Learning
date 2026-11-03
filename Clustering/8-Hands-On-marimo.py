@@ -953,25 +953,25 @@ def _(cluster_index, mo, np, scaled_kept, tips):
         ["total_bill", "tip", "size"]
     ].mean()
     _lines = "\n".join(
-        f"    - **Cluster {_c}** ({_sizes[_c]} parties): mean bill \\${_r.total_bill:.2f}, "
-        f"mean tip \\${_r.tip:.2f}, mean party size {_r['size']:.1f}"
+        f"- Cluster {_c} ({_sizes[_c]} parties): mean bill ${_r.total_bill:.2f}, "
+        f"mean tip ${_r.tip:.2f}, mean party size {_r['size']:.1f}"
         for _c, _r in _means.iterrows()
     )
-    mo.md(f"""
-    Read the four tables for what separates the clusters, and what does not.
+    mo.md(
+        f"""Read the four tables for what separates the clusters, and what does not.
 
-    - **Sex is nearly identical** in both groups: about 63% male in one cluster and 69% in the other (36% and 31% female). The clustering did not find anything about sex.
-    - **Smoking differs somewhat**: one cluster is about 38.9% smokers, the other about 30.8%. A real difference, though modest.
-    - **Day and time differ only slightly.** Both clusters are mostly Saturday and Sunday, mostly dinner.
+- **Sex is nearly identical** in both groups: about 63% male in one cluster and 69% in the other (36% and 31% female). The clustering did not find anything about sex.
+- **Smoking differs somewhat**: one cluster is about 38.9% smokers, the other about 30.8%. A real difference, though modest.
+- **Day and time differ only slightly.** Both clusters are mostly Saturday and Sunday, mostly dinner.
 
-    So the honest conclusion is that the two groups are **not** separated by who the customers were. They are separated by what they spent, which is precisely the two columns the algorithms were given:
+So the honest conclusion is that the two groups are **not** separated by who the customers were. They are separated by what they spent, which is precisely the two columns the algorithms were given:
 
-    {_lines}
+{_lines}
 
-    The second cluster spends roughly twice as much per party, which is what a clustering of `total_bill` and `tip` was always going to find. Its parties are also slightly larger, which explains part of the gap: more people means a bigger bill.
+The second cluster spends roughly twice as much per party, which is what a clustering of `total_bill` and `tip` was always going to find. Its parties are also slightly larger, which explains part of the gap: more people means a bigger bill.
 
-    **Caveat.** These are descriptive percentages from one restaurant. Turning "38.9% versus 30.8% smokers" into a claim about tipping behaviour would need a statistical test, and would still be confounded by the fact that larger parties spend more. This lesson stops at description.
-    """)
+**Caveat.** These are descriptive percentages from one restaurant. Turning "38.9% versus 30.8% smokers" into a claim about tipping behaviour would need a statistical test, and would still be confounded by the fact that larger parties spend more. This lesson stops at description."""
+    )
     return
 
 

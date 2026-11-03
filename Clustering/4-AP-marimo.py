@@ -696,10 +696,14 @@ def _(wine_shape):
 @app.cell
 def _(mo, wine_frame):
     _wine_preview = wine_frame.head().round(2)
+    _wine_tail = _wine_preview.iloc[:, 10:].rename(
+        columns={"od280/od315_of_diluted_wines": "od280_od315"}
+    )
     mo.vstack(
         [
-            mo.Html(_wine_preview.iloc[:, :7].to_html()),
-            mo.Html(_wine_preview.iloc[:, 7:].to_html()),
+            mo.Html(_wine_preview.iloc[:, :5].to_html()),
+            mo.Html(_wine_preview.iloc[:, 5:10].to_html()),
+            mo.Html(_wine_tail.to_html()),
         ]
     )
     return

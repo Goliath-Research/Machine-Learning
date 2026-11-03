@@ -274,7 +274,9 @@ def _(blob_fits, centers, np, pd):
                     tuple(
                         _fitted[
                             np.argmin(np.linalg.norm(_fitted - np.array(_c), axis=1))
-                        ].round(2)
+                        ]
+                        .round(2)
+                        .tolist()
                     )
                 ),
             }
