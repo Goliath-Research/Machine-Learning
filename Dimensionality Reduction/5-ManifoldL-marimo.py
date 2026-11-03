@@ -521,7 +521,7 @@ def _(
         ("t-SNE", "perplexity 120", tsne_agreement[120]),
     ]
     score_table = pd.DataFrame(
-        _rows, columns=["Method", "Setting", "Along-word", "Notes"]
+        _rows, columns=["Method", "Setting", "Along-word"]
     )
     score_table["Notes"] = [
         "Global linear collapse",
@@ -600,7 +600,7 @@ def _(digit_pca, digit_tsne, digits, go, make_subplots, np, pd):
     digits_figure = make_subplots(
         rows=1, cols=2, subplot_titles=("PCA (2 components)", "t-SNE")
     )
-    for _panel, _frame, _index in ((_left, 0), (_right, 1)):
+    for _frame, _index in ((_left, 0), (_right, 1)):
         for _digit in map(str, range(10)):
             _mask = _frame["digit"].to_numpy() == _digit
             digits_figure.add_trace(
