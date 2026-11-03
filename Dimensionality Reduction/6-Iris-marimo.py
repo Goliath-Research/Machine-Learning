@@ -109,43 +109,21 @@ def _(mo):
 
     ## Background
 
-    This lesson is the synthesis for the folder. Every method here has had its own lesson, and now they are applied to one dataset so their pictures can be compared.
+    Five methods, one standardized input (four columns), two coordinates out. None uses species labels; colour is added afterward.
 
-    All five take the **same input**: four standardized iris measurements. All five return **two coordinates per flower**. What differs is the criterion each one optimises, and therefore which relationships survive the collapse to two dimensions.
+    | Method | Preserves | Labels? |
+    | :--- | :--- | :---: |
+    | **PCA** | variance directions | no |
+    | **MDS** | pairwise distances | no |
+    | **LLE** | neighbour weights | no |
+    | **Isomap** | graph shortest paths | no |
+    | **t-SNE** | neighbour probabilities | no |
 
-    | Method | What it tries to preserve | Uses labels? |
-    | :--- | :--- | :--- |
-    | **PCA** | the directions of greatest variance | no |
-    | **MDS** | the pairwise distances between flowers | no |
-    | **Locally linear embedding** | each flower's reconstruction weights from its neighbours | no |
-    | **Isomap** | shortest-path distances along a neighbour graph | no |
-    | **t-SNE** | the probability that two flowers are neighbours | no |
-
-    **None of them uses the species labels.** The colours are added afterwards, which is what makes these plots a fair test: if named species land in separate regions, the method found structure it was never told about.
-
-    ### Why the axes have no meaning
-
-    Only PCA produces axes with an interpretation: its first axis is the direction of greatest variance, and its components are weighted mixtures of the four measurements. The other four are **non-linear embeddings** whose axes are arbitrary — a rotated or flipped version of the same picture is equally valid.
-
-    So when reading any of the non-PCA plots, ask *which groups are separate*, not *what the x axis means*. There is no answer to the second question.
-
-    ### Two cautions that this lesson is built around
-
-    **A high variance share is not the same as a good picture.** PCA will report that its two components keep a large fraction of the variance, and it is tempting to read that as "these two dimensions are enough". Whether they separate the species is a separate question, and the plot answers it, not the percentage.
-
-    **t-SNE distances are not measurements.** t-SNE preserves *neighbourhoods*, not distances. Two flowers close together in its picture are neighbours in the original space; wide visual gaps are not measured distances. And because it has no `transform` method, placing a new flower requires refitting the whole map.
-
-    That last property is the subject of the final section, and it teaches something that generalises: **a picture is a fit, not a projection.**
+    Only **PCA** axes are interpretable loadings; other plots have arbitrary axes — read **groupings**, not axis meaning. High PCA variance share still may not separate species; t-SNE keeps neighbourhoods, not distances, and has no **`transform`**.
 
     ## Datasets used
 
-    ### Iris
-
-    **Source.** The iris dataset, collected by the botanist **Edgar Anderson** and published by **R. A. Fisher** in 1936 in *The use of multiple measurements in taxonomic problems* (*Annals of Eugenics*, 7(2), 179–188). Loaded here with `sklearn.datasets.load_iris`; also distributed by the [UCI Machine Learning Repository](https://archive.ics.uci.edu/dataset/53/iris).
-
-    **What it holds.** 150 flowers, 50 from each of three species, with four measurements in centimetres: sepal length, sepal width, petal length, and petal width. The species are *Iris setosa*, *Iris versicolor*, and *Iris virginica*.
-
-    **Why it suits this lesson.** Setosa is clearly separable from the other two on these measurements. Versicolor and virginica overlap, and no two-dimensional view of four measurements can fully separate them, because some flowers genuinely have intermediate values.
+    **Iris** (Fisher, 1936; [UCI](https://archive.ics.uci.edu/dataset/53/iris)): 150 flowers, four cm measurements, three species. Setosa is easy to split; versicolor and virginica overlap in 4-D.
     """)
     return
 
@@ -182,16 +160,6 @@ def _(SPECIES_ORDER, go, px):
     return (species_scatter,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### `species_scatter`
-
-    One trace per species using **`go.Scatter`**. Embeddings use free axis scaling so clusters are not squashed; PCA biplots may request equal scaling when comparing score and loading geometry.
-    """)
-    return
-
-
 @app.cell
 def _(SPECIES_ORDER, go, np, px):
     def pca_biplot(scores, species, loadings, names, share, title="", width=840, height=500):
@@ -218,8 +186,8 @@ def _(SPECIES_ORDER, go, np, px):
                     y=[0, loadings[1, index] * _scale],
                     mode="lines+markers",
                     name=name,
-                    line=dict(width=2),
-                    marker=dict(size=6),
+                    line=dict(width=2, color="dimgray"),
+                    marker=dict(size=6, color="dimgray"),
                     showlegend=True,
                 )
             )
@@ -236,16 +204,6 @@ def _(SPECIES_ORDER, go, np, px):
     return (pca_biplot,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### `pca_biplot`
-
-    Flower scores plus **loading vectors** for each measurement, scaled by explained variance so arrow length reflects how much that feature contributes to the plane. This replaces a separate arrow overlay on a second figure.
-    """)
-    return
-
-
 @app.cell
 def _(scipy_procrustes):
     def layout_shift(baseline, comparison):
@@ -254,16 +212,6 @@ def _(scipy_procrustes):
         return float(disparity)
 
     return (layout_shift,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### `layout_shift`
-
-    Compares two embeddings of the same flowers after removing rotation, reflection, and scale. A small value means the **neighbourhood structure** barely moved; a large value means seed or perplexity reshaped the map.
-    """)
-    return
 
 
 @app.cell
@@ -278,53 +226,51 @@ def _(load_iris, pd):
         + ", ".join(f"{_name} {_count}" for _name, _count in species_counts.items())
         + f". Missing values: {int(iris_frame.isnull().sum().sum())}"
     )
-    _spreads = iris_frame[measure_columns].max() - iris_frame[measure_columns].min()
-    spread_ratio = float(_spreads.max() / _spreads.min())
-    widest_measurement = _spreads.idxmax()
+    spreads = iris_frame[measure_columns].max() - iris_frame[measure_columns].min()
+    spread_ratio = float(spreads.max() / spreads.min())
+    widest_measurement = spreads.idxmax()
+    petal_length_spread = float(spreads["petal length (cm)"])
+    narrow_spread = float(spreads.min())
     return (
         iris,
         iris_frame,
         measure_columns,
+        narrow_spread,
+        petal_length_spread,
         species_counts,
         species_facts,
         spread_ratio,
+        spreads,
         widest_measurement,
-        _spreads,
     )
 
 
 @app.cell(hide_code=True)
-def _(iris_frame, measure_columns, mo, species_facts, spread_ratio, widest_measurement, _spreads):
+def _(
+    iris_frame,
+    measure_columns,
+    mo,
+    narrow_spread,
+    petal_length_spread,
+    species_facts,
+    spread_ratio,
+    spreads,
+    widest_measurement,
+):
     _rows = "\n".join(
-        f"| {_name} | {iris_frame[_name].min():.1f} | {iris_frame[_name].max():.1f} | {_spreads[_name]:.1f} |"
+        f"| {_name} | {iris_frame[_name].min():.1f} | {iris_frame[_name].max():.1f} | {spreads[_name]:.1f} |"
         for _name in measure_columns
     )
     mo.md(f"""
     **{species_facts}.**
 
-    Petal length spreads **{_spreads['petal length (cm)']:.1f} cm**; sepal width and petal width tie at **{_spreads['sepal width (cm)']:.1f} cm**. The ratio of widest to narrowest spread is **{spread_ratio:.2f}** ({widest_measurement} vs the 2.4 cm columns).
+    Petal length spreads **{petal_length_spread:.1f} cm**; sepal width and petal width tie at **{narrow_spread:.1f} cm**. The ratio of widest to narrowest spread is **{spread_ratio:.2f}** ({widest_measurement} vs the {narrow_spread:.1f} cm columns).
 
     | measurement | min | max | spread |
     | :--- | ---: | ---: | ---: |
     {_rows}
 
-    On the raw scale, distance methods would overweight petal length. Standardization fixes that.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### Standardization
-
-    Each column is centred and scaled to unit variance:
-
-    $$
-    z_{ij} = \frac{x_{ij} - \mu_j}{\sigma_j}.
-    $$
-
-    The boxes below use **raw** centimetres; every embedding in this lesson uses **`z`**.
+    On the raw scale, distance methods would overweight petal length. Standardize with \\(z_{{ij}}=(x_{{ij}}-\\mu_j)/\\sigma_j\\). **Setosa** has short petals; **versicolor** and **virginica** overlap on all four.
     """)
     return
 
@@ -381,16 +327,22 @@ def _():
 
 
 @app.cell(hide_code=True)
-def _(mo, spread_ratio, widest_measurement):
+def _(
+    mo,
+    narrow_spread,
+    petal_length_spread,
+    spread_ratio,
+    widest_measurement,
+):
     mo.accordion(
         {
             "Show answer": mo.md(f"""
 ```python
-_spreads = iris_frame[measure_columns].max() - iris_frame[measure_columns].min()
-student_widest = _spreads.idxmax()
-student_ratio = _spreads.max() / _spreads.min()
+spreads = iris_frame[measure_columns].max() - iris_frame[measure_columns].min()
+student_widest = spreads.idxmax()
+student_ratio = spreads.max() / spreads.min()
 ```
-**{widest_measurement}** spreads **5.9 cm**; sepal width and petal width tie at **2.4 cm**. The ratio is **{spread_ratio:.2f}**, not three-to-one.
+**{widest_measurement}** spreads **{petal_length_spread:.1f} cm**; sepal width and petal width tie at **{narrow_spread:.1f} cm**. The ratio is **{spread_ratio:.2f}**, not three-to-one.
 """)
         },
         expanded=False,
@@ -415,7 +367,7 @@ def _(mo):
 
 
 @app.cell
-def _(PCA, iris_z, measure_columns, np, pca_biplot):
+def _(PCA, iris_z, measure_columns, np, pd, pca_biplot):
     iris_pca_model = PCA(n_components=2).fit(iris_z[measure_columns])
     iris_share = iris_pca_model.explained_variance_ratio_
     _plane = iris_pca_model.transform(iris_z[measure_columns])
@@ -431,7 +383,7 @@ def _(PCA, iris_z, measure_columns, np, pca_biplot):
         title="PCA biplot on standardized measurements",
     )
     iris_pca_figure
-    return iris_pca_frame, iris_pca_model, iris_share
+    return iris_pca_model, iris_share
 
 
 @app.cell(hide_code=True)
@@ -444,17 +396,9 @@ def _(iris_pca_model, iris_share, measure_columns, mo):
     | :--- | ---: | ---: |
     {chr(10).join(f"| {_name} | {_loadings[0, _i]:+.2f} | {_loadings[1, _i]:+.2f} |" for _i, _name in enumerate(measure_columns))}
 
-    **PC1** mixes petal length and width with **sepal length** (same sign) — a general size axis. **PC2** is dominated by **sepal width**, with **sepal length** loading the same way (both positive here): wide, relatively short sepals versus the opposite.
+    **PC1** mixes petal length and width with **sepal length** (same sign) — a general size axis. **PC2** is dominated by **sepal width**, and **both sepal loadings are positive**, so high PC2 means **wider and somewhat longer** sepals.
 
-    Setosa separates on the left; versicolor and virginica form a **touching band** with no empty gap.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(iris_share, mo):
-    mo.md(f"""
-    **What the variance share does not promise.** Two components keep **{iris_share.sum():.1%}** of the variance — a faithful summary of spread — yet versicolor and virginica still overlap because they overlap in four dimensions.
+    Setosa separates on the left; versicolor and virginica form a **touching band** with no empty gap. Keeping **{iris_share.sum():.1%}** of the variance does not by itself separate those species.
     """)
     return
 
@@ -541,6 +485,8 @@ def _(MDS, iris_z, measure_columns, pd, species_scatter):
     _mds = MDS(
         n_components=2,
         metric_mds=True,
+        init="random",
+        n_init=1,
         random_state=25,
         normalized_stress="auto",
     ).fit_transform(iris_z[measure_columns])
@@ -589,9 +535,9 @@ def _(Isomap, iris_z, measure_columns, pd, species_scatter):
 
 @app.cell
 def _(TSNE, iris_z, measure_columns, np, pd):
-    _baseline = TSNE(random_state=20, init="pca", perplexity=30).fit_transform(
-        iris_z[measure_columns]
-    )
+    _baseline = TSNE(
+        random_state=20, init="random", perplexity=30
+    ).fit_transform(iris_z[measure_columns])
     tsne_baseline = pd.DataFrame(
         {
             "t-SNE 1": _baseline[:, 0],
@@ -612,7 +558,7 @@ def _(mo):
         0, 99, value=20, step=1, show_value=True, label="t-SNE random seed"
     )
     lle_neighbors_slider = mo.ui.slider(
-        5, 50, value=30, step=5, show_value=True, label="LLE n_neighbors"
+        10, 50, value=30, step=5, show_value=True, label="LLE n_neighbors"
     )
     mo.hstack([tsne_perplexity_slider, tsne_seed_slider, lle_neighbors_slider], gap=2)
     return lle_neighbors_slider, tsne_perplexity_slider, tsne_seed_slider
@@ -620,11 +566,9 @@ def _(mo):
 
 @app.cell
 def _(
-    LocallyLinearEmbedding,
     TSNE,
     iris_z,
     layout_shift,
-    lle_neighbors_slider,
     measure_columns,
     pd,
     species_scatter,
@@ -634,16 +578,8 @@ def _(
 ):
     _perp = int(tsne_perplexity_slider.value)
     _seed = int(tsne_seed_slider.value)
-    _n = int(lle_neighbors_slider.value)
     _tsne = TSNE(
-        random_state=_seed, init="pca", perplexity=_perp
-    ).fit_transform(iris_z[measure_columns])
-    _lle = LocallyLinearEmbedding(
-        n_neighbors=_n,
-        n_components=2,
-        random_state=50,
-        method="modified",
-        eigen_solver="dense",
+        random_state=_seed, init="random", perplexity=_perp
     ).fit_transform(iris_z[measure_columns])
     tsne_shift = layout_shift(
         tsne_baseline[["t-SNE 1", "t-SNE 2"]].to_numpy(), _tsne
@@ -657,14 +593,35 @@ def _(
         "t-SNE 2",
         f"t-SNE (perplexity {_perp}, seed {_seed}; Procrustes shift {tsne_shift:.3f})",
     )
+    tsne_live_figure
+    return (tsne_shift,)
+
+
+@app.cell
+def _(
+    LocallyLinearEmbedding,
+    iris_z,
+    lle_neighbors_slider,
+    measure_columns,
+    pd,
+    species_scatter,
+):
+    _n = int(lle_neighbors_slider.value)
+    _lle = LocallyLinearEmbedding(
+        n_neighbors=_n,
+        n_components=2,
+        random_state=50,
+        method="modified",
+        eigen_solver="dense",
+    ).fit_transform(iris_z[measure_columns])
     lle_live_figure = species_scatter(
         pd.DataFrame({"LLE 1": _lle[:, 0], "LLE 2": _lle[:, 1], "species": iris_z["species"]}),
         "LLE 1",
         "LLE 2",
         f"LLE ({_n} neighbours)",
     )
-    mo.vstack([tsne_live_figure, lle_live_figure])
-    return tsne_shift,
+    lle_live_figure
+    return
 
 
 @app.cell
@@ -676,12 +633,11 @@ def _(
     iris,
     iris_z,
     measure_columns,
-    mo,
     pd,
 ):
     _X = iris_z[measure_columns].to_numpy()
     _pca = PCA(n_components=2).fit_transform(_X)
-    _tsne = TSNE(random_state=20, init="pca", perplexity=30).fit_transform(_X)
+    _tsne = TSNE(random_state=20, init="random", perplexity=30).fit_transform(_X)
     _checker = KNeighborsClassifier(n_neighbors=5)
     knn_raw = float(
         cross_val_score(_checker, _X, iris.target, cv=5, n_jobs=1).mean()
@@ -692,15 +648,15 @@ def _(
     knn_tsne = float(
         cross_val_score(_checker, _tsne, iris.target, cv=5, n_jobs=1).mean()
     )
-    _rows = [
-        ("Raw standardized", knn_raw, "Original 4-D z-scores", "—"),
-        ("PCA (2D)", knn_pca, "Linear projection", "—"),
-        ("t-SNE (2D)", knn_tsne, "Strongest 2-D separation", "—"),
-    ]
     knn_table = pd.DataFrame(
-        _rows, columns=["Embedding", "5-NN accuracy", "Notes", "Extra"]
+        [
+            ("Raw standardized", knn_raw, "Original 4-D z-scores"),
+            ("PCA (2D)", knn_pca, "Linear projection"),
+            ("t-SNE (2D)", knn_tsne, "Strongest 2-D separation"),
+        ],
+        columns=["Embedding", "5-NN accuracy", "Notes"],
     )
-    mo.Html(knn_table.to_html(index=False, float_format=lambda x: f"{x:.3f}"))
+    knn_table
     return knn_pca, knn_raw, knn_tsne
 
 
@@ -816,17 +772,37 @@ def _(mo):
 @app.cell
 def _(TSNE, iris_z, layout_shift, measure_columns, np, tsne_baseline):
     _X = iris_z[measure_columns].to_numpy()
+    _ref = tsne_baseline[["t-SNE 1", "t-SNE 2"]].to_numpy()
     _kept = np.delete(_X, 133, axis=0)
-    _refit = TSNE(random_state=20, init="pca", perplexity=30).fit_transform(_kept)
+    _refit = TSNE(random_state=20, init="random", perplexity=30).fit_transform(_kept)
     _common = tsne_baseline.drop(index=133)[["t-SNE 1", "t-SNE 2"]].to_numpy()
     refit_shift = layout_shift(_common, _refit)
-    return refit_shift,
+    tsne_shift_p5 = layout_shift(
+        _ref, TSNE(random_state=20, init="random", perplexity=5).fit_transform(_X)
+    )
+    tsne_shift_p25 = layout_shift(
+        _ref, TSNE(random_state=20, init="random", perplexity=25).fit_transform(_X)
+    )
+    tsne_shift_p50 = layout_shift(
+        _ref, TSNE(random_state=20, init="random", perplexity=50).fit_transform(_X)
+    )
+    tsne_shift_seed0 = layout_shift(
+        _ref, TSNE(random_state=0, init="random", perplexity=30).fit_transform(_X)
+    )
+    return refit_shift, tsne_shift_p5, tsne_shift_p25, tsne_shift_p50, tsne_shift_seed0
 
 
 @app.cell(hide_code=True)
-def _(mo, refit_shift):
+def _(
+    mo,
+    refit_shift,
+    tsne_shift_p5,
+    tsne_shift_p25,
+    tsne_shift_p50,
+    tsne_shift_seed0,
+):
     mo.md(f"""
-    Procrustes shift after dropping row 133 is only **{refit_shift:.3f}** — the map barely moves for the remaining flowers. **Seed** and **perplexity** (see sliders) change the picture far more; the lesson is that t-SNE cannot place a new flower without a full refit.
+    Dropping row 133 moves the remaining layout only **{refit_shift:.3f}** (Procrustes). **Perplexity** matters mainly at low values versus the baseline map (**{tsne_shift_p5:.3f}** at 5, **{tsne_shift_p25:.3f}** at 25, **{tsne_shift_p50:.3f}** at 50); **seed** nudges it too (**{tsne_shift_seed0:.3f}** at seed 0). A new flower still needs a full refit — there is no **`transform`**.
     """)
     return
 
@@ -836,7 +812,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Using `iris_z` and `measure_columns`, fit `StandardScaler` is already applied — store the 2-D PCA coordinates of all flowers in `student_iris_pca` with shape `(150, 2)`.
+    `iris_z` is already standardized. Fit **PCA** with two components on `measure_columns` and store the coordinates in `student_iris_pca` with shape `(150, 2)`.
     """)
     return
 
@@ -863,11 +839,11 @@ student_iris_pca = PCA(n_components=2).fit_transform(iris_z[measure_columns])
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+def _(mo, row133_versicolor_neighbors):
+    mo.md(f"""
     ### Try it yourself
 
-    Row 133 has three versicolor flowers among its five nearest neighbours in 4-D. Does that force it to look like a mislabelled versicolor in t-SNE? Answer in one sentence.
+    Row **133** has **{row133_versicolor_neighbors}** versicolor flowers among its five nearest neighbours in standardized 4-D. Does that force it to look mislabelled in t-SNE? Answer in one sentence.
     """)
     return
 
@@ -890,17 +866,29 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Row 133 lands among versicolor flowers in the t-SNE plot but has ordinary virginica measurements. Explain how both can be true. Work out your answer, then reveal it.
+    Using `NearestNeighbors` on `iris_z[measure_columns]`, store the count of versicolor flowers among the five nearest neighbours of row **133** in `student_row133_versicolor` (an integer).
     """)
     return
 
 
+@app.cell
+def _():
+    student_row133_versicolor = None
+    return (student_row133_versicolor,)
+
+
 @app.cell(hide_code=True)
-def _(mo):
+def _(iris, iris_z, measure_columns, mo, np, row133_versicolor_neighbors):
     mo.accordion(
         {
-            "Show answer": mo.md(r"""
-The plot answers **who is nearby** in the embedding; the measurements answer **whether the flower is typical** for its label. Row 133 is geometrically close to versicolor in four dimensions, so t-SNE places it there, while every centimetre value stays inside the virginica whiskers.
+            "Show answer": mo.md(f"""
+```python
+_X = iris_z[measure_columns].to_numpy()
+_nn = NearestNeighbors(n_neighbors=6).fit(_X)
+_indices = _nn.kneighbors(_X[133:134], return_distance=False)[0, 1:]
+student_row133_versicolor = int(np.sum(iris.target[_indices] == 1))
+```
+The count is **{row133_versicolor_neighbors}** versicolor neighbours (target code 1).
 """)
         },
         expanded=False,
@@ -909,15 +897,24 @@ The plot answers **who is nearby** in the embedding; the measurements answer **w
 
 
 @app.cell(hide_code=True)
-def _(iris_share, knn_tsne, mo, refit_shift, spread_ratio):
+def _(
+    iris_share,
+    mo,
+    refit_shift,
+    row133_versicolor_neighbors,
+    tsne_shift_p5,
+    tsne_shift_p25,
+    tsne_shift_p50,
+    tsne_shift_seed0,
+):
     mo.md(f"""
     ## Conclusions
 
-    1. **Five criteria, one table:** PCA, MDS, LLE, Isomap, and t-SNE all read the same standardized four columns yet optimise different properties, so their 2-D groupings disagree while setosa always separates.
-    2. **Variance share ≠ separation:** two PCA components keep **{iris_share.sum():.1%}** of the variance, but versicolor and virginica still overlap in the biplot because they overlap in 4-D.
-    3. **Standardize first:** raw spreads differ by **{spread_ratio:.2f}×** (petal length 5.9 cm vs 2.4 cm columns), so distances on centimetres would be dominated by petals without scaling.
-    4. **t-SNE neighbourhoods vs measurements:** 5-NN accuracy is highest in t-SNE (**{knn_tsne:.3f}** in 2-D) with **no empty gap** between versicolor and virginica; row 133 shows three versicolor neighbours in 4-D yet ordinary virginica sizes.
-    5. **Fit, not projection:** dropping row 133 shifts the t-SNE layout only **{refit_shift:.3f}** (Procrustes); new flowers need a full refit, and seed or perplexity move the map more — unlike PCA **`transform`**.
+    1. **Different optima, different pictures:** PCA, MDS, LLE, Isomap, and t-SNE share the same four standardized columns yet preserve variance, distances, weights, graph paths, or neighbourhoods — so their 2-D groupings disagree even when setosa always separates.
+    2. **Variance share ≠ class separation:** two PCA components keep **{iris_share.sum():.1%}** of the variance, but versicolor and virginica still overlap in the biplot because they overlap in measurement space.
+    3. **Meaningful axes only for PCA:** MDS, LLE, Isomap, and t-SNE axes are arbitrary; read **which species cluster**, not what the horizontal axis "means".
+    4. **t-SNE is a fit, not a map:** there is no **`transform`** for a new flower; dropping row 133 shifts the layout only **{refit_shift:.3f}**. Procrustes shifts vs the baseline map are **{tsne_shift_p5:.3f}** at perplexity 5, **{tsne_shift_p25:.3f}** at 25, **{tsne_shift_p50:.3f}** at 50, and **{tsne_shift_seed0:.3f}** when the seed is 0 — perplexity matters mainly at low values.
+    5. **Neighbourhood ≠ typicality:** row 133 sits among versicolor in t-SNE with **{row133_versicolor_neighbors} of 5** versicolor neighbours in 4-D, yet its centimetre values stay inside virginica whiskers — check measurements, not plot position alone.
     """)
     return
 
