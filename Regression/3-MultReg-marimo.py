@@ -272,6 +272,11 @@ def _(
         f"R² = {reduced_ols.rsquared:.4f}, F = {reduced_ols.fvalue:.2f} "
         f"(p = {reduced_ols.f_pvalue:.2e})"
     )
+    print(f"Dropped column: {dropped_budget}")
+    print(f"Reduced training R² = {reduced_train_r2:.3f}")
+    print(
+        f"Reduced testing  R² = {reduced_test_r2:.3f}    RMSE = {reduced_test_rmse:.3f}"
+    )
     _coef_table = pd.DataFrame(
         {
             "coef": reduced_ols.params,
@@ -281,11 +286,6 @@ def _(
         }
     )
     mo.Html(_coef_table.round(4).to_html())
-    print(f"Dropped column: {dropped_budget}")
-    print(f"Reduced training R² = {reduced_train_r2:.3f}")
-    print(
-        f"Reduced testing  R² = {reduced_test_r2:.3f}    RMSE = {reduced_test_rmse:.3f}"
-    )
     return dropped_budget, kept, reduced_test_r2, reduced_test_rmse, reduced_train_r2
 
 
