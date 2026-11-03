@@ -18,53 +18,67 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import r2_score, root_mean_squared_error
+    from sklearn.model_selection import train_test_split
+    import statsmodels.api as sm
+    from statsmodels.graphics.gofplots import qqplot
 
     plt.rcParams["figure.max_open_warning"] = 0
     sns.set_theme(style="whitegrid")
 
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
-    from sklearn.linear_model import LinearRegression
-    from sklearn.metrics import r2_score, root_mean_squared_error
-    from sklearn.model_selection import train_test_split
-
-    return LinearRegression, r2_score, root_mean_squared_error, train_test_split
-
-
-@app.cell
-def _():
-    import statsmodels.api as sm
-    from statsmodels.graphics.gofplots import qqplot
-
-    return qqplot, sm
-
-
-@app.cell
-def _(plt, sns):
-    def numeric_panel(frame, title):
-        _figure, _axes = plt.subplots(2, 2, figsize=(10, 7))
-        sns.histplot(data=frame, kde=True, ax=_axes[0, 0])
-        _axes[0, 0].set_title("Histograms")
-        sns.violinplot(data=frame, ax=_axes[0, 1])
-        _axes[0, 1].set_title("Violin plots")
-        sns.boxplot(data=frame, ax=_axes[1, 0])
-        _axes[1, 0].set_title("Box plots")
-        sns.boxenplot(data=frame, ax=_axes[1, 1])
-        _axes[1, 1].set_title("Boxen plots")
-        _figure.suptitle(title)
-        _figure.tight_layout()
-        return _figure
-
-    return (numeric_panel,)
+    return (
+        LinearRegression,
+        mo,
+        np,
+        pd,
+        plt,
+        qqplot,
+        r2_score,
+        root_mean_squared_error,
+        sm,
+        sns,
+        train_test_split,
+    )
 
 
 @app.cell(hide_code=True)
@@ -87,6 +101,25 @@ def _(mo):
     - **Advertising.** Budgets for TV, radio, and newspaper, and the sales that followed, in 200 markets. This lesson uses TV as the only predictor.
     """)
     return
+
+@app.cell
+def _(plt, sns):
+    def numeric_panel(frame, title):
+        _figure, _axes = plt.subplots(2, 2, figsize=(10, 7))
+        sns.histplot(data=frame, kde=True, ax=_axes[0, 0])
+        _axes[0, 0].set_title("Histograms")
+        sns.violinplot(data=frame, ax=_axes[0, 1])
+        _axes[0, 1].set_title("Violin plots")
+        sns.boxplot(data=frame, ax=_axes[1, 0])
+        _axes[1, 0].set_title("Box plots")
+        sns.boxenplot(data=frame, ax=_axes[1, 1])
+        _axes[1, 1].set_title("Boxen plots")
+        _figure.suptitle(title)
+        _figure.tight_layout()
+        return _figure
+
+    return (numeric_panel,)
+
 
 
 @app.cell(hide_code=True)
@@ -117,18 +150,22 @@ def _(advertising_file, mo, pd):
     features = ads[["TV", "Radio", "Newspaper"]]
     sales = ads["Sales"]
     print(f"{ads.shape[0]} markets, {ads.shape[1]} columns")
-    return mo.Html(ads.head().to_html())
+    _table = mo.Html(ads.head().to_html())
+    _table
+    return ads, features, sales
 
 
 @app.cell
 def _(features, numeric_panel):
     feature_panel = numeric_panel(features, "Advertising budgets")
+    feature_panel
     return feature_panel
 
 
 @app.cell
 def _(numeric_panel, sales):
     sales_panel = numeric_panel(sales.to_frame(), "Sales")
+    sales_panel
     return sales_panel
 
 
@@ -170,6 +207,7 @@ def _(LinearRegression, ads, np, pd, plt, sns, train_test_split):
     _axes.plot(_xs["TV"], line.predict(_xs), color="firebrick", label="Fitted line")
     _axes.set_title("TV spend and sales")
     _axes.legend()
+    _figure
     return _figure
 
 
@@ -190,7 +228,9 @@ def _(line, mo, pd, r2_score, root_mean_squared_error, sales_test, sales_train, 
     )
     print(f"Training R² = {train_r2:.3f}    RMSE = {train_rmse:.2f}")
     print(f"Testing  R² = {test_r2:.3f}    RMSE = {test_rmse:.2f}")
-    return mo.Html(preview.head().round(2).to_html())
+    _preview = mo.Html(preview.head().round(2).to_html())
+    _preview
+    return train_r2, test_r2, test_rmse, train_pred, test_pred
 
 
 @app.cell(hide_code=True)
@@ -251,7 +291,11 @@ def _(mo):
 @app.cell
 def _(sales_train, sm, tv_train):
     ols_line = sm.OLS(sales_train, sm.add_constant(tv_train)).fit()
-    print(ols_line.summary())
+    print(
+        f"R² = {ols_line.rsquared:.4f}, F = {ols_line.fvalue:.2f} "
+        f"(p = {ols_line.f_pvalue:.2e})"
+    )
+    mo.Html(ols_line.summary().tables[1].as_html())
 
 
 @app.cell
@@ -264,7 +308,144 @@ def _(ols_line, plt, qqplot, sales_test, sales_train, test_pred, train_pred):
     _figure.tight_layout()
     print(f"Statsmodels slope = {ols_line.params['TV']:.4f}")
     print(f"Statsmodels intercept = {ols_line.params['const']:.2f}")
+    _figure
     return _figure
+
+
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    R² and RMSE both score the line. In one phrase each: what does R² measure, and what does RMSE measure?
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_r2_means = None
+    student_rmse_means = None
+    print(student_r2_means, student_rmse_means)
+    return student_r2_means, student_rmse_means
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**R²** is the share of variance in sales that the line explains (here about 0.81 on the training markets).
+
+**RMSE** is the typical size of a prediction error in sales units (the square root of the mean squared residual).
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    From the fitted `line`, store the TV slope in `student_tv_slope`. It is the first entry of `coef_`.
+    """)
+    return
+
+
+@app.cell
+def _(line):
+    student_tv_slope = None
+    print(student_tv_slope)
+    return (student_tv_slope,)
+
+
+@app.cell(hide_code=True)
+def _(line, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_tv_slope = line.coef_[0]
+student_tv_slope
+```
+The slope is about **0.0540**: one extra unit of TV spend goes with about 0.054 sales units on this fit.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    In the statsmodels coefficient table, which column holds the p-value for each slope? Replace `None` with its header text.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_pvalue_col = None
+    print(student_pvalue_col)
+    return (student_pvalue_col,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_pvalue_col = "P>|t|"
+```
+**P>|t|** is the two-sided p-value for the hypothesis that the coefficient is zero.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many markets are in the test holdout? Store the count in `student_test_n` using `len` on the test target series.
+    """)
+    return
+
+
+@app.cell
+def _(sales_test):
+    student_test_n = None
+    print(student_test_n)
+    return (student_test_n,)
+
+
+@app.cell(hide_code=True)
+def _(mo, sales_test):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_test_n = len(sales_test)
+student_test_n
+```
+With `test_size=0.3` and 200 markets, the holdout has **60** test markets.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)

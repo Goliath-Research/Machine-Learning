@@ -18,22 +18,45 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, pd, plt, sns
-
-
-@app.cell
-def _():
     from pathlib import Path
-
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.metrics import r2_score, root_mean_squared_error
     from sklearn.model_selection import train_test_split
@@ -41,6 +64,10 @@ def _():
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVR
     from sklearn.tree import DecisionTreeRegressor
+    import statsmodels.api as sm
+
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
 
     return (
         DecisionTreeRegressor,
@@ -49,17 +76,15 @@ def _():
         RandomForestRegressor,
         SVR,
         StandardScaler,
+        mo,
+        pd,
+        plt,
         r2_score,
         root_mean_squared_error,
+        sm,
+        sns,
         train_test_split,
     )
-
-
-@app.cell
-def _():
-    import statsmodels.api as sm
-
-    return (sm,)
 
 
 @app.cell(hide_code=True)
@@ -145,6 +170,7 @@ def _(Path, mo, pd):
         .reset_index(drop=True)
     )
     print(f"{len(cars)} complete rows, from {auto_source}")
+    mo.Html(cars.head().to_html())
     return mo.Html(cars.head().to_html())
 
 
@@ -159,6 +185,7 @@ def _(cars, plt, sns):
     _axes[1].set_title("Body style")
     _axes[1].tick_params(axis="x", rotation=30)
     _figure.tight_layout()
+    _figure
     return _figure
 
 
@@ -175,7 +202,7 @@ def _(mo):
 
 
 @app.cell
-def _(cars, pd, sm, train_test_split):
+def _(cars, mo, pd, sm, train_test_split):
     style_drop = pd.get_dummies(cars["body_style"], drop_first=True).astype(int)
     omitted_style = sorted(set(cars["body_style"]) - set(style_drop.columns))
     numeric_names = ["horsepower", "city_mpg", "highway_mpg"]
@@ -187,7 +214,11 @@ def _(cars, pd, sm, train_test_split):
     price_ols = sm.OLS(price_train, sm.add_constant(design_train)).fit()
     print(f"Omitted body style: {omitted_style[0]}")
     print(f"Train = {len(design_train)} \t Test = {len(price_test)}")
-    print(price_ols.summary())
+    print(
+        f"R² = {price_ols.rsquared:.4f}, F = {price_ols.fvalue:.2f} "
+        f"(p = {price_ols.f_pvalue:.2e})"
+    )
+    mo.Html(price_ols.summary().tables[1].as_html())
     return (
         design_test,
         design_train,
@@ -237,6 +268,7 @@ def _(
     SVR,
     StandardScaler,
     cars,
+    mo,
     numeric_names,
     pd,
     r2_score,
@@ -281,7 +313,8 @@ def _(
         )
     model_scores = pd.DataFrame(score_rows).set_index("model")
     print(f"Same split size: train {len(y_train)}, test {len(y_test)}")
-    print(model_scores.round(1).to_string())
+    mo.Html(model_scores.round(1).to_html())
+    return model_scores, price_forest
 
 
 @app.cell
@@ -318,8 +351,8 @@ def _(
     )
     best_rmse = comparison["test_rmse"].idxmin()
     best_r2 = comparison["test_r2"].idxmax()
-    print(comparison.round(1).to_string())
-    return mo.Html(comparison.round(1).to_html())
+    mo.Html(comparison.round(1).to_html())
+    return comparison, best_rmse, best_r2
 
 
 @app.cell
@@ -335,6 +368,7 @@ def _(plt, price_forest, sns):
     _axes.set_title("Forest importance")
     _axes.tick_params(axis="x", rotation=30)
     _figure.tight_layout()
+    _figure
     return _figure
 
 
@@ -371,6 +405,112 @@ student_baseline = "drop_first"
     return
 
 
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Why does the linear model use `drop_first=True` on body style? One sentence in `student_drop_first`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_drop_first = None
+    print(student_drop_first)
+    return (student_drop_first,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+So one style is the **baseline** in the intercept and the remaining columns are **differences** from that style (avoiding a redundant dummy trap).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which model has the lowest test RMSE in `comparison`? Store its index name in `student_best_model`.
+    """)
+    return
+
+
+@app.cell
+def _(comparison):
+    student_best_model = None
+    print(student_best_model)
+    return (student_best_model,)
+
+
+@app.cell(hide_code=True)
+def _(comparison, mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_best_model = comparison["test_rmse"].idxmin()
+student_best_model
+```
+**forest** wins on test RMSE (about 4,082 dollars on this split).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Why are horsepower and mpg standardized for kNN and SVR but not for the tree? Short answer in `student_scale_why`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_scale_why = None
+    print(student_scale_why)
+    return (student_scale_why,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+Neighbors and the RBF kernel use **distance**, so columns need comparable units; trees split one column at a time and do not need z-scores for that.
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What unit is RMSE in for every model in the table? Store one word in `student_rmse_unit`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_rmse_unit = None
+    print(student_rmse_unit)
+    return (student_rmse_unit,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+**Dollars** — price was never standardized, so errors are measured in dollars for every method.
+""")}, lazy=True)
+    return
+
+
 @app.cell(hide_code=True)
 def _(best_r2, best_rmse, comparison, mo, omitted_style, price_ols):
     mo.md(f"""
@@ -378,7 +518,7 @@ def _(best_r2, best_rmse, comparison, mo, omitted_style, price_ols):
 
     **Key takeaways:**
 
-    - The linear model omits **{omitted_style[0]}**. Training R² is {price_ols.rsquared:.3f} and the F-test p-value is {price_ols.f_pvalue:.3e}. The condition number is {price_ols.condition_number:,.0f}: city mpg and highway mpg move together, so those two slopes are hard to separate.
+    - The linear model omits **{omitted_style[0]}**. Training R² is {price_ols.rsquared:.3f} and the F-test p-value is {price_ols.f_pvalue:.3e}. The condition number is {price_ols.condition_number:,.0f}, partly because city mpg and highway mpg move together (corr ≈ 0.97), so those two slopes are hard to separate; mixed units also inflate it.
     - On this test split, the smallest RMSE is **{best_rmse}**, at {comparison.loc[best_rmse, "test_rmse"]:,.0f} dollars. The largest test R² is **{best_r2}**, at {comparison.loc[best_r2, "test_r2"]:.3f}.
     - Neighbors and the RBF model see z-scored horsepower and mpg. The linear model, the tree, and the forest see the original units. Price is in dollars for every row of the table.
     - A training R² close to 1, next to a lower test R², means the fit is using the training cars more tightly than it can use a new car.

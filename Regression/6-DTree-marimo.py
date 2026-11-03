@@ -17,30 +17,61 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.metrics import r2_score, root_mean_squared_error
     from sklearn.model_selection import train_test_split
     from sklearn.tree import DecisionTreeRegressor, plot_tree
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         DecisionTreeRegressor,
+        mo,
+        np,
+        pd,
+        plt,
         plot_tree,
         r2_score,
         root_mean_squared_error,
+        sns,
         train_test_split,
     )
 
@@ -92,6 +123,7 @@ def _(DecisionTreeRegressor, np, pd, plt, sns, train_test_split):
         x=toy_x_test["x"], y=toy_y_test, s=60, color="darkblue", label="Test", ax=_axes
     )
     _axes.set_title("Ten points")
+    _figure
     return _figure, depth_two, stump, toy_x_test, toy_x_train, toy_y_test, toy_y_train
 
 
@@ -130,6 +162,7 @@ def _(np, plt, plot_tree, r2_score, stump, toy_x_test, toy_x_train, toy_y_test, 
         ax=_axes,
     )
     _axes.set_title("Maximum depth 1")
+    _figure
     return _figure
 
 
@@ -145,6 +178,7 @@ def _(depth_two, np, pd, plt, r2_score, stump, toy_x_test, toy_x_train, toy_y_te
     _axes.plot(_grid["x"], depth_two.predict(_grid), color="darkgreen", label="Depth 2")
     _axes.set_title("Leaf averages on a grid")
     _axes.legend()
+    _figure
     return _figure
 
 
@@ -160,6 +194,7 @@ def _(plt, plot_tree, depth_two):
         ax=_axes,
     )
     _axes.set_title("Maximum depth 2")
+    _figure
     return _figure
 
 
@@ -194,6 +229,7 @@ def _():
 def _(
     DecisionTreeRegressor,
     advertising_file,
+    mo,
     pd,
     plt,
     plot_tree,
@@ -235,7 +271,8 @@ def _(
         _ax.set_title(_label)
     tv_scores = pd.DataFrame(tv_rows).set_index("limit")
     _figure.tight_layout()
-    print(tv_scores.round(3).to_string())
+    mo.Html(tv_scores.round(3).to_html())
+    _figure
     return _figure
 
 
@@ -244,7 +281,7 @@ def _(mo):
     mo.md(r"""
     ## Three budgets
 
-    The same markets, now with TV, radio, and newspaper. Model A keeps at least 20 training rows in every leaf. Model B refuses to split a node that has 50 or fewer training rows. Model C uses the defaults, so a leaf can hold a single market.
+    The same markets, now with TV, radio, and newspaper. Model A keeps at least 20 training rows in every leaf. Model B refuses to split a node with fewer than 50 training rows. Model C uses the defaults, so a leaf can hold a single market.
 
     The default tree is too large to read as a picture. The cell prints its depth and its number of leaves instead, and draws the two limited trees.
     """)
@@ -255,6 +292,7 @@ def _(mo):
 def _(
     DecisionTreeRegressor,
     ads,
+    mo,
     pd,
     plt,
     plot_tree,
@@ -303,7 +341,8 @@ def _(
         )
         _ax.set_title(_label)
     _figure.tight_layout()
-    print(multi_scores.round(3).to_string())
+    mo.Html(multi_scores.round(3).to_html())
+    _figure
     return _figure
 
 
@@ -337,6 +376,116 @@ student_split_limit = "min_samples_split"
         },
         lazy=True,
     )
+    return
+
+
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What number does a leaf predict? One short phrase in `student_leaf_prediction`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_leaf_prediction = None
+    print(student_leaf_prediction)
+    return (student_leaf_prediction,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+The **average y of the training rows in that leaf** (region).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On TV-only trees, which limit gives the lowest test RMSE in `tv_scores`? Store the index label in `student_tv_best`.
+    """)
+    return
+
+
+@app.cell
+def _(tv_scores):
+    student_tv_best = None
+    print(student_tv_best)
+    return (student_tv_best,)
+
+
+@app.cell(hide_code=True)
+def _(mo, tv_scores):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_tv_best = tv_scores["test_rmse"].idxmin()
+student_tv_best
+```
+**min_samples_split=70** has the lowest test RMSE on this split (about 2.088).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What does `max_depth=2` limit? Replace `None` with a short phrase in `student_depth_limit`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_depth_limit = None
+    print(student_depth_limit)
+    return (student_depth_limit,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+**How many splits can be stacked** from the root (depth counts splits from the top).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many leaves does the default three-budget tree (`C defaults`) have? Store `student_default_leaves` from `multi_scores`.
+    """)
+    return
+
+
+@app.cell
+def _(multi_scores):
+    student_default_leaves = None
+    print(student_default_leaves)
+    return (student_default_leaves,)
+
+
+@app.cell(hide_code=True)
+def _(mo, multi_scores):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_default_leaves = int(multi_scores.loc["C defaults", "leaves"])
+student_default_leaves
+```
+The unrestricted tree has **132** leaves on this split—it memorizes many small regions.
+""")}, lazy=True)
     return
 
 

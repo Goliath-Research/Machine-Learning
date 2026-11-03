@@ -18,32 +18,63 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import pandas as pd
     import seaborn as sns
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import r2_score, root_mean_squared_error
+    from sklearn.model_selection import train_test_split
+    import statsmodels.api as sm
 
     plt.rcParams["figure.max_open_warning"] = 0
     sns.set_theme(style="whitegrid")
 
-    return mo, pd, plt, sns
-
-
-@app.cell
-def _():
-    from sklearn.linear_model import LinearRegression
-    from sklearn.metrics import r2_score, root_mean_squared_error
-    from sklearn.model_selection import train_test_split
-
-    return LinearRegression, r2_score, root_mean_squared_error, train_test_split
-
-
-@app.cell
-def _():
-    import statsmodels.api as sm
-
-    return (sm,)
+    return (
+        LinearRegression,
+        mo,
+        pd,
+        plt,
+        r2_score,
+        root_mean_squared_error,
+        sm,
+        sns,
+        train_test_split,
+    )
 
 
 @app.cell(hide_code=True)
@@ -94,6 +125,7 @@ def _(advertising_file, mo, pd):
     # ads = pd.read_csv("advertising.csv")
     ads = pd.read_csv(advertising_file)
     print(f"{ads.shape[0]} markets, {ads.shape[1]} columns")
+    mo.Html(ads.head().to_html())
     return mo.Html(ads.head().to_html())
 
 
@@ -102,6 +134,7 @@ def _(ads, plt, sns):
     _figure, _axes = plt.subplots(figsize=(5, 4))
     sns.heatmap(ads.corr(), annot=True, cmap="Blues", ax=_axes)
     _axes.set_title("Correlations")
+    _figure
     return _figure
 
 
@@ -116,7 +149,7 @@ def _(ads, mo):
 
     {_lines}
 
-    A correlation near zero means that budget, by itself, moves almost in step with nothing in sales. The pair plot shows the same clouds.
+    The weakest correlation with sales is the smallest number in that list. The pair plot shows the same clouds.
     """)
     return
 
@@ -126,6 +159,7 @@ def _(ads, sns):
     _pairs = sns.pairplot(ads, corner=True)
     _pairs.figure.suptitle("Each pair of columns", y=1.02)
     pair_figure = _pairs.figure
+    pair_figure
     return pair_figure
 
 
@@ -182,9 +216,13 @@ def _(mo):
 
 
 @app.cell
-def _(budgets_train, sales_train, sm):
+def _(budgets_train, mo, sales_train, sm):
     full_ols = sm.OLS(sales_train, sm.add_constant(budgets_train)).fit()
-    print(full_ols.summary())
+    print(
+        f"R² = {full_ols.rsquared:.4f}, F = {full_ols.fvalue:.2f} "
+        f"(p = {full_ols.f_pvalue:.2e})"
+    )
+    mo.Html(full_ols.summary().tables[1].as_html())
 
 
 @app.cell(hide_code=True)
@@ -207,6 +245,7 @@ def _(
     full_ols,
     r2_score,
     root_mean_squared_error,
+    mo,
     sales_test,
     sales_train,
     sm,
@@ -220,7 +259,11 @@ def _(
     reduced_train_r2 = r2_score(
         sales_train, reduced_ols.predict(sm.add_constant(budgets_train[kept]))
     )
-    print(reduced_ols.summary())
+    print(
+        f"R² = {reduced_ols.rsquared:.4f}, F = {reduced_ols.fvalue:.2f} "
+        f"(p = {reduced_ols.f_pvalue:.2e})"
+    )
+    mo.Html(reduced_ols.summary().tables[1].as_html())
     print(f"Dropped column: {dropped_budget}")
     print(f"Reduced training R² = {reduced_train_r2:.3f}")
     print(
@@ -256,6 +299,140 @@ student_joint_test = "F-statistic"
 ```
 **F-statistic.** Its p-value asks whether every slope could be zero. Each `P>|t|` asks that question for one slope.
 ''')
+        },
+        lazy=True,
+    )
+    return
+
+
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which budget has the **strongest** correlation with sales in the heatmap? Store its name in `student_strongest_budget`.
+    """)
+    return
+
+
+@app.cell
+def _(ads):
+    student_strongest_budget = None
+    print(student_strongest_budget)
+    return (student_strongest_budget,)
+
+
+@app.cell(hide_code=True)
+def _(ads, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_strongest_budget = ads.corr()["Sales"].drop("Sales").idxmax()
+student_strongest_budget
+```
+**TV** has the largest correlation with sales (about 0.78). Correlation is not the same as a partial slope, but it matches the dominant pattern in the pair plot.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What does a partial slope mean when several budgets are in the model? Complete: "It is the change in sales when that budget increases by one unit while ___."
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_partial_phrase = None
+    print(student_partial_phrase)
+    return (student_partial_phrase,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**…while the other budgets in the model are held fixed.** That is what "partial" means in multiple regression.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which predictor has the largest p-value on its slope in `full_ols` (excluding the intercept)? Store the name in `student_largest_p`.
+    """)
+    return
+
+
+@app.cell
+def _(full_ols):
+    student_largest_p = None
+    print(student_largest_p)
+    return (student_largest_p,)
+
+
+@app.cell(hide_code=True)
+def _(full_ols, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_largest_p = full_ols.pvalues.drop("const").idxmax()
+student_largest_p
+```
+**Newspaper** has the largest p-value (about 0.93), so this sample does not distinguish its slope from zero.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    After dropping that column, did test RMSE change much? Store `True` or `False` in `student_rmse_stable` if test RMSE moved by less than 0.05 from the full model.
+    """)
+    return
+
+
+@app.cell
+def _(full_test_rmse, reduced_test_rmse):
+    student_rmse_stable = None
+    print(student_rmse_stable)
+    return (student_rmse_stable,)
+
+
+@app.cell(hide_code=True)
+def _(full_test_rmse, mo, reduced_test_rmse):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_rmse_stable = abs(full_test_rmse - reduced_test_rmse) < 0.05
+student_rmse_stable
+```
+**True.** Full-model test RMSE is about 0.943 and reduced-model test RMSE is about 0.943 on this split—the drop barely moves prediction error.
+""")
         },
         lazy=True,
     )
@@ -309,7 +486,7 @@ def _(mo):
         {
             "Show answers": mo.md(r"""
 1. **A partial change:** It is the change in sales tied to that budget when the other budgets in the model are held fixed.
-2. **Newspaper:** Its correlation with sales is near zero. TV is the strongest of the three.
+2. **Newspaper:** Its correlation with sales is the weakest of the three (about 0.158). TV is the strongest.
 3. **The data do not separate it from zero:** A large p-value is not proof that the budget never matters. It says this sample does not detect a slope.
 4. **Whether every slope could be zero together:** That is separate from the test of one slope.
 5. **To see whether prediction changes:** A column can fail its t-test and still be checked on the test markets.

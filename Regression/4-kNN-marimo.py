@@ -17,32 +17,63 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.metrics import r2_score, root_mean_squared_error
     from sklearn.model_selection import GridSearchCV, train_test_split
     from sklearn.neighbors import KNeighborsRegressor
     from sklearn.preprocessing import StandardScaler
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         GridSearchCV,
         KNeighborsRegressor,
         StandardScaler,
+        mo,
+        np,
+        pd,
+        plt,
         r2_score,
         root_mean_squared_error,
+        sns,
         train_test_split,
     )
 
@@ -97,6 +128,7 @@ def _(advertising_file, mo, pd):
     # ads = pd.read_csv("advertising.csv")
     ads = pd.read_csv(advertising_file)
     print(f"{ads.shape[0]} markets, {ads.shape[1]} columns")
+    mo.Html(ads.head().to_html())
     return mo.Html(ads.head().to_html())
 
 
@@ -137,6 +169,7 @@ def _(
         _ax.set_title(f"k = {_k}\nTest R² = {r2_score(sales_tv_test, _hat):.3f}")
         _ax.set_xlabel("TV (training z-score)")
     _figure.tight_layout()
+    _figure
     return _figure
 
 
@@ -184,6 +217,7 @@ def _(
         )
     knn_scores = pd.DataFrame(knn_rows).set_index("k")
     print(f"Train = {len(budgets_train)} \t Test = {len(budgets_test)}")
+    mo.Html(knn_scores.round(3).to_html())
     return mo.Html(knn_scores.round(3).to_html())
 
 
@@ -253,12 +287,23 @@ def _(
     _axes[0].set_xlabel("k")
     _axes[0].set_ylabel("Test RMSE")
     _axes[1].plot(k_values, -rmse_search.cv_results_["mean_test_score"], color="firebrick", label="CV RMSE")
-    _axes[1].plot(k_values, r2_search.cv_results_["mean_test_score"], color="steelblue", label="CV R²")
+    _axes[1].set_ylabel("CV RMSE")
+    _twin = _axes[1].twinx()
+    _twin.plot(
+        k_values,
+        r2_search.cv_results_["mean_test_score"],
+        color="steelblue",
+        label="CV R²",
+    )
+    _twin.set_ylabel("CV R²")
     _axes[1].axvline(cv_rmse_k, color="gray", linestyle="--")
     _axes[1].set_title("10-fold scores on the training rows")
     _axes[1].set_xlabel("k")
-    _axes[1].legend()
+    _h1, _l1 = _axes[1].get_legend_handles_labels()
+    _h2, _l2 = _twin.get_legend_handles_labels()
+    _axes[1].legend(_h1 + _h2, _l1 + _l2, loc="upper right")
     _figure.tight_layout()
+    _figure
     return _figure
 
 
@@ -292,6 +337,116 @@ student_rmse_scoring = "neg_root_mean_squared_error"
         },
         lazy=True,
     )
+    return
+
+
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Why is `StandardScaler` fit on the training budgets only? One sentence in `student_scaler_reason`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_scaler_reason = None
+    print(student_scaler_reason)
+    return (student_scaler_reason,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+Test markets must not change the training means and standard deviations; the scaler learns from training rows and only **transforms** test rows.
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    With three standardized budgets, which k has lower test RMSE in `knn_scores`, 3 or 5? Store the integer in `student_better_k`.
+    """)
+    return
+
+
+@app.cell
+def _(knn_scores):
+    student_better_k = None
+    print(student_better_k)
+    return (student_better_k,)
+
+
+@app.cell(hide_code=True)
+def _(knn_scores, mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_better_k = int(knn_scores["test_rmse"].idxmin())
+student_better_k
+```
+**3** has lower test RMSE (about 2.01 vs 2.13 for k = 5 on this split).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What does a k-nearest neighbors regressor predict for a new row? Fill in `student_knn_prediction`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_knn_prediction = None
+    print(student_knn_prediction)
+    return (student_knn_prediction,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+The **average sales of the k closest training markets** (in standardized budget space).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Ten-fold search picked `cv_rmse_k` for RMSE. Store that k in `student_cv_k` from the variable already computed above.
+    """)
+    return
+
+
+@app.cell
+def _(cv_rmse_k):
+    student_cv_k = None
+    print(student_cv_k)
+    return (student_cv_k,)
+
+
+@app.cell(hide_code=True)
+def _(cv_rmse_k, mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_cv_k = cv_rmse_k
+student_cv_k
+```
+Cross-validation on the training rows picks **k = 2** for RMSE on this split.
+""")}, lazy=True)
     return
 
 
