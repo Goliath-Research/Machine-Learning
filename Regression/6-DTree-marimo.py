@@ -271,8 +271,7 @@ def _(
         _ax.set_title(_label)
     tv_scores = pd.DataFrame(tv_rows).set_index("limit")
     _figure.tight_layout()
-    mo.Html(tv_scores.round(3).to_html())
-    _figure
+    mo.vstack([mo.Html(tv_scores.round(3).to_html()), _figure])
     return _figure
 
 
@@ -341,8 +340,7 @@ def _(
         )
         _ax.set_title(_label)
     _figure.tight_layout()
-    mo.Html(multi_scores.round(3).to_html())
-    _figure
+    mo.vstack([mo.Html(multi_scores.round(3).to_html()), _figure])
     return _figure
 
 
