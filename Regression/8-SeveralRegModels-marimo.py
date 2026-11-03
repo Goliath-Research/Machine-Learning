@@ -181,9 +181,17 @@ def _(cars, plt, sns):
         data=cars, x="horsepower", y="price", hue="body_style", ax=_axes[0]
     )
     _axes[0].set_title("Price and horsepower")
+    _axes[0].legend(
+        title="Body style",
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+        borderaxespad=0,
+        fontsize=8,
+    )
     sns.countplot(x=cars["body_style"], ax=_axes[1], color="steelblue")
     _axes[1].set_title("Body style")
     _axes[1].tick_params(axis="x", rotation=30)
+    _figure.subplots_adjust(wspace=0.45)
     _figure.tight_layout()
     _figure
     return _figure
@@ -218,7 +226,15 @@ def _(cars, mo, pd, sm, train_test_split):
         f"R² = {price_ols.rsquared:.4f}, F = {price_ols.fvalue:.2f} "
         f"(p = {price_ols.f_pvalue:.2e})"
     )
-    mo.Html(price_ols.summary().tables[1].as_html())
+    _coef_table = pd.DataFrame(
+        {
+            "coef": price_ols.params,
+            "std err": price_ols.bse,
+            "t": price_ols.tvalues,
+            "P>|t|": price_ols.pvalues,
+        }
+    )
+    mo.Html(_coef_table.round(4).to_html())
     return (
         design_test,
         design_train,
@@ -313,7 +329,6 @@ def _(
         )
     model_scores = pd.DataFrame(score_rows).set_index("model")
     print(f"Same split size: train {len(y_train)}, test {len(y_test)}")
-    mo.Html(model_scores.round(1).to_html())
     return model_scores, price_forest
 
 

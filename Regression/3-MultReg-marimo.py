@@ -216,13 +216,21 @@ def _(mo):
 
 
 @app.cell
-def _(budgets_train, mo, sales_train, sm):
+def _(budgets_train, mo, pd, sales_train, sm):
     full_ols = sm.OLS(sales_train, sm.add_constant(budgets_train)).fit()
     print(
         f"R² = {full_ols.rsquared:.4f}, F = {full_ols.fvalue:.2f} "
         f"(p = {full_ols.f_pvalue:.2e})"
     )
-    mo.Html(full_ols.summary().tables[1].as_html())
+    _coef_table = pd.DataFrame(
+        {
+            "coef": full_ols.params,
+            "std err": full_ols.bse,
+            "t": full_ols.tvalues,
+            "P>|t|": full_ols.pvalues,
+        }
+    )
+    mo.Html(_coef_table.round(4).to_html())
 
 
 @app.cell(hide_code=True)
@@ -246,6 +254,7 @@ def _(
     r2_score,
     root_mean_squared_error,
     mo,
+    pd,
     sales_test,
     sales_train,
     sm,
@@ -263,12 +272,20 @@ def _(
         f"R² = {reduced_ols.rsquared:.4f}, F = {reduced_ols.fvalue:.2f} "
         f"(p = {reduced_ols.f_pvalue:.2e})"
     )
+    _coef_table = pd.DataFrame(
+        {
+            "coef": reduced_ols.params,
+            "std err": reduced_ols.bse,
+            "t": reduced_ols.tvalues,
+            "P>|t|": reduced_ols.pvalues,
+        }
+    )
+    mo.Html(_coef_table.round(4).to_html())
     print(f"Dropped column: {dropped_budget}")
     print(f"Reduced training R² = {reduced_train_r2:.3f}")
     print(
         f"Reduced testing  R² = {reduced_test_r2:.3f}    RMSE = {reduced_test_rmse:.3f}"
     )
-    mo.Html(reduced_ols.summary().tables[1].as_html())
     return dropped_budget, kept, reduced_test_r2, reduced_test_rmse, reduced_train_r2
 
 
@@ -333,7 +350,7 @@ def _(ads, mo):
 student_strongest_budget = ads.corr()["Sales"].drop("Sales").idxmax()
 student_strongest_budget
 ```
-**TV** has the largest correlation with sales (about 0.78). Correlation is not the same as a partial slope, but it matches the dominant pattern in the pair plot.
+**TV** has the largest correlation with sales (about 0.901). Correlation is not the same as a partial slope, but it matches the dominant pattern in the pair plot.
 """)
         },
         lazy=True,
@@ -431,7 +448,7 @@ def _(full_test_rmse, mo, reduced_test_rmse):
 student_rmse_stable = abs(full_test_rmse - reduced_test_rmse) < 0.05
 student_rmse_stable
 ```
-**True.** Full-model test RMSE is about 0.943 and reduced-model test RMSE is about 0.943 on this split—the drop barely moves prediction error.
+**True.** Full-model test RMSE is about 2.093 and reduced-model test RMSE is about 2.093 on this split—the drop barely moves prediction error.
 """)
         },
         lazy=True,

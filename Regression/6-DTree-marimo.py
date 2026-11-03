@@ -271,8 +271,12 @@ def _(
         _ax.set_title(_label)
     tv_scores = pd.DataFrame(tv_rows).set_index("limit")
     _figure.tight_layout()
-    mo.vstack([mo.Html(tv_scores.round(3).to_html()), _figure])
-    return _figure
+    _panel = mo.vstack(
+        [mo.Html(tv_scores.round(3).to_html()), _figure],
+        gap=1,
+    )
+    _panel
+    return _figure, tv_scores
 
 
 @app.cell(hide_code=True)
@@ -340,8 +344,12 @@ def _(
         )
         _ax.set_title(_label)
     _figure.tight_layout()
-    mo.vstack([mo.Html(multi_scores.round(3).to_html()), _figure])
-    return _figure
+    _panel = mo.vstack(
+        [mo.Html(multi_scores.round(3).to_html()), _figure],
+        gap=1,
+    )
+    _panel
+    return _figure, multi_scores
 
 
 @app.cell(hide_code=True)
@@ -428,7 +436,7 @@ def _(mo, tv_scores):
 student_tv_best = tv_scores["test_rmse"].idxmin()
 student_tv_best
 ```
-**min_samples_split=70** has the lowest test RMSE on this split (about 2.088).
+**min_samples_leaf=15** has the lowest test RMSE on this TV-only split (about 2.685). **min_samples_split=70** is the highest of the three (about 2.713).
 """)}, lazy=True)
     return
 

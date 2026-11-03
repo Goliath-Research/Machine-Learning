@@ -289,13 +289,21 @@ def _(mo):
 
 
 @app.cell
-def _(sales_train, sm, tv_train):
+def _(mo, pd, sales_train, sm, tv_train):
     ols_line = sm.OLS(sales_train, sm.add_constant(tv_train)).fit()
     print(
         f"R² = {ols_line.rsquared:.4f}, F = {ols_line.fvalue:.2f} "
         f"(p = {ols_line.f_pvalue:.2e})"
     )
-    mo.Html(ols_line.summary().tables[1].as_html())
+    _coef_table = pd.DataFrame(
+        {
+            "coef": ols_line.params,
+            "std err": ols_line.bse,
+            "t": ols_line.tvalues,
+            "P>|t|": ols_line.pvalues,
+        }
+    )
+    mo.Html(_coef_table.round(4).to_html())
 
 
 @app.cell

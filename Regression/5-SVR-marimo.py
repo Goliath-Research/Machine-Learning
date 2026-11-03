@@ -414,7 +414,7 @@ def _(curve_search, mo):
 student_curve_cv_r2 = curve_search.best_score_
 student_curve_cv_r2
 ```
-The best mean CV R² is about **0.90** for the winning `(C, epsilon, gamma)` on the synthetic training folds.
+The best mean CV R² is about **0.93** for the winning `(C, epsilon, gamma)` on the synthetic training folds.
 """)}, lazy=True)
     return
 
