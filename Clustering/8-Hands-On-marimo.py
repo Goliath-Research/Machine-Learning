@@ -300,10 +300,10 @@ def _(StandardScaler, pd, px, tips):
 
 @app.cell(hide_code=True)
 def _(mo, money):
-    mo.md(f"""
+    mo.md(rf"""
     Read the two plots together.
 
-    - **Original scale.** The bill box sits far above the tip box and is much taller: `total_bill` runs from ${money.total_bill.min():.2f} to ${money.total_bill.max():.2f} with a standard deviation of ${money.total_bill.std():.2f}, while `tip` runs from ${money.tip.min():.2f} to ${money.tip.max():.2f} with a standard deviation of ${money.tip.std():.2f}. On this scale, one bill difference can be twenty times the entire range of tips.
+    - **Original scale.** The bill box sits far above the tip box and is much taller: `total_bill` runs from \${money.total_bill.min():.2f} to \${money.total_bill.max():.2f} with a standard deviation of \${money.total_bill.std():.2f}, while `tip` runs from \${money.tip.min():.2f} to \${money.tip.max():.2f} with a standard deviation of \${money.tip.std():.2f}. On this scale, the full bill range is about five times the full tip range.
     - **Standardized.** Both columns are now centred near 0 with a standard deviation of 1, so neither dominates the distance.
 
     Without this step, every algorithm in the lesson would effectively cluster on the bill alone and the tip would contribute almost nothing.
@@ -650,11 +650,11 @@ def _(mo, small_index, tips):
 @app.cell(hide_code=True)
 def _(mo, small_count, small_index, tips):
     _p = tips.loc[small_index]
-    mo.md(f"""
+    mo.md(rf"""
     Both parties spent far more than everyone else:
 
-    - Bills of **${_p.total_bill.min():.2f}** and **${_p.total_bill.max():.2f}**, against a median bill of ${tips.total_bill.median():.2f}.
-    - Tips of **${_p.tip.min():.2f}** and **${_p.tip.max():.2f}**, against a median tip of ${tips.tip.median():.2f}.
+    - Bills of **\${_p.total_bill.min():.2f}** and **\${_p.total_bill.max():.2f}**, against a median bill of \${tips.total_bill.median():.2f}.
+    - Tips of **\${_p.tip.min():.2f}** and **\${_p.tip.max():.2f}**, against a median tip of \${tips.tip.median():.2f}.
 
     Both were male, on a Saturday, at dinner, with 3 and 4 people. Those attributes are printed for context; **they played no part in the distance**. The two parties were separated because of how much money they spent, not because of who they were.
 
@@ -904,9 +904,12 @@ def _(mo):
 
 
 @app.cell
-def _(cluster_index, second_labels):
+def _(second_labels):
     cluster_index = second_labels["mean shift"]
-    return (cluster_index,)@app.cell
+    return (cluster_index,)
+
+
+@app.cell
 def _(cluster_index, mo, pd, scaled_kept, tips):
     _kept = tips.loc[scaled_kept.index]
     _lab = pd.Series(cluster_index, index=scaled_kept.index, name="cluster")
@@ -950,15 +953,15 @@ def _(cluster_index, mo, np, scaled_kept, tips):
         ["total_bill", "tip", "size"]
     ].mean()
     _lines = "\n".join(
-        f"    - **Cluster {_c}** ({_sizes[_c]} parties): mean bill ${_r.total_bill:.2f}, "
-        f"mean tip ${_r.tip:.2f}, mean party size {_r['size']:.1f}"
+        f"    - **Cluster {_c}** ({_sizes[_c]} parties): mean bill \\${_r.total_bill:.2f}, "
+        f"mean tip \\${_r.tip:.2f}, mean party size {_r['size']:.1f}"
         for _c, _r in _means.iterrows()
     )
     mo.md(f"""
     Read the four tables for what separates the clusters, and what does not.
 
-    - **Sex is nearly identical** in both groups: roughly 64% male and 36% female in each. The clustering did not find anything about sex.
-    - **Smoking differs somewhat**: one cluster is 39% smokers, the other 27%. A real difference, though modest.
+    - **Sex is nearly identical** in both groups: about 63% male in one cluster and 69% in the other (36% and 31% female). The clustering did not find anything about sex.
+    - **Smoking differs somewhat**: one cluster is about 38.9% smokers, the other about 30.8%. A real difference, though modest.
     - **Day and time differ only slightly.** Both clusters are mostly Saturday and Sunday, mostly dinner.
 
     So the honest conclusion is that the two groups are **not** separated by who the customers were. They are separated by what they spent, which is precisely the two columns the algorithms were given:
@@ -967,7 +970,7 @@ def _(cluster_index, mo, np, scaled_kept, tips):
 
     The second cluster spends roughly twice as much per party, which is what a clustering of `total_bill` and `tip` was always going to find. Its parties are also slightly larger, which explains part of the gap: more people means a bigger bill.
 
-    **Caveat.** These are descriptive percentages from one restaurant. Turning "39% versus 27% smokers" into a claim about tipping behaviour would need a statistical test, and would still be confounded by the fact that larger parties spend more. This lesson stops at description.
+    **Caveat.** These are descriptive percentages from one restaurant. Turning "38.9% versus 30.8% smokers" into a claim about tipping behaviour would need a statistical test, and would still be confounded by the fact that larger parties spend more. This lesson stops at description.
     """)
     return
 

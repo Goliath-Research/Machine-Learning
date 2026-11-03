@@ -342,7 +342,7 @@ def _(mo):
     mo.md(r"""
     Read the table as three separate questions.
 
-    - **At k = 2**, where the answer is unambiguous, k-means scores about **0.25** and spectral scores **1.00**. k-means agrees with the truth on only about a quarter of the paired comparisons, which is slightly better than chance but far from the two arms.
+    - **At k = 2**, where the answer is unambiguous, k-means scores about **0.25** on the adjusted Rand index and spectral scores **1.00**. That 0.25 is the ARI, not plain pair agreement (which would be about **0.63** here). k-means is slightly better than chance but far from the two arms.
     - **At k = 3 and k = 6**, k-means stays near **0.26** and **0.28**. Its answer has not improved with more centers, because the problem is not the number of groups.
     - **Spectral falls to 0.75 and then 0.34**, but for a different reason: the partition is still clean, it simply splits each crescent into smaller pieces. A score below 1 does not always mean a bad clustering. It can mean a finer clustering of the same shape.
 
@@ -513,7 +513,7 @@ def _(mo):
 
 @app.cell
 def _(circle_sparse_warnings, mo):
-    if circle_sparse_warnings:
+    _warning_output = (
         mo.callout(
             mo.md(
                 "scikit-learn warned: "
@@ -521,8 +521,10 @@ def _(circle_sparse_warnings, mo):
             ),
             kind="warn",
         )
-    else:
-        mo.md("No warning was raised.")
+        if circle_sparse_warnings
+        else mo.md("No warning was raised.")
+    )
+    _warning_output
     return
 
 
@@ -938,7 +940,7 @@ def _(SpectralClustering, TfidfVectorizer, np, pd):
         "Python is a programming language",
         "Python language is used for machine learning",
         "Machine learning can be done with Python",
-        "Artificial Intelligence is a branch of machine learning",
+        "Machine learning is a branch of Artificial Intelligence",
         "Learning Python is fun",
         "Python is easy to learn and powerful",
         "Machine learning is a fascinating field",

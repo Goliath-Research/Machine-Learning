@@ -297,12 +297,12 @@ def _(mo):
     - **Merge 0, height 0.479:** points **1** and **5** join first. They are the closest pair in the cloud.
     - **Merge 1, height 0.545:** points **3** and **8** join, a second pair almost as close.
     - **Merge 2, height 1.355:** point **7** joins the 3-8 group, making a group of three.
-    - **Merges 3 to 5, heights 1.375 to 1.737:** three more small groups form: 0 with 6, 9 with the 1-5 pair, and 2 with the 3-8-7 group.
+    - **Merges 3 to 5, heights 1.375 to 1.737:** three more small groups form: 0 with 6, 9 with the 1-5 pair, and 2 with the {0, 6} pair.
     - **Merge 6, height 4.237:** two of those groups combine into four points.
     - **Merge 7, height 6.842:** two groups combine into six points.
     - **Merge 8, height 15.976:** the last merge joins everything.
 
-    The final merge tells you the top-level split. Cutting just below 15.976 leaves two branches: **{1, 4, 5, 9}** and **{0, 2, 3, 6, 7, 8}**. Those are the two largest groups the tree offers, and they are the ones a cut at height 2 through 8 recovers.
+    The final merge tells you the top-level split. Cutting just below 15.976 leaves two branches: **{1, 4, 5, 9}** and **{0, 2, 3, 6, 7, 8}**. Those are the two largest groups the tree offers, and a horizontal cut with height **between about 6.84 and 15.98** recovers them (a cut at 2 through 6 still leaves three or more clusters).
     """)
     return
 

@@ -253,7 +253,7 @@ def _(mo):
     mo.md(r"""
     ## 1. Three densities: the reachability landscape
 
-    Three groups with standard deviations 0.6, 0.1, and 3.0. The middle one is ten times tighter than the first, and the last is thirty times wider than the tight one.
+    Three groups with standard deviations 0.6, 0.1, and 3.0. The middle one is six times tighter than the first, and the last is thirty times wider than the tight one.
 
     OPTICS is fitted once with `min_samples=10` and `min_cluster_size=0.05` (at least 5% of the 100 points). Everything in the next two sections reuses that one fit.
     """)

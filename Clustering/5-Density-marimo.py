@@ -883,11 +883,9 @@ def _(mo):
 
     The last two datasets are the irregular shapes from earlier lessons. Both are **standardized before fitting**, and that step matters more than it looks.
 
-    DBSCAN measures distances in the units of the data. If one column has a much wider range than the other, that column dominates every distance, and `eps` ends up calibrated to it alone. Standardizing puts both columns on the same scale so `eps` means the same thing in each direction.
+    DBSCAN measures distances in the units of the data. On the moons the two coordinates have different spreads (standard deviations about **0.87** and **0.49**), so a single `eps` in raw space is not the same distance in the x and y directions. Standardizing puts both axes on comparable scales before fitting.
 
-    This is not a formality. On the moons, clustering the **raw** coordinates with `eps=0.5` and `min_samples=10` produces **1 cluster and 0 noise** with an adjusted Rand index of **0.000**, a complete failure. Standardizing first gives **2 clusters, 0 noise, and an adjusted Rand index of 1.000**. Same data, same parameters, opposite outcome.
-
-    The plots below use the original coordinates so the shapes stay recognisable, while the fits use the standardized values.
+    With **`min_samples=10`**, the default `eps` on **standardized** moons gives **2 clusters, 0 noise, and an adjusted Rand index of 1.000**. On the **raw** coordinates the same default `eps=0.5` merges the crescents (**1 cluster**, ARI **0.000**). A tighter raw `eps` can recover the shape, but then `eps` is doing different work in each direction. That is why this section standardizes before fitting even though the plots use the original coordinates for display.
     """)
     return
 
@@ -994,7 +992,7 @@ def _(mo, moon_db_ari, moon_db_groups, moon_db_noise, moon_op_ari, moon_op_group
 
     A perfect score here needs a caveat. OPTICS and DBSCAN both recovered the two crescents and discarded **no** points, so the partition is unambiguous. But as the background section warns, a score of 1.0 alone would not have proved that: if one entire crescent had been labelled noise and the other clustered correctly, the index would also have been 1.0. It is the combination of **score 1.0, two clusters, and zero noise** that establishes the result.
 
-    The point-type plot is worth a second look. Each crescent has a dense core running along its length and a thin halo of border points at the edges. That is what a crescent looks like to a density algorithm: a curve of high density, not a blob.
+    The point-type plot is worth a second look. With `min_samples=10` on standardized moons, every point is **core** (500 core, 0 border, 0 noise): the crescents are dense enough that each point has enough neighbours within `eps`. That is what a crescent looks like to a density algorithm here: a crowded curve, not a blob with a fringe of border points.
     """)
     return
 
@@ -1188,7 +1186,7 @@ def _(
     3. **Zero noise does not mean a good fit.** At `eps=2` the summary reads one cluster and no noise, and the grouping is wrong. Noise is what the algorithm discards, so removing it can mean the distinctions were destroyed rather than resolved.
     4. **A single `eps` cannot serve groups of different densities.** On the three-density cloud, DBSCAN with `eps=0.5` found only {int(varied_table.loc["DBSCAN eps=0.5, min_samples=10", "clusters"])} clusters and rejected {int(varied_table.loc["DBSCAN eps=0.5, min_samples=10", "noise"])} of the 100 points, because the group with standard deviation 2.0 is far sparser than the radius assumes. The tight group is easy to miss at full scale; zoom before concluding it is absent.
     5. **OPTICS handles the mixed densities by ordering rather than thresholding.** The same cloud yielded **3 clusters and 0 noise** at `min_samples=10` and `xi=0.05`. Its parameters do different jobs: `min_samples` sets the density requirement, `xi` how steep a boundary must be, and `min_cluster_size` the smallest reportable group, where a fraction means a proportion of the sample.
-    6. **`min_cluster_size` filters results rather than changing the clustering.** Raising it from 0.1 to 0.4 reduced the reported clusters from 4 to 1 while keeping noise at zero, because small groups are dropped rather than rejected. This is the opposite direction from raising `eps`, which creates noise.
+    6. **`min_cluster_size` filters results rather than changing the clustering.** Raising it from 0.1 to 0.4 reduced the reported clusters from 4 to 1; at 0.1 the table still shows **11 noise points**, while at 0.4 small groups are dropped rather than left as noise. This is the opposite direction from raising `eps`, which creates noise.
     7. **Standardizing is decisive on the moons.** On the raw coordinates the default DBSCAN produced one cluster and an adjusted Rand index of 0.000; on standardized coordinates, two clusters and 1.000.
     8. **Density methods solve the shapes the earlier methods struggled with.** Moons: {moon_db_groups} clusters, {moon_db_noise} noise, adjusted Rand {moon_db_ari:.3f} for DBSCAN and {moon_op_ari:.3f} for OPTICS. Rings: {circle_db_groups} clusters, {circle_db_noise} noise, adjusted Rand {circle_db_ari:.3f} for DBSCAN and {circle_op_ari:.3f} for OPTICS. The rings separate because of the empty band between them, which no cluster can cross.
     9. **A perfect score needs the noise count beside it.** Because every noise point shares the same label, a whole group can be relabelled as noise while the adjusted Rand index stays at 1.0. Moons and rings both reach 1.0 here with two clusters *and* zero noise, and the zero is what rules out a silently discarded group.

@@ -139,7 +139,7 @@ def _(mo):
 
     ### USArrests
 
-    **Source.** The `USArrests` dataset, distributed with the R statistical software and documented at the [R datasets reference](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/USArrests.html). A copy, `USArrests.csv`, sits beside this notebook. It is also available from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/dataset/105/us-arrests-data).
+    **Source.** The `USArrests` dataset, distributed with the R statistical software and documented at the [R datasets reference](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/USArrests.html). A copy, `USArrests.csv`, sits beside this notebook.
 
     **What it holds.** 50 rows, one per US state, with four columns measured in **1973**:
 
@@ -606,15 +606,6 @@ def _(pd, practice_models, practice_points, silhouette_score):
 
 
 @app.cell(hide_code=True)
-def _(pd, practice_models, practice_view):
-    practice_view.plot_silhouette(
-        pd.DataFrame({f"k={_k}": _m.labels_ for _k, _m in practice_models.items()}),
-        title="Silhouette scores: practice dataset",
-    )
-    return
-
-
-@app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
@@ -627,6 +618,15 @@ The scores are 0.7802 (k = 2), **0.8725 (k = 3)**, 0.6965 (k = 4), 0.4944 (k = 5
     """)
         },
         expanded=False,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(pd, practice_models, practice_view):
+    practice_view.plot_silhouette(
+        pd.DataFrame({f"k={_k}": _m.labels_ for _k, _m in practice_models.items()}),
+        title="Silhouette scores: practice dataset",
     )
     return
 
@@ -651,7 +651,6 @@ def _(mo):
 def _(Path, pd, px):
     # USArrests: arrest rates per 100,000 residents for 50 US states, 1973.
     # Source and variable descriptions: https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/USArrests.html
-    # Also available from UCI: https://archive.ics.uci.edu/dataset/105/us-arrests-data
     # Note: these are ARRESTS, not crimes. They reflect police activity, not only offending.
     # Save USArrests.csv beside this notebook; in browser Marimo, upload it to the notebook's files.
     # CSV columns: State, Murder, Assault, UrbanPop, Rape (50 states, 1973).
@@ -852,14 +851,6 @@ def _(mo):
 
     Compare the distributions of the four standardized variables within each cluster. A box shows the middle 50% of values and its line marks the median. The table reports cluster means in the original units. Interpret the measured variables rather than calling one cluster simply “better” or “worse.”
     """)
-    return
-
-
-@app.cell
-def _(arrest_models, arrest_view):
-    arrest_view.plot_clusters(
-        arrest_models[2].labels_, title="USArrests: two clusters displayed in PCA space"
-    )
     return
 
 

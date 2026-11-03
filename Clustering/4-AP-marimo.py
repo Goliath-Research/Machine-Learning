@@ -136,7 +136,7 @@ def _(mo):
 
     If the number of groups is not supplied, something has to control how many points are willing to stand for election. That role belongs to **`preference`**.
 
-    - `preference` is the willingness of each point to become an exemplar. In scikit-learn it is also the initial value of the availability message.
+    - `preference` is the willingness of each point to become an exemplar. In scikit-learn it is written onto the diagonal of the similarity matrix; availabilities start at zero.
     - A **higher** (less negative, or positive) preference makes more points willing, so more exemplars survive, so you get **more** clusters.
     - A **more negative** preference makes fewer points willing, so **fewer** clusters survive. Push it far enough and everything collapses into two groups, then one.
 
@@ -168,7 +168,7 @@ def _(mo):
     | Normalized Mutual Info | **no** | Shared information, scaled to 0 to 1. Its chance value is small but not 0. |
     | Fowlkes–Mallows | **no** | Geometric mean of pairwise precision and recall. Its chance value is **well above 0**. |
 
-    Only the two adjusted scores are built so that meaningless labels score about zero. **Fowlkes–Mallows is the one to be careful with**: a meaningless clustering still scores around 0.3, so a Fowlkes–Mallows value of 0.75 is less impressive than it looks. Compare it only between fits that asked for the same number of clusters, or read it alongside Adjusted Rand.
+    Only the two adjusted scores are built so that meaningless labels score about zero. **Fowlkes–Mallows is the one to be careful with**: a meaningless clustering still scores well above zero on the wine data, so a Fowlkes–Mallows value of 0.75 is less impressive than it looks. Compare it only between fits that asked for the same number of clusters, or read it alongside Adjusted Rand.
 
     Affinity propagation does not accept `n_clusters`, but you can still compare runs that happened to produce different numbers of clusters. The adjusted scores make that comparison fair; Fowlkes–Mallows does not.
 
@@ -636,7 +636,7 @@ def _(mo):
 
 
 @app.cell
-def _(AffinityPropagation, StandardScaler, load_wine, np, pd):
+def _(AffinityPropagation, StandardScaler, fowlkes_mallows_score, load_wine, np, pd):
     # Wine: 178 wines, 13 chemical measurements, 3 cultivars (grape varieties).
     # UCI Machine Learning Repository, contributed by S. Aeberhard et al. (1992).
     # https://archive.ics.uci.edu/dataset/109/wine
@@ -671,9 +671,13 @@ def _(AffinityPropagation, StandardScaler, load_wine, np, pd):
     ).fit(wine_z)
     wine_count = len(wine_model.cluster_centers_indices_)
     wine_shape = f"{wine_frame.shape[0]} wines, {wine_frame.shape[1] - 1} measurements"
+    wine_fm_chance = fowlkes_mallows_score(
+        wine.target, np.random.RandomState(0).permutation(wine.target)
+    )
     return (
         wine,
         wine_count,
+        wine_fm_chance,
         wine_frame,
         wine_labels,
         wine_model,
@@ -691,7 +695,13 @@ def _(wine_shape):
 
 @app.cell
 def _(mo, wine_frame):
-    mo.Html(wine_frame.head().round(2).to_html())
+    _wine_preview = wine_frame.head().round(2)
+    mo.vstack(
+        [
+            mo.Html(_wine_preview.iloc[:, :7].to_html()),
+            mo.Html(_wine_preview.iloc[:, 7:].to_html()),
+        ]
+    )
     return
 
 
@@ -805,13 +815,13 @@ def _(mo, wine_scores):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+def _(mo, wine_fm_chance):
+    mo.md(f"""
     Read the four values with the baseline in mind, not as four confirmations of the same thing.
 
     - **Adjusted Rand is about 0.62.** Roughly two thirds of the pairwise agreement you could hope for. This is the number to quote.
     - **Adjusted Mutual Info is about 0.61**, telling the same story in a different currency.
-    - **Fowlkes–Mallows is about 0.75**, which looks impressive and is the least trustworthy of the four. Shuffled labels on this data still score about **0.33**, so the usable range is roughly 0.33 to 1.00 rather than 0 to 1.00.
+    - **Fowlkes–Mallows is about 0.75**, which looks impressive and is the least trustworthy of the four. Shuffled labels on this data still score about **{wine_fm_chance:.2f}**, so the usable range is roughly {wine_fm_chance:.2f} to 1.00 rather than 0 to 1.00.
     - **Normalized Mutual Info is about 0.61** and is unadjusted, though its chance value is small enough that it is far less misleading than Fowlkes–Mallows.
 
     So the honest summary is "good but not close to perfect agreement", which the next table explains.
@@ -846,10 +856,10 @@ def _(mo, wine_sizes):
 
     The pattern is more encouraging than the scores alone suggested, but it is not a recovery of the three labels.
 
-    - **Each cluster is dominated by one cultivar.** Cluster 0 holds 49 of the 59 cultivar-0 wines and only 5 wines from elsewhere, so it is close to pure. Cluster 1 holds 58 of the 71 cultivar-1 wines, and cluster 2 holds 46 of the 48 cultivar-2 wines.
-    - **But each cluster also absorbs wines from a neighbour.** Cluster 0 takes 10 cultivar-1 wines, cluster 1 takes 10 cultivar-2 wines, and cluster 2 takes 10 cultivar-1 wines. Those 20 misassigned wines are what hold the adjusted Rand index down to 0.62.
+    - **Each cluster is dominated by one cultivar.** Cluster 0 holds 49 of the 59 cultivar-0 wines; cluster 1 holds 58 of the 71 cultivar-1 wines; cluster 2 holds 46 of the 48 cultivar-2 wines.
+    - **But each cluster also absorbs wines from neighbours.** Cluster 0 takes 3 cultivar-1 and 2 cultivar-2 wines; cluster 1 takes 10 cultivar-0 wines; cluster 2 takes 10 cultivar-1 wines. Those **25** misassigned wines are what hold the adjusted Rand index down to 0.62.
 
-    In other words, the grouping is largely right, and the errors are concentrated where cultivars 1 and 2 meet chemically. No cluster is "the cultivar 1 group" in a pure sense, and the chemical measurements that separate those two cultivars overlap enough that a clustering of these thirteen columns cannot fully undo it.
+    In other words, the grouping is largely right, and the errors are not confined to the cultivar-1/cultivar-2 boundary alone. No cluster is a pure cultivar group, and the chemical measurements that separate cultivars overlap enough that a clustering of these thirteen columns cannot fully undo it.
 
     ### Do the scores agree on which preference is best?
 
@@ -897,16 +907,16 @@ def _(mo, sweep_scores):
 
 
 @app.cell(hide_code=True)
-def _(adjusted_rand_score, mo, np, sweep_scores, wine, wine_labels):
+def _(adjusted_rand_score, fowlkes_mallows_score, mo, np, sweep_scores, wine, wine_fm_chance, wine_labels):
     _shuffled = np.random.RandomState(0).permutation(wine_labels["preference=-200"])
     mo.md(f"""
     The three scores do **not** agree on a single winner, and that is the honest result.
 
     - **Adjusted Rand is highest at preference=-200**, with about {sweep_scores.loc["preference=-200", "Adjusted Rand"]:.3f}. This is the fit that produced three clusters.
     - **Adjusted Mutual Info is highest at preference=-100**, with about {sweep_scores.loc["preference=-100", "Adjusted Mutual Info"]:.3f}, even though that fit produced five clusters. Splitting a group can share slightly more information without agreeing more on pairs.
-    - **Fowlkes-Mallows is also highest at preference=-200**, at about {sweep_scores.loc["preference=-200", "Fowlkes-Mallows"]:.3f}. Remember that its chance floor on this data is about 0.34, so treat the ranking as a tie-breaker only.
+    - **Fowlkes-Mallows is also highest at preference=-200**, at about {sweep_scores.loc["preference=-200", "Fowlkes-Mallows"]:.3f}. Remember that its chance floor on this data is about {wine_fm_chance:.2f}, so treat the ranking as a tie-breaker only.
 
-    To see that floor, this fit's labels shuffled at random score {adjusted_rand_score(wine.target, _shuffled):.3f} on Adjusted Rand but well above zero on Fowlkes-Mallows. Comparing the two columns side by side is the safest habit.
+    To see that floor, this fit's labels shuffled at random score {adjusted_rand_score(wine.target, _shuffled):.3f} on Adjusted Rand but {fowlkes_mallows_score(wine.target, _shuffled):.3f} on Fowlkes-Mallows. Comparing the two columns side by side is the safest habit.
 
     There is no automatic rule that picks `preference=-200` for you. The justification is a combination of the adjusted Rand index and the fact that three clusters matches the three known cultivars, which is information from outside the algorithm.
     """)
@@ -960,11 +970,11 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(mo, wine_fm_chance):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-**Fowlkes–Mallows** is not corrected for chance. Shuffled labels on this data still score about **0.34**, so the usable range is roughly 0.34 to 1.00 and a value of 0.75 is far less impressive than it appears.
+            "Show answers": mo.md(f"""
+**Fowlkes–Mallows** is not corrected for chance. Shuffled labels on this data still score about **{wine_fm_chance:.2f}**, so the usable range is roughly {wine_fm_chance:.2f} to 1.00 and a value of 0.75 is far less impressive than it appears.
 
 Adjusted Rand and Adjusted Mutual Info both fall to about 0 when the labels are shuffled, which is why they are the ones to quote. Normalized Mutual Info is also unadjusted, but its chance value is small.
 
@@ -987,6 +997,7 @@ def _(
     sentence_count,
     sweep_scores,
     wine_count,
+    wine_fm_chance,
     wine_scores,
     wine_sizes,
 ):
@@ -1000,7 +1011,7 @@ def _(
     5. **The similarity you supply decides what the method can see.** For the sentences, cosine similarity of TF-IDF weights grouped {sentence_count} clusters by shared vocabulary, and each exemplar was a readable sentence. That works for text because the vocabulary is distinctive; sentences that mean the same thing in different words would not be grouped.
     6. **On the wine data, three clusters score well but not perfectly.** {wine_count} clusters at `preference=-200`, with adjusted Rand {wine_scores.loc["Adjusted Rand", "Value"]:.3f} and adjusted mutual information {wine_scores.loc["Adjusted Mutual Info", "Value"]:.3f}. Cluster sizes are {", ".join(str(int(_size)) for _size in wine_sizes)}.
     7. **The scores disagree about the best preference.** Adjusted Rand peaks at -200, but adjusted mutual information peaks at -100 with five clusters. The choice of `preference` rests on the adjusted Rand index plus the outside knowledge that there are three cultivars. No formula makes that choice for you.
-    8. **Fowlkes–Mallows needs care.** Its value of {wine_scores.loc["Fowlkes-Mallows", "Value"]:.3f} sits against a chance floor of about 0.34 on this data. Quote the adjusted scores, and treat Fowlkes–Mallows as a tie-breaker between fits with the same number of clusters.
+    8. **Fowlkes–Mallows needs care.** Its value of {wine_scores.loc["Fowlkes-Mallows", "Value"]:.3f} sits against a chance floor of about {wine_fm_chance:.2f} on this data. Quote the adjusted scores, and treat Fowlkes–Mallows as a tie-breaker between fits with the same number of clusters.
     9. **t-SNE drew the picture, it did not cluster.** The fits used the standardized measurements, and on the wine data the exemplars cannot even be drawn, because they live in thirteen dimensions.
     """)
     return
@@ -1017,7 +1028,7 @@ def _(mo):
     4. On the moons, `preference=-50` produced two clusters but an adjusted Rand index near 0.26. Explain how both can be true.
     5. What does `affinity="precomputed"` expect, and why is it used for the sentences?
     6. Why is cosine similarity preferred over Euclidean distance for text?
-    7. Which external scores are corrected for chance, and which one has a chance floor near 0.34 on the wine data?
+    7. Which external scores are corrected for chance, and which one has a noticeable chance floor on the wine data?
     8. Which data did the wine clustering actually use, and why can the exemplars not be drawn on the t-SNE plot?
     """)
     return
@@ -1034,7 +1045,7 @@ def _(mo):
 4. **The dial worked and the geometry did not.** Lowering the preference reduced the count to two, which it controls. It cannot teach the method that a crescent is a curve, so each cluster still contains points from both arms, and the adjusted Rand index stays near chance.
 5. **A square matrix of pairwise similarities** between observations, rather than the observations themselves. It is used for the sentences because text has no coordinates, so `cosine_similarity` computes the similarities first.
 6. **It compares the angle between word-weight vectors and ignores their length.** That suits text, where a short and a long sentence on the same subject should count as similar. Euclidean distance would be dominated by document length and by high-weight rare words.
-7. **Adjusted Rand and adjusted mutual information are corrected.** Normalized mutual information and Fowlkes–Mallows are not. Fowlkes–Mallows has a chance floor near 0.34 on the wine data, so its 0.75 is less impressive than it looks.
+7. **Adjusted Rand and adjusted mutual information are corrected.** Normalized mutual information and Fowlkes–Mallows are not. Fowlkes–Mallows has a noticeable chance floor on the wine data, so its 0.75 is less impressive than it looks.
 8. **The clustering used all thirteen standardized chemical measurements.** t-SNE is only a two-dimensional picture for the eye. The exemplars are real wines with thirteen coordinates, so they have no position in that picture.
 """)
         },
