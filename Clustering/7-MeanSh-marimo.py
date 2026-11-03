@@ -136,7 +136,7 @@ def _(mo):
 
     This is the point most often stated incorrectly, so it is worth being precise.
 
-    **There is no default bandwidth of 1.** In scikit-learn, if you write `MeanShift()` with no `bandwidth`, the estimator calls `estimate_bandwidth` internally on your data and uses the value it computes. That function takes a **quantile of the distances to each point's nearest neighbours** (the default quantile is 0.3) and returns a radius near that quantile.
+    **There is no default bandwidth of 1.** In scikit-learn, if you write `MeanShift()` with no `bandwidth`, the estimator calls `estimate_bandwidth` internally on your data and uses the value it computes. That function averages the distance to each point's **`int(n × quantile)`-th nearest neighbour** (default quantile 0.3) and returns that mean as the radius.
 
     So `MeanShift()` is a data-driven choice, not a constant. On the three-centre cloud below the estimate comes out at **1.39**, which happens to be close enough to 1 that both produce the same three clusters. They agree by coincidence here, not because 1 is the default.
 
@@ -264,18 +264,24 @@ def _(mo):
 
 
 @app.cell
-def _(blob_fits, centers, pd):
+def _(blob_fits, centers, np, pd):
+    _fitted = blob_fits["estimate"].cluster_centers_
     center_compare = pd.DataFrame(
-        {
-            "generating centre": [str(_c) for _c in centers],
-            "fitted centre": [
-                str(tuple(_row))
-                for _row in sorted(
-                    blob_fits["estimate"].cluster_centers_.round(2).tolist(),
-                    key=lambda _v: _v[1],
-                )
-            ],
-        }
+        [
+            {
+                "generating centre": str(_c),
+                "fitted centre": str(
+                    tuple(
+                        _fitted[
+                            np.argmin(np.linalg.norm(_fitted - np.array(_c), axis=1))
+                        ]
+                        .round(2)
+                        .tolist()
+                    )
+                ),
+            }
+            for _c in centers
+        ]
     )
     return (center_compare,)
 
@@ -490,10 +496,10 @@ def _(coarse, fine, mo):
     mo.md(f"""
     The two estimates are far apart, and the reason is the quantile.
 
-    - **quantile 0.1** lands on the 10th percentile of nearest-neighbour distances, giving **{fine:.2f}**.
-    - **quantile 0.3** lands on the 30th percentile, giving **{coarse:.2f}**.
+    - **quantile 0.1** uses each point's **`int(n × quantile)`-th nearest neighbour** (40 on this cloud) and returns the **mean** of those distances, giving **{fine:.2f}**.
+    - **quantile 0.3** uses 120 neighbours here and returns their mean distance, giving **{coarse:.2f}**.
 
-    The larger quantile is a higher cut of the same distribution of distances, so it returns a bigger radius. That is the mechanism: the quantile is not a quality setting, it is a position in the distance distribution.
+    The larger quantile looks further out in the neighbour-distance distribution, so it returns a bigger radius. That is the mechanism: the quantile is not a quality setting, it is which neighbour rank gets averaged.
 
     A bandwidth of {coarse:.2f} is nearly four times {fine:.2f}, which is a large enough change to alter the number of peaks. The next two plots show the result.
     """)
@@ -1003,7 +1009,7 @@ def _(
 
     1. **A mean-shift window walks to a peak.** It repeatedly moves to the mean of the points inside it and stops where that mean no longer moves. That stopping point is a cluster centre, and every point climbing to the same peak shares a cluster.
     2. **There is no `n_clusters` argument, because the peaks are the output.** On the three-centre cloud the method found {blob_counts['estimate']} clusters matching the {blob_counts['estimate']} visible groups, and the fitted centres landed within a few hundredths of the generating centres (1, 1), (3, 3), and (5, 1).
-    3. **`bandwidth` is the window radius, and it is not a universal number.** It carries the units of the data: 0.55 to 2.75 were the useful range for blob coordinates, {toy_bandwidth:.1f} for the photograph whose colours run from 0 to 255, and {lake_bandwidth:.1f} for the downsampled lake. A bandwidth of 1 would shatter an image into thousands of colour groups.
+    3. **`bandwidth` is the window radius, and it is not a universal number.** It carries the units of the data: about **0.65 to 1.8** were the useful range for the three-centre blob coordinates (three clusters), {toy_bandwidth:.1f} for the photograph whose colours run from 0 to 255, and {lake_bandwidth:.1f} for the downsampled lake. A bandwidth of 1 would shatter an image into thousands of colour groups.
     4. **The default is not 1.** `MeanShift()` with no bandwidth calls `estimate_bandwidth` internally, which uses a quantile of 0.3. On the three-centre cloud that gives {estimated:.2f}, and both that value and an explicit 1 produce {default_count} clusters. They agree by coincidence at this scale, not because 1 is the default.
     5. **Too small a bandwidth fragments; too large merges.** On the three-centre cloud, 0.55 produced {blob_counts['bandwidth 0.55']} clusters by splitting blobs from the inside, while 2 produced {blob_counts['bandwidth 2']} by merging two of them. The two failures look different in the plot and neither raises a warning.
     6. **`estimate_bandwidth` depends on choices you make.** A quantile of 0.1 gave {fine:.2f} and found {wide_counts['quantile 0.1']} clusters, the correct count for four blobs. A quantile of 0.3 on 100 sampled rows gave {coarse:.2f} and found {wide_counts['quantile 0.3']}. The estimator is not neutral, so always inspect the value it returns.
