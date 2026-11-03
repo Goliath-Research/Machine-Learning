@@ -180,16 +180,27 @@ def _(SPECIES_ORDER, go, np, px):
             )
         _scale = 3.0 * np.sqrt(float(np.sum(share)))
         for index, name in enumerate(names):
+            _xl = loadings[0, index] * _scale
+            _yl = loadings[1, index] * _scale
             figure.add_trace(
                 go.Scatter(
-                    x=[0, loadings[0, index] * _scale],
-                    y=[0, loadings[1, index] * _scale],
+                    x=[0, _xl],
+                    y=[0, _yl],
                     mode="lines+markers",
                     name=name,
                     line=dict(width=2, color="dimgray"),
                     marker=dict(size=6, color="dimgray"),
                     showlegend=True,
                 )
+            )
+            figure.add_annotation(
+                x=_xl,
+                y=_yl,
+                text=name,
+                showarrow=False,
+                font=dict(color="dimgray", size=10),
+                xanchor="left" if _xl >= 0 else "right",
+                yanchor="bottom" if _yl >= 0 else "top",
             )
         figure.update_layout(
             width=width,
@@ -212,6 +223,25 @@ def _(scipy_procrustes):
         return float(disparity)
 
     return (layout_shift,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "About `species_scatter`": mo.md(
+                "One trace per species with shared colours across embeddings; plot size is capped for the notebook layout."
+            ),
+            "About `pca_biplot`": mo.md(
+                "Scores plus grey loading arrows from the origin; length reflects variance share and labels sit at each arrow tip."
+            ),
+            "About `layout_shift`": mo.md(
+                "Procrustes disparity after aligning two layouts — near zero when shapes match, larger when settings rearrange the map."
+            ),
+        },
+        expanded=False,
+    )
+    return
 
 
 @app.cell
@@ -299,14 +329,20 @@ def _(SPECIES_ORDER, iris_frame, measure_columns, pd, px):
 
 
 @app.cell
-def _(StandardScaler, iris_frame, measure_columns, pd):
+def _(StandardScaler, iris, iris_frame, measure_columns, np, pd):
     iris_z = pd.DataFrame(
         StandardScaler().fit_transform(iris_frame[measure_columns]),
         columns=measure_columns,
         index=iris_frame.index,
     )
     iris_z["species"] = iris_frame["species"]
-    return (iris_z,)
+    _X = iris_z[measure_columns].to_numpy()
+    _virginica = np.flatnonzero(iris.target == 2)
+    _centroid = _X[iris.target == 1].mean(axis=0)
+    highlight_row = int(
+        _virginica[np.argmin(np.linalg.norm(_X[_virginica] - _centroid, axis=1))]
+    )
+    return highlight_row, iris_z
 
 
 @app.cell(hide_code=True)
@@ -500,24 +536,6 @@ def _(MDS, iris_z, measure_columns, pd, species_scatter):
 
 
 @app.cell
-def _(LocallyLinearEmbedding, iris_z, measure_columns, pd, species_scatter):
-    _lle = LocallyLinearEmbedding(
-        n_neighbors=30,
-        n_components=2,
-        random_state=50,
-        method="modified",
-        eigen_solver="dense",
-    ).fit_transform(iris_z[measure_columns])
-    species_scatter(
-        pd.DataFrame({"LLE 1": _lle[:, 0], "LLE 2": _lle[:, 1], "species": iris_z["species"]}),
-        "LLE 1",
-        "LLE 2",
-        "Locally linear embedding",
-    )
-    return
-
-
-@app.cell
 def _(Isomap, iris_z, measure_columns, pd, species_scatter):
     _isomap = Isomap(n_neighbors=30, n_components=2, eigen_solver="dense").fit_transform(
         iris_z[measure_columns]
@@ -651,8 +669,12 @@ def _(
     knn_table = pd.DataFrame(
         [
             ("Raw standardized", knn_raw, "Original 4-D z-scores"),
-            ("PCA (2D)", knn_pca, "Linear projection"),
-            ("t-SNE (2D)", knn_tsne, "Strongest 2-D separation"),
+            ("PCA (2D)", knn_pca, "Linear 2-D projection"),
+            (
+                "t-SNE (2D)",
+                knn_tsne,
+                f"Beats PCA ({knn_pca:.3f}) in 2-D, below raw ({knn_raw:.3f})",
+            ),
         ],
         columns=["Embedding", "5-NN accuracy", "Notes"],
     )
@@ -663,40 +685,40 @@ def _(
 @app.cell(hide_code=True)
 def _(knn_pca, knn_raw, knn_tsne, mo):
     mo.md(f"""
-    **5-NN species accuracy (cross-validated):** raw standardized **{knn_raw:.3f}**, PCA **{knn_pca:.3f}**, t-SNE **{knn_tsne:.3f}** — t-SNE separates classes most in the plane, but versicolor and virginica still **touch**; there is no empty channel between them.
+    **5-NN species accuracy (cross-validated):** raw standardized **{knn_raw:.3f}**, PCA **{knn_pca:.3f}**, t-SNE **{knn_tsne:.3f}**. t-SNE separates species better than PCA in two dimensions (**{knn_tsne:.3f}** vs **{knn_pca:.3f}**) but still scores below the raw four-dimensional input (**{knn_raw:.3f}**). Versicolor and virginica still **touch**; there is no empty channel between them.
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 3. Row 133 in t-SNE space
+def _(highlight_row, mo):
+    mo.md(f"""
+    ## 3. Row {highlight_row} in t-SNE space
 
-    The virginica flower **row 133** sits among versicolor points in the baseline t-SNE map. Check its **four-dimensional neighbours** and its raw measurements.
+    We highlight the **virginica** flower closest to the **versicolor** centroid in standardized 4-D (row **{highlight_row}** on this table). It sits among versicolor points in the baseline t-SNE map — check its neighbours and raw measurements.
     """)
     return
 
 
 @app.cell
-def _(NearestNeighbors, iris, iris_z, measure_columns, np):
+def _(NearestNeighbors, highlight_row, iris, iris_z, measure_columns, np):
     _X = iris_z[measure_columns].to_numpy()
     _nn = NearestNeighbors(n_neighbors=6).fit(_X)
-    _indices = _nn.kneighbors(_X[133:134], return_distance=False)[0, 1:]
-    row133_neighbor_species = iris.target_names[iris.target[_indices]]
-    row133_versicolor_neighbors = int(np.sum(iris.target[_indices] == 1))
-    return row133_neighbor_species, row133_versicolor_neighbors
+    _indices = _nn.kneighbors(_X[highlight_row : highlight_row + 1], return_distance=False)[0, 1:]
+    highlight_neighbor_species = iris.target_names[iris.target[_indices]]
+    highlight_versicolor_neighbors = int(np.sum(iris.target[_indices] == 1))
+    return highlight_neighbor_species, highlight_versicolor_neighbors
 
 
 @app.cell
-def _(go, species_scatter, tsne_baseline):
+def _(go, highlight_row, species_scatter, tsne_baseline):
     _highlight = tsne_baseline.copy()
-    _row = _highlight.loc[133]
+    _row = _highlight.loc[highlight_row]
     _figure = species_scatter(
         _highlight,
         "t-SNE 1",
         "t-SNE 2",
-        "Baseline t-SNE with row 133 circled",
+        f"Baseline t-SNE with row {highlight_row} circled",
     )
     _figure.add_trace(
         go.Scatter(
@@ -704,7 +726,7 @@ def _(go, species_scatter, tsne_baseline):
             y=[_row["t-SNE 2"]],
             mode="markers",
             marker=dict(size=14, color="rgba(0,0,0,0)", line=dict(color="black", width=2)),
-            name="row 133",
+            name=f"row {highlight_row}",
             showlegend=True,
         )
     )
@@ -713,18 +735,18 @@ def _(go, species_scatter, tsne_baseline):
 
 
 @app.cell(hide_code=True)
-def _(mo, row133_neighbor_species, row133_versicolor_neighbors):
-    _list = ", ".join(row133_neighbor_species)
+def _(highlight_row, highlight_neighbor_species, highlight_versicolor_neighbors, mo):
+    _list = ", ".join(highlight_neighbor_species)
     mo.md(f"""
-    In standardized 4-D space, **{row133_versicolor_neighbors} of 5** nearest neighbours of row 133 are **versicolor** ({_list}). t-SNE is honouring that overlap — not claiming the flower is atypical in centimetres.
+    In standardized 4-D space, **{highlight_versicolor_neighbors} of 5** nearest neighbours of row **{highlight_row}** are **versicolor** ({_list}). t-SNE is honouring that overlap — not claiming the flower is atypical in centimetres.
     """)
     return
 
 
 @app.cell
-def _(iris_frame, measure_columns, np):
+def _(highlight_row, iris_frame, measure_columns, np):
     _virginica_raw = iris_frame.loc[iris_frame.species == "virginica", measure_columns]
-    _values = iris_frame.loc[133, measure_columns].astype(float)
+    _values = iris_frame.loc[highlight_row, measure_columns].astype(float)
     _rows = []
     for _name in measure_columns:
         _q1, _q3 = _virginica_raw[_name].quantile([0.25, 0.75])
@@ -760,9 +782,9 @@ def _(mo, outlier_check):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 4. Refitting without row 133
+def _(highlight_row, mo):
+    mo.md(f"""
+    ## 4. Refitting without row {highlight_row}
 
     t-SNE has no **`transform`**. The next cell refits on 149 flowers (same seed and perplexity as the baseline) and reports how much the layout moves for the flowers that remain.
     """)
@@ -770,12 +792,12 @@ def _(mo):
 
 
 @app.cell
-def _(TSNE, iris_z, layout_shift, measure_columns, np, tsne_baseline):
+def _(TSNE, highlight_row, iris_z, layout_shift, measure_columns, np, tsne_baseline):
     _X = iris_z[measure_columns].to_numpy()
     _ref = tsne_baseline[["t-SNE 1", "t-SNE 2"]].to_numpy()
-    _kept = np.delete(_X, 133, axis=0)
+    _kept = np.delete(_X, highlight_row, axis=0)
     _refit = TSNE(random_state=20, init="random", perplexity=30).fit_transform(_kept)
-    _common = tsne_baseline.drop(index=133)[["t-SNE 1", "t-SNE 2"]].to_numpy()
+    _common = tsne_baseline.drop(index=highlight_row)[["t-SNE 1", "t-SNE 2"]].to_numpy()
     refit_shift = layout_shift(_common, _refit)
     tsne_shift_p5 = layout_shift(
         _ref, TSNE(random_state=20, init="random", perplexity=5).fit_transform(_X)
@@ -794,6 +816,7 @@ def _(TSNE, iris_z, layout_shift, measure_columns, np, tsne_baseline):
 
 @app.cell(hide_code=True)
 def _(
+    highlight_row,
     mo,
     refit_shift,
     tsne_shift_p5,
@@ -802,7 +825,7 @@ def _(
     tsne_shift_seed0,
 ):
     mo.md(f"""
-    Dropping row 133 moves the remaining layout only **{refit_shift:.3f}** (Procrustes). **Perplexity** matters mainly at low values versus the baseline map (**{tsne_shift_p5:.3f}** at 5, **{tsne_shift_p25:.3f}** at 25, **{tsne_shift_p50:.3f}** at 50); **seed** nudges it too (**{tsne_shift_seed0:.3f}** at seed 0). A new flower still needs a full refit — there is no **`transform`**.
+    Dropping row **{highlight_row}** moves the remaining layout only **{refit_shift:.3f}** (Procrustes). **Perplexity** matters mainly at low values versus the baseline map (**{tsne_shift_p5:.3f}** at 5, **{tsne_shift_p25:.3f}** at 25, **{tsne_shift_p50:.3f}** at 50); **seed** nudges it too (**{tsne_shift_seed0:.3f}** at seed 0). A new flower still needs a full refit — there is no **`transform`**.
     """)
     return
 
@@ -839,11 +862,11 @@ student_iris_pca = PCA(n_components=2).fit_transform(iris_z[measure_columns])
 
 
 @app.cell(hide_code=True)
-def _(mo, row133_versicolor_neighbors):
+def _(highlight_row, highlight_versicolor_neighbors, mo):
     mo.md(f"""
     ### Try it yourself
 
-    Row **133** has **{row133_versicolor_neighbors}** versicolor flowers among its five nearest neighbours in standardized 4-D. Does that force it to look mislabelled in t-SNE? Answer in one sentence.
+    Row **{highlight_row}** has **{highlight_versicolor_neighbors}** versicolor flowers among its five nearest neighbours in standardized 4-D. Does that force it to look mislabelled in t-SNE? Answer in one sentence.
     """)
     return
 
@@ -862,33 +885,33 @@ No — t-SNE keeps **local neighbourhoods**, so a virginica surrounded by versic
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+def _(highlight_row, mo):
+    mo.md(f"""
     ### Try it yourself
 
-    Using `NearestNeighbors` on `iris_z[measure_columns]`, store the count of versicolor flowers among the five nearest neighbours of row **133** in `student_row133_versicolor` (an integer).
+    Using `NearestNeighbors` on `iris_z[measure_columns]`, store the count of versicolor flowers among the five nearest neighbours of row **{highlight_row}** in `student_highlight_versicolor` (an integer).
     """)
     return
 
 
 @app.cell
 def _():
-    student_row133_versicolor = None
-    return (student_row133_versicolor,)
+    student_highlight_versicolor = None
+    return (student_highlight_versicolor,)
 
 
 @app.cell(hide_code=True)
-def _(iris, iris_z, measure_columns, mo, np, row133_versicolor_neighbors):
+def _(highlight_row, highlight_versicolor_neighbors, iris, iris_z, measure_columns, mo, np):
     mo.accordion(
         {
             "Show answer": mo.md(f"""
 ```python
 _X = iris_z[measure_columns].to_numpy()
 _nn = NearestNeighbors(n_neighbors=6).fit(_X)
-_indices = _nn.kneighbors(_X[133:134], return_distance=False)[0, 1:]
-student_row133_versicolor = int(np.sum(iris.target[_indices] == 1))
+_indices = _nn.kneighbors(_X[{highlight_row}:{highlight_row + 1}], return_distance=False)[0, 1:]
+student_highlight_versicolor = int(np.sum(iris.target[_indices] == 1))
 ```
-The count is **{row133_versicolor_neighbors}** versicolor neighbours (target code 1).
+The count is **{highlight_versicolor_neighbors}** versicolor neighbours (target code 1).
 """)
         },
         expanded=False,
@@ -898,10 +921,11 @@ The count is **{row133_versicolor_neighbors}** versicolor neighbours (target cod
 
 @app.cell(hide_code=True)
 def _(
+    highlight_row,
+    highlight_versicolor_neighbors,
     iris_share,
     mo,
     refit_shift,
-    row133_versicolor_neighbors,
     tsne_shift_p5,
     tsne_shift_p25,
     tsne_shift_p50,
@@ -913,8 +937,8 @@ def _(
     1. **Different optima, different pictures:** PCA, MDS, LLE, Isomap, and t-SNE share the same four standardized columns yet preserve variance, distances, weights, graph paths, or neighbourhoods — so their 2-D groupings disagree even when setosa always separates.
     2. **Variance share ≠ class separation:** two PCA components keep **{iris_share.sum():.1%}** of the variance, but versicolor and virginica still overlap in the biplot because they overlap in measurement space.
     3. **Meaningful axes only for PCA:** MDS, LLE, Isomap, and t-SNE axes are arbitrary; read **which species cluster**, not what the horizontal axis "means".
-    4. **t-SNE is a fit, not a map:** there is no **`transform`** for a new flower; dropping row 133 shifts the layout only **{refit_shift:.3f}**. Procrustes shifts vs the baseline map are **{tsne_shift_p5:.3f}** at perplexity 5, **{tsne_shift_p25:.3f}** at 25, **{tsne_shift_p50:.3f}** at 50, and **{tsne_shift_seed0:.3f}** when the seed is 0 — perplexity matters mainly at low values.
-    5. **Neighbourhood ≠ typicality:** row 133 sits among versicolor in t-SNE with **{row133_versicolor_neighbors} of 5** versicolor neighbours in 4-D, yet its centimetre values stay inside virginica whiskers — check measurements, not plot position alone.
+    4. **t-SNE is a fit, not a map:** there is no **`transform`** for a new flower; dropping row **{highlight_row}** shifts the layout only **{refit_shift:.3f}**. Procrustes shifts vs the baseline map are **{tsne_shift_p5:.3f}** at perplexity 5, **{tsne_shift_p25:.3f}** at 25, **{tsne_shift_p50:.3f}** at 50, and **{tsne_shift_seed0:.3f}** when the seed is 0 — perplexity matters mainly at low values.
+    5. **Neighbourhood ≠ typicality:** row **{highlight_row}** sits among versicolor in t-SNE with **{highlight_versicolor_neighbors} of 5** versicolor neighbours in 4-D, yet its centimetre values stay inside virginica whiskers — check measurements, not plot position alone.
     """)
     return
 
