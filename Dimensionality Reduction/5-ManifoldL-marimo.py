@@ -338,6 +338,7 @@ def _(LLE_NEIGHBOR_KEYS, mo):
         stop=max(LLE_NEIGHBOR_KEYS),
         step=5,
         value=100,
+        show_value=True,
         label="LLE n_neighbors",
     )
     lle_neighbor_slider
@@ -399,6 +400,7 @@ def _(ISO_NEIGHBOR_KEYS, mo):
         stop=max(ISO_NEIGHBOR_KEYS),
         step=5,
         value=62,
+        show_value=True,
         label="Isomap n_neighbors",
     )
     isomap_neighbor_slider
@@ -486,6 +488,7 @@ def _(TSNE_PERPLEXITY_KEYS, mo):
         stop=max(TSNE_PERPLEXITY_KEYS),
         step=_step,
         value=30,
+        show_value=True,
         label="t-SNE perplexity",
     )
     tsne_perplexity_slider
