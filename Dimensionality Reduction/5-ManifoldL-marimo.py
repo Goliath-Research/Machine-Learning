@@ -59,7 +59,6 @@ def _(packages_ready):
     import plotly.express as px
     import plotly.graph_objects as go
     import plotly.io as pio
-    import PlotBuilder as pb
     from plotly.subplots import make_subplots
     from sklearn.datasets import load_digits
     from sklearn.decomposition import PCA
@@ -69,16 +68,26 @@ def _(packages_ready):
 
     pio.templates.default = "plotly_white"
     px.defaults.color_discrete_sequence = px.colors.qualitative.G10
-    builder = pb.PlotBuilder(width=780, height=380)
+    LETTER_COLORS = {
+        letter: px.colors.qualitative.G10[index]
+        for index, letter in enumerate("GOLIATH")
+    }
+    LLE_NEIGHBOR_KEYS = sorted({*range(55, 106, 5), 80, 100, 105})
+    ISO_NEIGHBOR_KEYS = sorted({*range(55, 106, 5), 62})
+    TSNE_PERPLEXITY_KEYS = [5, 10, 20, 30, 40, 50, 60, 80, 100, 120]
+    TSNE_LEARNING_RATE = 200
 
     return (
-        Isomap,
+        ISO_NEIGHBOR_KEYS,
         KNeighborsClassifier,
+        LETTER_COLORS,
+        LLE_NEIGHBOR_KEYS,
         LocallyLinearEmbedding,
         PCA,
         Path,
         TSNE,
-        builder,
+        TSNE_LEARNING_RATE,
+        TSNE_PERPLEXITY_KEYS,
         cross_val_score,
         go,
         load_digits,
@@ -90,56 +99,84 @@ def _(packages_ready):
     )
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Manifold Learning
+
+    ## Objectives
+
+    By the end of this lesson, you should be able to:
+
+    1. Explain why distance *along* a bent sheet differs from straight-line distance *through* space, and why that breaks linear projection on the S-shaped GOLIATH cloud.
+    2. State what each method preserves — local reconstruction weights (LLE), graph shortest paths (Isomap), neighbourhood probabilities (t-SNE) — and why preserving one property does not preserve the others.
+    3. Interpret the along-word score as how monotonically the saved row order follows *some* direction in the plane (not letter readability).
+    4. Tune neighbourhood size (`n_neighbors` or `perplexity`) and read when local detail or global order improves or collapses on this dataset.
+    5. Contrast PCA as a reusable **`transform`** with t-SNE as a full refit that cannot extend to new points.
+
+    ## Background
+
+    On a folded sheet, neighbours *along* the surface can be far *through* the air — PCA only sees the latter. **LLE** keeps local reconstruction weights; **Isomap** keeps graph shortest paths; **t-SNE** keeps neighbourhood probabilities; **PCA** is the linear baseline. **`n_neighbors`** / **`perplexity`** trade local detail against global smoothing.
+
+    The **along-word score** measures monotonicity along the best direction in the plane, treating a **reversed** word order as equally good (`max(s, 1−s)` per axis). Low scores mean the row order folds back on itself; a mirrored but readable GOLIATH still scores high.
+
+    ## Datasets Used
+
+    - **S-shaped GOLIATH.** `GOLIATH_S_curve.csv`: 1,000 points on an S-shaped surface, row order matching the word sequence used by the along-word score.
+    - **Digits.** 1,797 images of 64 pixels from `load_digits`.
+    """)
+    return
+
+
 @app.cell
-def _(builder, go, make_subplots, np, pd):
-    def along_word(position, embedded):
-        """Absolute correlation between the word order and an embedding axis.
+def _(np):
+    def along_word(embedded):
+        """Monotonicity of CSV row order along the best plane direction."""
+        emb = np.asarray(embedded, dtype=float)
+        _n = len(emb)
+        _best = 0.0
+        _directions = [emb[:, 0], emb[:, 1]]
+        _centered = emb - emb.mean(axis=0)
+        _, _, _vt = np.linalg.svd(_centered, full_matrices=False)
+        _directions.append(_centered @ _vt[0])
+        _pairs = _n * (_n - 1) // 2
+        for _coord in _directions:
+            _order = np.argsort(_coord)
+            _rank = np.empty(_n, dtype=int)
+            _rank[_order] = np.arange(_n)
+            _inversions = sum(
+                1 for _i in range(_n) for _j in range(_i + 1, _n) if _rank[_i] > _rank[_j]
+            )
+            _score = 1.0 - _inversions / _pairs
+            _best = max(_best, _score, 1.0 - _score)
+        return float(_best)
 
-        Parameters
-        ----------
-        position : array-like
-            The original row order, which is the word order.
-        embedded : array-like
-            Two coordinates per point.
+    return (along_word,)
 
-        Returns
-        -------
-        float
-            Absolute correlation with the longest axis, so a flipped axis is not
-            penalised.
-        """
-        embedded = np.asarray(embedded)
-        axis = embedded[:, int(np.argmax(np.var(embedded, axis=0)))]
-        return abs(float(np.corrcoef(position, axis)[0, 1]))
 
-    def letters_panel(frames, captions, title="", rows=1, cols=None, width=1150):
-        """Place several letter embeddings side by side for comparison.
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `along_word`
 
-        Parameters
-        ----------
-        frames : list of pandas.DataFrame
-            One layout per panel, each with `x0`, `x1`, and `labels`.
-        captions : list of str
-            Panel titles, in reading order.
-        title : str, default ""
-            Figure title.
-        rows, cols : int
-            Grid shape.
-        width : int, default 1150
-            Figure width in pixels.
+    The CSV rows trace the word. A honest unrolling lets you walk the rows monotonically along some direction; walking backwards counts the same. The score is the best such monotonicity over the two axes or the first principal direction — high means the global sequence survived (even mirrored), not that each letter is legible.
+    """)
+    return
 
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            The assembled figure, sharing one legend.
-        """
+
+@app.cell
+def _(LETTER_COLORS, go, make_subplots):
+    def letters_panel(frames, captions, title="", rows=1, cols=None, width=840):
+        """Letter scatters in a grid; width capped at 840 px."""
         cols = cols or len(frames)
+        width = min(int(width), 840)
+        _single = rows == 1 and cols == 1 and len(frames) == 1
         figure = make_subplots(
             rows=rows,
             cols=cols,
             subplot_titles=captions,
             horizontal_spacing=0.04,
-            vertical_spacing=0.14,
+            vertical_spacing=0.12,
         )
         for index, frame in enumerate(frames):
             row = index // cols + 1
@@ -154,72 +191,92 @@ def _(builder, go, make_subplots, np, pd):
                         name=letter,
                         legendgroup=letter,
                         showlegend=index == 0,
-                        marker=dict(size=4, opacity=0.8),
+                        marker=dict(size=4, opacity=0.8, color=LETTER_COLORS[letter]),
                     ),
                     row=row,
                     col=col,
                 )
+            if not _single:
+                axis_suffix = "" if col == 1 and row == 1 else str(index + 1)
+                figure.update_yaxes(
+                    scaleanchor=f"x{axis_suffix}", scaleratio=1, row=row, col=col
+                )
         figure.update_layout(
             width=width,
-            height=340 if rows == 1 else 720,
+            height=380 if rows == 1 else 500,
             title=title,
             margin=dict(t=70, b=35, l=45, r=20),
-            legend=dict(orientation="h", itemsizing="constant"),
+            legend=dict(orientation="h", itemsizing="constant", title="letter"),
         )
         return figure
 
-    def plot_digits(images):
-        """Draw the first 40 digit images as a 4 by 10 Plotly grid.
-
-        Parameters
-        ----------
-        images : array-like
-            One row of 64 pixel values per image.
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            The grid, with axes hidden.
-        """
-        return builder.digit_grid(images, 4, 10, "The first 40 digits")
-
-    return along_word, letters_panel, plot_digits
+    return (letters_panel,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Manifold Learning
+    ### `letters_panel`
 
-    ## Objectives
+    Compare several letter layouts in one figure with a shared legend and consistent colours. Multi-panel views keep equal axis scaling so panels are comparable; single plots leave axes free so a thin ribbon is not squashed.
+    """)
+    return
 
-    By the end of this lesson, you should be able to:
 
-    1. Explain what the manifold assumption buys: that distance *along* a surface can differ completely from straight-line distance *through* the space, and that this is why linear projection fails on a bent cloud.
-    2. Explain what each method preserves — reconstruction weights (LLE), graph shortest paths (Isomap), neighbourhood probabilities (t-SNE) — and why preserving one property does not preserve the others.
-    3. Explain why the neighbourhood size, whether called neighbours or perplexity, is the parameter that trades local detail against global shape, and why it fails at both extremes.
-    4. Explain why an embedding can preserve neighbours well while distorting every distance, and why a high along-word score does not mean the letters are readable.
-    5. Explain why PCA and t-SNE are different kinds of object: PCA is a fixed transformation you can reuse on new data, while t-SNE is a fit that must be redone from scratch.
+@app.cell
+def _(go, make_subplots, np):
+    def plot_digits(images, width=840):
+        """First 40 digit images upright in a 4×10 Plotly heatmap grid."""
+        data = np.asarray(images)
+        if data.ndim == 2:
+            data = data.reshape(-1, 8, 8)
+        rows, cols = 4, 10
+        width = min(int(width), 840)
+        figure = make_subplots(
+            rows=rows,
+            cols=cols,
+            horizontal_spacing=0.01,
+            vertical_spacing=0.02,
+        )
+        shown = 0
+        for row in range(1, rows + 1):
+            for col in range(1, cols + 1):
+                if shown >= min(len(data), rows * cols):
+                    break
+                figure.add_trace(
+                    go.Heatmap(
+                        z=np.flipud(data[shown]),
+                        showscale=False,
+                        colorscale="Greys",
+                        hoverinfo="skip",
+                    ),
+                    row=row,
+                    col=col,
+                )
+                shown += 1
+        _left, _right, _top, _bottom = 10, 10, 55, 10
+        _cell = (width - _left - _right) * (1 - 0.01 * (cols - 1)) / cols
+        _plot_h = rows * _cell / (1 - 0.02 * (rows - 1))
+        figure.update_layout(
+            width=width,
+            height=min(500, int(_top + _bottom + _plot_h)),
+            title="The first 40 digits",
+            margin=dict(t=_top, b=_bottom, l=_left, r=_right),
+            plot_bgcolor="white",
+        )
+        figure.update_xaxes(showticklabels=False, showgrid=False, zeroline=False)
+        figure.update_yaxes(showticklabels=False, showgrid=False, zeroline=False)
+        return figure
 
-    ## Background
+    return (plot_digits,)
 
-    **Why a bent surface breaks a linear method.** Each of these clouds lies on a sheet that has been folded through space. Two points can be neighbours *along the sheet* while being far apart *through the air*, and a linear method such as PCA can only measure the second. Unrolling the sheet means replacing straight-line distance with a distance that follows the surface. Every method in this lesson is a different guess at that replacement.
 
-    **The four methods.**
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### `plot_digits`
 
-    - **Locally linear embedding** rebuilds each point from its neighbours and keeps those local weights. The weights describe local shape and nothing global.
-    - **Isomap** keeps shortest-path distances on the neighbour graph, a stand-in for distance along the surface. Those paths give it global reach that LLE lacks.
-    - **t-SNE** places points so that neighbours stay neighbours. It optimises the neighbourhood, not the distances, which is why the gaps in its pictures are not measurements.
-    - **PCA**, kept here for comparison, projects linearly and cannot bend at all.
-
-    **The neighbour count is the key setting.** `n_neighbors` for LLE and Isomap, `perplexity` for t-SNE: each asks how much of the neighbourhood to trust. Perplexity is roughly the effective number of neighbours considered, and the default is 30. Too small and the fit memorises local noise; too large and it averages over the structure it should have found.
-
-    The along-word score is the absolute correlation between the original row order and the longer axis of the embedding. The file is stored in that row order. A high score means the word still runs along one axis. It does not by itself mean the letters are readable.
-
-    ## Datasets Used
-
-    - **S-shaped GOLIATH.** `GOLIATH_S_curve.csv`, the saved cloud: 1,000 points sampled from the rendered word and wrapped onto an S-shaped surface. `Goliath.png`, the image those points were sampled from, is also in this folder. The cloud is read from the CSV rather than regenerated, so the row order that the word-order score depends on is exactly the saved order.
-    - **Digits.** 1,797 images, 64 pixels each, from `load_digits`.
+    A small gallery of 8×8 handwritten digits, flipped upright and drawn with square cells so strokes are not stretched.
     """)
     return
 
@@ -228,8 +285,6 @@ def _(mo):
 def _(Path, np, pd, px):
     curve_path = Path(__file__).with_name("GOLIATH_S_curve.csv")
     curve = pd.read_csv(curve_path)
-    word_position = np.arange(len(curve))
-    letter_counts = curve.labels.value_counts().reindex(list("GOLIATH"))
     _figure = px.scatter_3d(
         curve,
         x="x0",
@@ -241,85 +296,286 @@ def _(Path, np, pd, px):
     )
     _figure.update_traces(marker=dict(size=2, opacity=0.85))
     _figure.update_layout(
-        width=760, height=520, margin=dict(t=55, b=20, l=20, r=20),
+        width=760, height=500, margin=dict(t=55, b=20, l=20, r=20),
         legend=dict(itemsizing="constant"),
     )
     _figure
-    return curve, letter_counts, word_position
+    return (curve,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Locally linear embedding
+
+    For each point \(x_i\), LLE finds weights \(W_{ij}\) so \(x_i \approx \sum_j W_{ij} x_j\) over neighbours. The 2-D embedding minimises \(\Phi(Y)=\sum_i \| y_i - \sum_j W_{ij} y_j \|^2\). **What to look for:** smooth ribbons; at 80 neighbours the word can appear **mirrored** yet score high, at 105 as a clean **arc** — read the picture, not only the number.
+    """)
+    return
 
 
 @app.cell
-def _(LocallyLinearEmbedding, along_word, curve, letters_panel, pd, word_position):
-    lle_agreement = {}
-    _layouts = []
-    _captions = []
-    for _neighbors in (82, 97, 101):
-        _embedded = LocallyLinearEmbedding(
-            n_neighbors=_neighbors,
+def _(LLE_NEIGHBOR_KEYS, LocallyLinearEmbedding, curve, pd):
+    _coords = curve[["x0", "x1", "x2"]].to_numpy()
+    lle_cache = {}
+    for _n in LLE_NEIGHBOR_KEYS:
+        _emb = LocallyLinearEmbedding(
+            n_neighbors=_n,
             n_components=2,
             random_state=20,
             method="modified",
             eigen_solver="dense",
-        ).fit_transform(curve[["x0", "x1", "x2"]])
-        lle_agreement[_neighbors] = along_word(word_position, _embedded)
-        _layouts.append(
-            pd.DataFrame(
-                {"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels}
-            )
+        ).fit_transform(_coords)
+        lle_cache[_n] = pd.DataFrame(
+            {"x0": _emb[:, 0], "x1": _emb[:, 1], "labels": curve.labels}
         )
-        _captions.append(f"LLE, {_neighbors} neighbours")
-    letters_panel(
-        _layouts, _captions, title="Locally linear embedding at three neighbourhood sizes"
-    )
-    return (lle_agreement,)
+    return (lle_cache,)
 
 
 @app.cell
-def _(Isomap, along_word, curve, letters_panel, pd, word_position):
-    isomap_agreement = {}
-    _layouts = []
-    _captions = []
-    for _neighbors, _solver in ((62, "dense"), (100, "auto")):
-        _embedded = Isomap(
-            n_neighbors=_neighbors, n_components=2, eigen_solver=_solver
-        ).fit_transform(curve[["x0", "x1", "x2"]])
-        isomap_agreement[_neighbors] = along_word(word_position, _embedded)
-        _layouts.append(
-            pd.DataFrame(
-                {"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels}
-            )
+def _(LLE_NEIGHBOR_KEYS, mo):
+    lle_neighbor_slider = mo.ui.slider(
+        start=min(LLE_NEIGHBOR_KEYS),
+        stop=max(LLE_NEIGHBOR_KEYS),
+        step=5,
+        value=100,
+        label="LLE n_neighbors",
+    )
+    lle_neighbor_slider
+    return (lle_neighbor_slider,)
+
+
+@app.cell
+def _(LLE_NEIGHBOR_KEYS, along_word, letters_panel, lle_cache, lle_neighbor_slider):
+    _n = min(LLE_NEIGHBOR_KEYS, key=lambda k: abs(k - int(lle_neighbor_slider.value)))
+    _frame = lle_cache[_n]
+    _score = along_word(_frame[["x0", "x1"]].to_numpy())
+    lle_slider_figure = letters_panel(
+        [_frame],
+        [f"LLE, {_n} neighbours (along-word {_score:.3f})"],
+        title="Locally linear embedding at the chosen neighbourhood size",
+    )
+    lle_slider_figure
+    return
+
+
+@app.cell
+def _(along_word, lle_cache):
+    lle_agreement = {
+        _n: along_word(lle_cache[_n][["x0", "x1"]].to_numpy())
+        for _n in (80, 100, 105)
+    }
+    return (lle_agreement,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Isomap
+
+    Geodesic distance \(D^G_{ij}\) is the shortest path on the `n_neighbors` graph; Isomap embeds so Euclidean distances match \(D^G_{ij}\). **What to look for:** connected graphs follow the sheet; broken graphs scatter letters and drop the along-word score.
+    """)
+    return
+
+
+@app.cell
+def _(ISO_NEIGHBOR_KEYS, Isomap, curve, pd):
+    _coords = curve[["x0", "x1", "x2"]].to_numpy()
+    isomap_cache = {}
+    for _n in ISO_NEIGHBOR_KEYS:
+        _solver = "dense" if _n <= 70 else "auto"
+        _emb = Isomap(
+            n_neighbors=_n, n_components=2, eigen_solver=_solver
+        ).fit_transform(_coords)
+        isomap_cache[_n] = pd.DataFrame(
+            {"x0": _emb[:, 0], "x1": _emb[:, 1], "labels": curve.labels}
         )
-        _captions.append(f"Isomap, {_neighbors} neighbours")
-    letters_panel(_layouts, _captions, title="Isomap at two neighbourhood sizes", width=900)
+    return (isomap_cache,)
+
+
+@app.cell
+def _(ISO_NEIGHBOR_KEYS, mo):
+    isomap_neighbor_slider = mo.ui.slider(
+        start=min(ISO_NEIGHBOR_KEYS),
+        stop=max(ISO_NEIGHBOR_KEYS),
+        step=5,
+        value=62,
+        label="Isomap n_neighbors",
+    )
+    isomap_neighbor_slider
+    return (isomap_neighbor_slider,)
+
+
+@app.cell
+def _(
+    ISO_NEIGHBOR_KEYS,
+    along_word,
+    isomap_cache,
+    isomap_neighbor_slider,
+    letters_panel,
+):
+    _n = min(ISO_NEIGHBOR_KEYS, key=lambda k: abs(k - int(isomap_neighbor_slider.value)))
+    _frame = isomap_cache[_n]
+    _score = along_word(_frame[["x0", "x1"]].to_numpy())
+    isomap_slider_figure = letters_panel(
+        [_frame],
+        [f"Isomap, {_n} neighbours (along-word {_score:.3f})"],
+        title="Isomap at the chosen neighbourhood size",
+    )
+    isomap_slider_figure
+    return
+
+
+@app.cell
+def _(along_word, isomap_cache):
+    isomap_agreement = {
+        _n: along_word(isomap_cache[_n][["x0", "x1"]].to_numpy())
+        for _n in (62, 100)
+    }
     return (isomap_agreement,)
 
 
 @app.cell
-def _(TSNE, along_word, curve, letters_panel, pd, word_position):
-    tsne_agreement = {}
+def _(PCA, along_word, curve, letters_panel, pd):
+    _coords = curve[["x0", "x1", "x2"]].to_numpy()
+    pca_emb = PCA(n_components=2).fit_transform(_coords)
+    pca_frame = pd.DataFrame(
+        {"x0": pca_emb[:, 0], "x1": pca_emb[:, 1], "labels": curve.labels}
+    )
+    pca_along = along_word(pca_emb)
+    pca_compare_figure = letters_panel(
+        [pca_frame],
+        [f"PCA (along-word {pca_along:.3f})"],
+        title="Linear PCA on the same 3-D coordinates",
+    )
+    pca_compare_figure
+    return (pca_along,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### t-SNE
+
+    Minimise \(C=\sum_i \mathrm{KL}(P_i \,\|\, Q_i)\) between high-D neighbour probabilities \(P\) and 2-D Student-\(t\) neighbours \(Q\) (learning rate fixed in this lesson). **What to look for:** along-word moves unevenly with perplexity — high values help overall but not monotonically; cluster gaps are still not distances.
+    """)
+    return
+
+
+@app.cell
+def _(TSNE, TSNE_LEARNING_RATE, TSNE_PERPLEXITY_KEYS, curve, pd):
+    _coords = curve[["x0", "x1", "x2"]].to_numpy()
+    tsne_cache = {}
+    for _p in TSNE_PERPLEXITY_KEYS:
+        _emb = TSNE(
+            random_state=20,
+            init="pca",
+            perplexity=_p,
+            learning_rate=TSNE_LEARNING_RATE,
+        ).fit_transform(_coords)
+        tsne_cache[_p] = pd.DataFrame(
+            {"x0": _emb[:, 0], "x1": _emb[:, 1], "labels": curve.labels}
+        )
+    return (tsne_cache,)
+
+
+@app.cell
+def _(TSNE_PERPLEXITY_KEYS, mo):
+    _step = TSNE_PERPLEXITY_KEYS[1] - TSNE_PERPLEXITY_KEYS[0]
+    tsne_perplexity_slider = mo.ui.slider(
+        start=min(TSNE_PERPLEXITY_KEYS),
+        stop=max(TSNE_PERPLEXITY_KEYS),
+        step=_step,
+        value=30,
+        label="t-SNE perplexity",
+    )
+    tsne_perplexity_slider
+    return (tsne_perplexity_slider,)
+
+
+@app.cell
+def _(
+    TSNE_PERPLEXITY_KEYS,
+    along_word,
+    letters_panel,
+    tsne_cache,
+    tsne_perplexity_slider,
+):
+    _p = min(
+        TSNE_PERPLEXITY_KEYS,
+        key=lambda k: abs(k - int(tsne_perplexity_slider.value)),
+    )
+    _frame = tsne_cache[_p]
+    _score = along_word(_frame[["x0", "x1"]].to_numpy())
+    tsne_slider_figure = letters_panel(
+        [_frame],
+        [f"t-SNE, perplexity {_p} (along-word {_score:.3f})"],
+        title="t-SNE at the chosen perplexity",
+    )
+    tsne_slider_figure
+    return
+
+
+@app.cell
+def _(along_word, letters_panel, tsne_cache):
+    tsne_agreement = {
+        _p: along_word(_frame[["x0", "x1"]].to_numpy())
+        for _p, _frame in tsne_cache.items()
+    }
     _layouts = []
     _captions = []
-    for _perplexity, _learning in ((30, "auto"), (5, 50), (50, "auto"), (120, 100)):
-        _model = TSNE(
-            random_state=20, init="pca", perplexity=_perplexity, learning_rate=_learning
+    for _perplexity in (5, 30, 50, 120):
+        _frame = tsne_cache[_perplexity]
+        _layouts.append(_frame)
+        _captions.append(
+            f"Perplexity {_perplexity} (score {tsne_agreement[_perplexity]:.3f})"
         )
-        _embedded = _model.fit_transform(curve[["x0", "x1", "x2"]])
-        tsne_agreement[_perplexity] = along_word(word_position, _embedded)
-        _layouts.append(
-            pd.DataFrame(
-                {"x0": _embedded[:, 0], "x1": _embedded[:, 1], "labels": curve.labels}
-            )
-        )
-        _captions.append(f"t-SNE, perplexity {_perplexity}")
-    letters_panel(
+    tsne_quad_figure = letters_panel(
         _layouts,
         _captions,
         title="t-SNE at four perplexities",
         rows=2,
         cols=2,
-        width=900,
+        width=840,
     )
+    tsne_quad_figure
     return (tsne_agreement,)
+
+
+@app.cell
+def _(
+    isomap_agreement,
+    lle_agreement,
+    mo,
+    pca_along,
+    pd,
+    tsne_agreement,
+):
+    _rows = [
+        ("PCA (linear)", "—", pca_along, "Cannot unroll the bend"),
+        ("LLE", "80 neighbours", lle_agreement[80], "Mirrored, readable word"),
+        ("LLE", "100 neighbours", lle_agreement[100], "Clean unrolling"),
+        ("LLE", "105 neighbours", lle_agreement[105], "Clean arc"),
+        ("Isomap", "62 neighbours", isomap_agreement[62], "Graph geodesics"),
+        ("Isomap", "100 neighbours", isomap_agreement[100], "Graph geodesics"),
+        ("t-SNE", "perplexity 5", tsne_agreement[5], "Very local"),
+        ("t-SNE", "perplexity 30", tsne_agreement[30], "Default-scale"),
+        ("t-SNE", "perplexity 50", tsne_agreement[50], "Mid perplexity"),
+        ("t-SNE", "perplexity 120", tsne_agreement[120], "Wide neighbourhood"),
+    ]
+    score_table = pd.DataFrame(
+        _rows, columns=["Method", "Setting", "Along-word", "Notes"]
+    )
+    mo.Html(score_table.to_html(index=False, float_format=lambda x: f"{x:.3f}"))
+    return
+
+
+@app.cell(hide_code=True)
+def _(isomap_agreement, lle_agreement, mo, pca_along, tsne_agreement):
+    _tsne_vals = list(tsne_agreement.values())
+    mo.md(f"""
+    PCA **{pca_along:.3f}**; LLE/Isomap **{min(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**–**{max(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}** (mirrored LLE 80 **{lle_agreement[80]:.3f}**). t-SNE is **uneven** (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}**): **{tsne_agreement[40]:.3f}** at 40, **{tsne_agreement[50]:.3f}** at 50, **{tsne_agreement[100]:.3f}** vs **{tsne_agreement[120]:.3f}** at 100 vs 120.
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -327,7 +583,7 @@ def _(mo):
     mo.md(r"""
     ## Digits
 
-    The 5-neighbor score is a check on the picture, not part of either fit. It is the mean accuracy of 5-fold cross-validation on the two coordinates, using the digit labels only as the thing to predict. `n_jobs=1`.
+    The 5-neighbour score is cross-validated k-NN accuracy on the 2-D coordinates — a digit-label check on the picture, separate from the GOLIATH along-word score and from the embedding objective.
     """)
     return
 
@@ -337,15 +593,17 @@ def _(
     KNeighborsClassifier,
     PCA,
     TSNE,
-    builder,
+    TSNE_LEARNING_RATE,
     cross_val_score,
     load_digits,
-    pd,
     plot_digits,
 ):
     digits = load_digits()
-    digit_pca = PCA(n_components=2).fit_transform(digits.data)
-    digit_tsne = TSNE(random_state=42, init="pca").fit_transform(digits.data)
+    digit_pca_model = PCA(n_components=2).fit(digits.data)
+    digit_pca = digit_pca_model.transform(digits.data)
+    digit_tsne = TSNE(
+        random_state=42, init="pca", learning_rate=TSNE_LEARNING_RATE
+    ).fit_transform(digits.data)
     _checker = KNeighborsClassifier(n_neighbors=5)
     pca_neighbor_score = float(
         cross_val_score(_checker, digit_pca, digits.target, cv=5, n_jobs=1).mean()
@@ -353,32 +611,134 @@ def _(
     tsne_neighbor_score = float(
         cross_val_score(_checker, digit_tsne, digits.target, cv=5, n_jobs=1).mean()
     )
-    plot_digits(digits.data)
-    return digit_pca, digit_tsne, digits, pca_neighbor_score, tsne_neighbor_score
+    plot_digits(digits.data[:40])
+    return (
+        digit_pca,
+        digit_pca_model,
+        digit_tsne,
+        digits,
+        pca_neighbor_score,
+        tsne_neighbor_score,
+    )
 
 
 @app.cell
-def _(builder, digit_pca, digit_tsne, digits, pd):
+def _(digit_pca, digit_tsne, digits, go, make_subplots, pd):
     _labels = digits.target.astype(str)
     _left = pd.DataFrame(
-        {"c1": digit_pca[:, 0], "c2": digit_pca[:, 1], "digit": _labels}
+        {"x0": digit_pca[:, 0], "x1": digit_pca[:, 1], "digit": _labels}
     )
     _right = pd.DataFrame(
-        {"c1": digit_tsne[:, 0], "c2": digit_tsne[:, 1], "digit": _labels}
+        {"x0": digit_tsne[:, 0], "x1": digit_tsne[:, 1], "digit": _labels}
     )
-    builder.scatter_by_group(
-        _left, "c1", "c2", "digit", "Digits in the plane of two principal components", size=4, equal=False
+    digits_figure = make_subplots(
+        rows=1, cols=2, subplot_titles=("PCA (2 components)", "t-SNE")
     )
+    for _frame, _index in ((_left, 0), (_right, 1)):
+        for _digit in map(str, range(10)):
+            _mask = _frame["digit"].to_numpy() == _digit
+            digits_figure.add_trace(
+                go.Scatter(
+                    x=_frame["x0"].to_numpy()[_mask],
+                    y=_frame["x1"].to_numpy()[_mask],
+                    mode="markers",
+                    name=_digit,
+                    legendgroup=_digit,
+                    showlegend=_index == 0,
+                    marker=dict(size=4, opacity=0.75),
+                ),
+                row=1,
+                col=_index + 1,
+            )
+    digits_figure.update_layout(
+        width=840,
+        height=380,
+        title="All digits: PCA plane versus t-SNE",
+        margin=dict(t=70, b=35, l=45, r=20),
+        legend=dict(orientation="h", title="digit"),
+    )
+    digits_figure
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, pca_neighbor_score, tsne_neighbor_score):
+    mo.md(f"""
+    t-SNE separates digit classes more clearly in the plane (5-NN accuracy **{tsne_neighbor_score:.3f}** vs **{pca_neighbor_score:.3f}** for PCA). That measures local class structure in the picture, not whether you can **`transform`** new images.
+    """)
     return
 
 
 @app.cell
-def _(builder, digit_tsne, digits, pd):
-    _right = pd.DataFrame(
-        {"c1": digit_tsne[:, 0], "c2": digit_tsne[:, 1], "digit": digits.target.astype(str)}
+def _(PCA, digits, go, pd):
+    _split = 1500
+    _train = digits.data[:_split]
+    _holdout = digits.data[_split:]
+    _holdout_labels = digits.target[_split:]
+    pca_reuse = PCA(n_components=2).fit(_train)
+    _pca_new = pca_reuse.transform(_holdout)
+    _reuse_frame = pd.DataFrame(
+        {"x0": _pca_new[:, 0], "x1": _pca_new[:, 1], "digit": _holdout_labels.astype(str)}
     )
-    builder.scatter_by_group(
-        _right, "c1", "c2", "digit", "The same digits placed by t-SNE", size=4, equal=False
+    transform_figure = go.Figure()
+    for _digit in map(str, range(10)):
+        _mask = _reuse_frame["digit"].to_numpy() == _digit
+        transform_figure.add_trace(
+            go.Scatter(
+                x=_reuse_frame["x0"].to_numpy()[_mask],
+                y=_reuse_frame["x1"].to_numpy()[_mask],
+                mode="markers",
+                name=_digit,
+                marker=dict(size=5, opacity=0.85),
+            )
+        )
+    transform_figure.update_layout(
+        width=760,
+        height=380,
+        title="PCA transform on 297 held-out digits (fit on the first 1,500)",
+        margin=dict(t=55, b=40, l=45, r=20),
+        legend=dict(title="digit"),
+    )
+    transform_figure
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    t-SNE has no **`transform`**: new points require refitting on the combined data, and the new layout will not align with an earlier t-SNE picture. PCA is the reusable map — the held-out scatter above uses the same projection learned from the training rows only.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which t-SNE argument sets the balance between local and wider neighbourhoods? Replace `None` with that argument name.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_perplexity = None
+    return (student_perplexity,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answer": mo.md(r"""
+```python
+student_perplexity = "perplexity"
+```
+**perplexity.** Smaller values weight nearest neighbours heavily; larger values widen the effective neighbourhood (default 30).
+""")
+        },
+        expanded=False,
     )
     return
 
@@ -388,28 +748,17 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which t-SNE argument sets the balance between local and wider neighborhoods? Replace `None` with that argument name.
+    In one sentence, what object does LLE try to keep fixed when it moves points into 2-D?
     """)
     return
-
-
-@app.cell
-def _():
-    student_perplexity = None
-    print(student_perplexity)
-    return (student_perplexity,)
-
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_perplexity = "perplexity"
-```
-**perplexity.** A small value keeps the fit focused on the nearest points. A larger value asks it to respect a wider neighborhood. The default is 30.
-''')
+            "Show answer": mo.md(r"""
+**Local reconstruction weights:** each point should still be approximated by the same linear combination of its neighbours after embedding.
+""")
         },
         expanded=False,
     )
@@ -417,47 +766,32 @@ student_perplexity = "perplexity"
 
 
 @app.cell(hide_code=True)
-def _(isomap_agreement, lle_agreement, mo, pca_neighbor_score, tsne_agreement, tsne_neighbor_score):
-    mo.md(f"""
-    ## Conclusions
-
-    1. **The manifold assumption is the whole lesson.** On the S-bend the points lie on a sheet that has been bent through space, so two points far apart *along* the sheet can be close *through* the air. A linear projection like PCA can only measure the second. Every method here works by trying to estimate the first, and each does it with a different substitute for "distance along the surface".
-    2. **Each method preserves a different thing, and gains and loses accordingly.** LLE keeps each point's reconstruction weights from its neighbours, so it respects local shape but has no global constraint. Isomap keeps shortest paths on a neighbour graph, which recovers global shape as long as the graph stays connected enough to be honest. t-SNE keeps neighbourhood probabilities, which separates groups brilliantly and distorts distances badly. None of them preserves all three.
-    3. **On this cloud the global methods won.** Isomap scored {isomap_agreement[62]:.3f} and {isomap_agreement[100]:.3f} on the along-word measure at 62 and 100 neighbours, LLE {lle_agreement[82]:.3f} to {lle_agreement[101]:.3f} across its three settings, and t-SNE ranged from {tsne_agreement[5]:.3f} at perplexity 5 to {tsne_agreement[120]:.3f} at 120. That ordering is a property of *this* cloud — a smoothly bent sheet with a genuine global order — not a general ranking of the methods.
-    4. **The neighbour count is the parameter, and it is the same idea under two names.** LLE's `n_neighbors` and t-SNE's `perplexity` both say how much of the neighbourhood to believe. Too small and the fit memorises local noise; too large and it smooths away the structure it was meant to find. t-SNE here went from {tsne_agreement[5]:.3f} at 5 to {tsne_agreement[120]:.3f} at 120 on the same data, which is the clearest evidence in this lesson that the setting is doing real work.
-    5. **A high along-word score is a weak certificate.** It says the word still runs along one axis. It does not say the letters are separated, ordered correctly, or readable — a layout can correlate just as well with the row order while running backwards, or while the letters overlap. Read the picture, not just the number.
-    6. **Neighbourhood quality and distance fidelity are different claims.** On the digits, 5-neighbour accuracy was {pca_neighbor_score:.3f} in the PCA plane and {tsne_neighbor_score:.3f} in the t-SNE plane, so t-SNE kept far more local class structure. That says the *neighbours* are better preserved. It says nothing about the distances between clusters, which t-SNE exaggerates deliberately. Neither embedding was shown the labels, so both scores measure structure the fit found on its own.
-    7. **t-SNE is a fit, PCA is a transformation.** PCA gives you a fixed projection you can apply to a new image later. t-SNE has no `transform`: adding one point means refitting everything, and the new layout will not line up with the old one. Choose between them on that basis as much as on the pictures, because a map you cannot extend is a different tool from one you can.
-    8. **Do not read a manifold plot as a map.** The axes carry no meaning, the cluster sizes mean nothing, and the gaps between groups are a property of the algorithm. What you may read is who is next to whom.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Check your understanding
+    ### Try it yourself
 
-    1. What does locally linear embedding try to keep?
-    2. What distance does Isomap keep?
-    3. What does a larger perplexity ask t-SNE to pay attention to?
-    4. Why is the 5-neighbor score not part of the t-SNE fit?
+    Using `curve` with columns `x0`, `x1`, `x2`, fit **PCA** with two components and store the embedding in `student_pca_2d` (a NumPy array of shape `(n_points, 2)`).
     """)
     return
+
+
+@app.cell
+def _():
+    student_pca_2d = None
+    return (student_pca_2d,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-1. **Local weights:** Each point is rebuilt from its neighbors. The embedding tries to keep those weights. It does not try to keep long distances.
-2. **Shortest paths on the neighbor graph:** Those paths follow the surface when the surface is covered by the neighbors. A Euclidean shortcut would cut through the bend.
-3. **A wider neighborhood:** Perplexity 5 stays very local. Perplexity 120 pulls in much more of the cloud. The along-word correlations are the comparison on this file.
-4. **The labels are only a check:** t-SNE sees the pixel values. The classifier is fit afterward on the two coordinates to measure how separated the digits became.
+            "Show answer": mo.md(r"""
+```python
+student_pca_2d = PCA(n_components=2).fit_transform(curve[["x0", "x1", "x2"]])
+```
 """)
         },
-        lazy=True,
+        expanded=False,
     )
     return
 
@@ -465,11 +799,51 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## References
+    ### Try it yourself
 
-    - [Manifold learning](https://scikit-learn.org/stable/modules/manifold.html)
-    - [t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html)
-    - VanderPlas, J. (2017). *Python Data Science Handbook*. O'Reilly Media. Chapter 5.
+    After fitting PCA on a training matrix `X_train`, what method places new rows `X_new` into the same component space?
+    """)
+    return
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answer": mo.md(r"""
+Call **`transform`** on the same fitted PCA object: `fitted_pca.transform(X_new)`.
+
+Running **`fit_transform`** on `X_new` alone would learn new directions and break compatibility with the training projection.
+""")
+        },
+        expanded=False,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    isomap_agreement,
+    lle_agreement,
+    mo,
+    pca_along,
+    tsne_agreement,
+):
+    _tsne_vals = list(tsne_agreement.values())
+    _manifold_high = max(
+        lle_agreement[80],
+        lle_agreement[100],
+        lle_agreement[105],
+        isomap_agreement[62],
+        isomap_agreement[100],
+    )
+    mo.md(f"""
+    ## Conclusions
+
+    1. **Manifold geometry:** PCA on the S-curve reaches along-word **{pca_along:.3f}**; tuned LLE and Isomap reach up to **{_manifold_high:.3f}**, including a mirrored GOLIATH at 80 neighbours (**{lle_agreement[80]:.3f}**), well above PCA.
+    2. **No single winner on this file:** Isomap **{isomap_agreement[62]:.3f}**–**{isomap_agreement[100]:.3f}**, LLE at 100 neighbours **{lle_agreement[100]:.3f}**, and t-SNE at 120 **{tsne_agreement[120]:.3f}** all recover order — compare layouts, not just decimals.
+    3. **Perplexity and neighbours matter:** t-SNE along-word is uneven (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}** across the slider cache), e.g. **{tsne_agreement[40]:.3f}** at perplexity 40, **{tsne_agreement[50]:.3f}** at 50, with **{tsne_agreement[100]:.3f}** at 100 beating **{tsne_agreement[120]:.3f}** at 120; LLE at 105 is **{lle_agreement[105]:.3f}** on a clean arc.
+    4. **Scores ≠ readable letters:** along-word tracks global monotonicity (either orientation); overlapping letters can still look wrong while scoring moderately (PCA **{pca_along:.3f}**).
+    5. **Reuse vs refit:** PCA **`transform`** maps held-out digits in the scatter above; t-SNE has no equivalent — every new point set needs a new fit and a new layout.
     """)
     return
 
