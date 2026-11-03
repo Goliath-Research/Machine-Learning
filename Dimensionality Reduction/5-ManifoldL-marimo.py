@@ -118,7 +118,7 @@ def _(mo):
 
     On a folded sheet, neighbours *along* the surface can be far *through* the air — PCA only sees the latter. **LLE** keeps local reconstruction weights; **Isomap** keeps graph shortest paths; **t-SNE** keeps neighbourhood probabilities; **PCA** is the linear baseline. **`n_neighbors`** / **`perplexity`** trade local detail against global smoothing.
 
-    The **along-word score** measures monotonicity: if you walk points in order along the best axis in the embedding, how often does that walk agree with the CSV row order? A folded or tangled layout can still correlate on one coordinate while reversing locally; the score counts order reversals, so garbled ribbons score low.
+    The **along-word score** measures monotonicity along the best direction in the plane, treating a **reversed** word order as equally good (`max(s, 1−s)` per axis). Low scores mean the row order folds back on itself; a mirrored but readable GOLIATH still scores high.
 
     ## Datasets Used
 
@@ -147,7 +147,8 @@ def _(np):
             _inversions = sum(
                 1 for _i in range(_n) for _j in range(_i + 1, _n) if _rank[_i] > _rank[_j]
             )
-            _best = max(_best, 1.0 - _inversions / _pairs)
+            _score = 1.0 - _inversions / _pairs
+            _best = max(_best, _score, 1.0 - _score)
         return float(_best)
 
     return (along_word,)
@@ -158,7 +159,7 @@ def _(mo):
     mo.md(r"""
     ### `along_word`
 
-    The CSV rows trace the word. A honest unrolling should let you walk the rows along one direction in the plane without constantly jumping backwards. The score checks that monotonicity along the better of the two axes or the first principal direction — high means the global sequence survived, not that each letter is legible.
+    The CSV rows trace the word. A honest unrolling lets you walk the rows monotonically along some direction; walking backwards counts the same. The score is the best such monotonicity over the two axes or the first principal direction — high means the global sequence survived (even mirrored), not that each letter is legible.
     """)
     return
 
@@ -307,7 +308,7 @@ def _(mo):
     mo.md(r"""
     ### Locally linear embedding
 
-    For each point \(x_i\), LLE finds weights \(W_{ij}\) so \(x_i \approx \sum_j W_{ij} x_j\) over neighbours. The 2-D embedding minimises \(\Phi(Y)=\sum_i \| y_i - \sum_j W_{ij} y_j \|^2\). **What to look for:** smooth ribbons at sensible `n_neighbors`; tangled knots score low on along-word even if colours cluster.
+    For each point \(x_i\), LLE finds weights \(W_{ij}\) so \(x_i \approx \sum_j W_{ij} x_j\) over neighbours. The 2-D embedding minimises \(\Phi(Y)=\sum_i \| y_i - \sum_j W_{ij} y_j \|^2\). **What to look for:** smooth ribbons; at 80 neighbours the word can appear **mirrored** yet score high, at 105 as a clean **arc** — read the picture, not only the number.
     """)
     return
 
@@ -455,7 +456,7 @@ def _(mo):
     mo.md(r"""
     ### t-SNE
 
-    Minimise \(C=\sum_i \mathrm{KL}(P_i \,\|\, Q_i)\) between high-D neighbour probabilities \(P\) and 2-D Student-\(t\) neighbours \(Q\) (learning rate fixed in this lesson). **What to look for:** low perplexity fragments the word; larger perplexity restores thread order on the score — cluster gaps are still not distances.
+    Minimise \(C=\sum_i \mathrm{KL}(P_i \,\|\, Q_i)\) between high-D neighbour probabilities \(P\) and 2-D Student-\(t\) neighbours \(Q\) (learning rate fixed in this lesson). **What to look for:** along-word moves unevenly with perplexity — high values help overall but not monotonically; cluster gaps are still not distances.
     """)
     return
 
@@ -516,14 +517,14 @@ def _(
 
 @app.cell
 def _(along_word, letters_panel, tsne_cache):
-    tsne_agreement = {}
+    tsne_agreement = {
+        _p: along_word(_frame[["x0", "x1"]].to_numpy())
+        for _p, _frame in tsne_cache.items()
+    }
     _layouts = []
     _captions = []
     for _perplexity in (5, 30, 50, 120):
         _frame = tsne_cache[_perplexity]
-        tsne_agreement[_perplexity] = along_word(
-            _frame[["x0", "x1"]].to_numpy()
-        )
         _layouts.append(_frame)
         _captions.append(
             f"Perplexity {_perplexity} (score {tsne_agreement[_perplexity]:.3f})"
@@ -551,9 +552,9 @@ def _(
 ):
     _rows = [
         ("PCA (linear)", "—", pca_along, "Cannot unroll the bend"),
-        ("LLE", "80 neighbours", lle_agreement[80], "Tangled layout"),
+        ("LLE", "80 neighbours", lle_agreement[80], "Mirrored, readable word"),
         ("LLE", "100 neighbours", lle_agreement[100], "Clean unrolling"),
-        ("LLE", "105 neighbours", lle_agreement[105], "Tangled layout"),
+        ("LLE", "105 neighbours", lle_agreement[105], "Clean arc"),
         ("Isomap", "62 neighbours", isomap_agreement[62], "Graph geodesics"),
         ("Isomap", "100 neighbours", isomap_agreement[100], "Graph geodesics"),
         ("t-SNE", "perplexity 5", tsne_agreement[5], "Very local"),
@@ -562,16 +563,17 @@ def _(
         ("t-SNE", "perplexity 120", tsne_agreement[120], "Wide neighbourhood"),
     ]
     score_table = pd.DataFrame(
-        _rows, columns=["Method", "Setting", "Along-word"]
+        _rows, columns=["Method", "Setting", "Along-word", "Notes"]
     )
     mo.Html(score_table.to_html(index=False, float_format=lambda x: f"{x:.3f}"))
     return
 
 
 @app.cell(hide_code=True)
-def _(mo, pca_along, tsne_agreement):
+def _(isomap_agreement, lle_agreement, mo, pca_along, tsne_agreement):
+    _tsne_vals = list(tsne_agreement.values())
     mo.md(f"""
-    PCA stays at **{pca_along:.3f}**; tuned LLE and Isomap reach **0.99+** while bad LLE settings near **0.51** match what the pictures show. t-SNE moves from **{tsne_agreement[5]:.3f}** (perplexity 5) to **{tsne_agreement[120]:.3f}** (120) on the same score — use the slider to see the middle values.
+    PCA stays at **{pca_along:.3f}**; LLE and Isomap settings shown here reach **{min(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**–**{max(lle_agreement[80], lle_agreement[100], lle_agreement[105], isomap_agreement[62], isomap_agreement[100]):.3f}**, including mirrored LLE at 80 (**{lle_agreement[80]:.3f}**). t-SNE along-word is **uneven** across perplexity (slider cache **{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}**): e.g. **{tsne_agreement[10]:.3f}** at 10, **{tsne_agreement[20]:.3f}** at 20, **{tsne_agreement[100]:.3f}** at 100 vs **{tsne_agreement[120]:.3f}** at 120.
     """)
     return
 
@@ -827,23 +829,23 @@ def _(
     mo,
     pca_along,
     tsne_agreement,
-    tsne_cache,
-    along_word,
 ):
-    _tsne_slider_scores = {
-        _p: along_word(tsne_cache[_p][["x0", "x1"]].to_numpy())
-        for _p in tsne_cache
-    }
-    _tsne_min = min(_tsne_slider_scores.values())
-    _tsne_max = max(_tsne_slider_scores.values())
+    _tsne_vals = list(tsne_agreement.values())
+    _manifold_high = max(
+        lle_agreement[80],
+        lle_agreement[100],
+        lle_agreement[105],
+        isomap_agreement[62],
+        isomap_agreement[100],
+    )
     mo.md(f"""
     ## Conclusions
 
-    1. **Manifold geometry:** PCA on the S-curve reaches along-word **{pca_along:.3f}**; strong Isomap/LLE settings exceed **0.99**, well above PCA, while tangled LLE near **0.51** matches garbled ribbons.
-    2. **No single winner on this file:** Isomap **{isomap_agreement[62]:.3f}**–**{isomap_agreement[100]:.3f}**, clean LLE at 100 neighbours **{lle_agreement[100]:.3f}**, and t-SNE at 120 **{tsne_agreement[120]:.3f}** all recover order — compare layouts, not just decimals.
-    3. **Perplexity and neighbours matter:** t-SNE along-word ranges from **{tsne_agreement[5]:.3f}** (perplexity 5) to **{tsne_agreement[120]:.3f}** (120), with precomputed slider values between **{_tsne_min:.3f}** and **{_tsne_max:.3f}**; LLE jumps from **{lle_agreement[80]:.3f}** at 80 neighbours to **{lle_agreement[100]:.3f}** at 100.
-    4. **Scores ≠ readable letters:** along-word tracks global monotonicity along some direction; overlapping letters can still look wrong while scoring moderately (PCA **{pca_along:.3f}**).
-    5. **Reuse vs refit:** PCA **`transform`** maps held-out digits in the next section; t-SNE has no equivalent — every new point set needs a new fit and a new layout.
+    1. **Manifold geometry:** PCA on the S-curve reaches along-word **{pca_along:.3f}**; tuned LLE and Isomap reach up to **{_manifold_high:.3f}**, including a mirrored GOLIATH at 80 neighbours (**{lle_agreement[80]:.3f}**), well above PCA.
+    2. **No single winner on this file:** Isomap **{isomap_agreement[62]:.3f}**–**{isomap_agreement[100]:.3f}**, LLE at 100 neighbours **{lle_agreement[100]:.3f}**, and t-SNE at 120 **{tsne_agreement[120]:.3f}** all recover order — compare layouts, not just decimals.
+    3. **Perplexity and neighbours matter:** t-SNE along-word is uneven (**{min(_tsne_vals):.3f}**–**{max(_tsne_vals):.3f}** across the slider cache), e.g. **{tsne_agreement[10]:.3f}** at perplexity 10, **{tsne_agreement[20]:.3f}** at 20, with **{tsne_agreement[100]:.3f}** at 100 beating **{tsne_agreement[120]:.3f}** at 120; LLE at 105 is **{lle_agreement[105]:.3f}** on a clean arc.
+    4. **Scores ≠ readable letters:** along-word tracks global monotonicity (either orientation); overlapping letters can still look wrong while scoring moderately (PCA **{pca_along:.3f}**).
+    5. **Reuse vs refit:** PCA **`transform`** maps held-out digits in the scatter above; t-SNE has no equivalent — every new point set needs a new fit and a new layout.
     """)
     return
 
