@@ -412,7 +412,9 @@ def _(LETTER_COLORS, go, make_subplots):
     def letters_panel(frames, captions, title="", width=880):
         """Side-by-side letter scatters with one shared legend (width capped for marimo)."""
         count = len(frames)
-        width = min(width, min(880, 220 * count + 80))
+        marimo_max = 880
+        suggested = min(marimo_max, 220 * count + 80)
+        width = suggested if width == marimo_max else min(width, marimo_max)
         figure = make_subplots(rows=1, cols=count, subplot_titles=captions, horizontal_spacing=0.04)
         for index, frame in enumerate(frames, start=1):
             for letter in "GOLIATH":
