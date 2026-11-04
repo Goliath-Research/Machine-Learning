@@ -483,9 +483,19 @@ def _(LinearDiscriminantAnalysis, load_wine, mo, pd, plt, scale_train_test, trai
     mo.vstack(
         [
             _figure,
-            mo.Html(_coef.iloc[:, :7].to_html()),
-            mo.Html(_coef.iloc[:, 7:].to_html()),
-            mo.Html(_show.head().round(3).to_html()),
+            mo.accordion(
+                {
+                    "Coefficient table and probability preview": mo.vstack(
+                        [
+                            mo.Html(_coef.iloc[:, :7].to_html()),
+                            mo.Html(_coef.iloc[:, 7:].to_html()),
+                            mo.Html(_show.head().round(3).to_html()),
+                        ],
+                        gap=1,
+                    ),
+                },
+                lazy=True,
+            ),
         ],
         gap=1,
     )
