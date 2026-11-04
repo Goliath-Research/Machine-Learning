@@ -18,33 +18,65 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.linear_model import LinearRegression
     from sklearn.metrics import r2_score, root_mean_squared_error
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import PolynomialFeatures
     from statsmodels.graphics.gofplots import qqplot
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         LinearRegression,
         PolynomialFeatures,
+        mo,
+        np,
+        pd,
+        plt,
         qqplot,
         r2_score,
         root_mean_squared_error,
+        sns,
         train_test_split,
     )
 
@@ -88,6 +120,7 @@ def _(np, pd, plt, sns, train_test_split):
     _axes.set_title("sin(x) * x, plus noise")
     _axes.set_xlabel("x")
     _axes.set_ylabel("y")
+    _figure
     return _figure, x_test, x_train, y_test, y_train
 
 
@@ -145,12 +178,13 @@ def _(
         )
     poly_scores = pd.DataFrame(poly_rows).set_index("degree")
     _figure.tight_layout()
+    _figure
     return _figure
 
 
 @app.cell
 def _(mo, poly_scores):
-    print(poly_scores.round(3).to_string())
+    mo.Html(poly_scores.round(3).to_html())
     return mo.Html(poly_scores.round(3).to_html())
 
 
@@ -159,7 +193,7 @@ def _(mo):
     mo.md(r"""
     RMSE is the typical size of a residual, in the units of `y`. A lower test RMSE is a closer fit on the rows that were held out.
 
-    The Q-Q plots below use the test residuals of degree 2 and degree 5. Points along the reference line are consistent with a normal residual. A bend means the degree is missing some of the wave.
+    The Q-Q plots below use the test residuals of degree 2 and degree 5. Points along the reference line are consistent with a normal residual. A bend means the residuals are not normal; it does not by itself show that the curve is missing the wave.
     """)
     return
 
@@ -185,6 +219,7 @@ def _(
         qqplot(_resid, line="s", ax=_ax)
         _ax.set_title(f"Degree {_degree} test residuals")
     _figure.tight_layout()
+    _figure
     return _figure
 
 
@@ -215,6 +250,139 @@ student_bias = "include_bias"
 ```
 **include_bias.** Set to `False`, the power columns start at `x` and the intercept is left to `LinearRegression`.
 ''')
+        },
+        lazy=True,
+    )
+    return
+
+
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Why must `PolynomialFeatures` be fit on the training `x` only, then `transform` applied to the test `x`? Answer in one sentence in `student_transform_reason`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_transform_reason = None
+    print(student_transform_reason)
+    return (student_transform_reason,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+The power columns are defined from the training range and statistics; the test rows must use the **same** column definitions, not refit powers on test data (which would leak information and change the feature space).
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which degree has the lowest test RMSE in `poly_scores`? Store it as an integer in `student_best_degree`.
+    """)
+    return
+
+
+@app.cell
+def _(poly_scores):
+    student_best_degree = None
+    print(student_best_degree)
+    return (student_best_degree,)
+
+
+@app.cell(hide_code=True)
+def _(mo, poly_scores):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_best_degree = int(poly_scores["test_rmse"].idxmin())
+student_best_degree
+```
+On this split the lowest test RMSE is at degree **5** (test RMSE about 1.75).
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Is the fitted model linear in its coefficients? Replace `None` with `True` or `False` in `student_linear_in_coefs`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_linear_in_coefs = None
+    print(student_linear_in_coefs)
+    return (student_linear_in_coefs,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_linear_in_coefs = True
+```
+Ordinary least squares still estimates one coefficient per column; the nonlinearity is in the **features** (`x`, `x²`, …), not in the coefficients.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    For degree 5, how much larger is test RMSE than training RMSE on this split? Store the gap in `student_rmse_gap` (test minus train).
+    """)
+    return
+
+
+@app.cell
+def _(poly_scores):
+    student_rmse_gap = None
+    print(student_rmse_gap)
+    return (student_rmse_gap,)
+
+
+@app.cell(hide_code=True)
+def _(mo, poly_scores):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+```python
+student_rmse_gap = poly_scores.loc[5, "test_rmse"] - poly_scores.loc[5, "train_rmse"]
+student_rmse_gap
+```
+The gap is about **0.538** (test RMSE 1.754 minus training RMSE 1.216), a sign the high-degree curve is fitting training noise.
+""")
         },
         lazy=True,
     )

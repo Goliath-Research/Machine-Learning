@@ -17,32 +17,63 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.metrics import r2_score, root_mean_squared_error
     from sklearn.model_selection import GridSearchCV, train_test_split
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVR
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         GridSearchCV,
         SVR,
         StandardScaler,
+        mo,
+        np,
+        pd,
+        plt,
         r2_score,
         root_mean_squared_error,
+        sns,
         train_test_split,
     )
 
@@ -93,6 +124,7 @@ def _(np, pd, plt, sns, train_test_split):
     sns.scatterplot(x=x_train, y=y_train, s=40, color="cornflowerblue", label="Training", ax=_axes)
     sns.scatterplot(x=x_test, y=y_test, s=40, color="darkblue", label="Test", ax=_axes)
     _axes.set_title("sin(x) * x, plus noise")
+    _figure
     return _figure, x_test, x_train, y_test, y_train
 
 
@@ -101,7 +133,7 @@ def _(mo):
     mo.md(r"""
     ## Epsilon, C, and gamma
 
-    Each panel fits on the training points and reports R² on the test points. The dashed lines are the tube, one epsilon above and below the curve. The open circles are the support vectors.
+    Each panel fits on the training points and reports R² on the test points. The dashed lines are the tube, one epsilon above and below the curve. The open circles mark training points on or outside the tube (the support vectors).
 
     The curve is drawn on a sorted grid. A line through the test rows in split order would zigzag.
     """)
@@ -139,6 +171,7 @@ def _(SVR, np, plt, r2_score, x_test, x_train, y_test, y_train):
     _draw(_axes[1, 0], epsilon=1, C=100, gamma=0.1)
     _draw(_axes[1, 1], epsilon=1, C=100, gamma=0.05)
     _figure.tight_layout()
+    _figure
     return _figure
 
 
@@ -259,10 +292,10 @@ def _(
     ad_test_rmse, ad_test_r2 = _sales_rmse(ad_search.best_estimator_)
     print(f"Train = {len(budgets_train)} \t Test = {len(budgets_test)}")
     print(f"Training standard deviation of sales = {sales_scale:.2f}")
-    print(manual_scores.round(3).to_string(index=False))
     print(f"Best training-fold parameters: {ad_search.best_params_}")
     print(f"Mean CV R² = {ad_search.best_score_:.3f}")
     print(f"Test R² = {ad_test_r2:.3f}    RMSE = {ad_test_rmse:.3f} sales units")
+    mo.Html(manual_scores.round(3).to_html(index=False))
     return mo.Html(manual_scores.round(3).to_html(index=False))
 
 
@@ -296,6 +329,121 @@ student_tube = "epsilon"
         },
         lazy=True,
     )
+    return
+
+
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which kernel string did we use for SVR? Store it in `student_kernel`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_kernel = None
+    print(student_kernel)
+    return (student_kernel,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_kernel = "rbf"
+```
+The radial basis function (**rbf**) kernel lets the fit bend locally; `gamma` controls how local it is.
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    If epsilon grows, do you expect more or fewer support vectors? Answer `"more"` or `"fewer"` in `student_sv_count`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_sv_count = None
+    print(student_sv_count)
+    return (student_sv_count,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_sv_count = "fewer"
+```
+A wider tube swallows more points **inside** it, so fewer points lie on or outside the tube.
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the synthetic curve search, what was the mean CV R²? Read it from `curve_search.best_score_` into `student_curve_cv_r2`.
+    """)
+    return
+
+
+@app.cell
+def _(curve_search):
+    student_curve_cv_r2 = None
+    print(student_curve_cv_r2)
+    return (student_curve_cv_r2,)
+
+
+@app.cell(hide_code=True)
+def _(curve_search, mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_curve_cv_r2 = curve_search.best_score_
+student_curve_cv_r2
+```
+The best mean CV R² is about **0.93** for the winning `(C, epsilon, gamma)` on the synthetic training folds.
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which hyperparameter controls the penalty on points outside the tube? Replace `None` with its name.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_penalty = None
+    print(student_penalty)
+    return (student_penalty,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_penalty = "C"
+```
+**C** trades off a wider margin against fitting errors outside the tube.
+""")}, lazy=True)
     return
 
 
@@ -334,7 +482,7 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-1. **The points outside the tube:** They determine the function. Points inside the tube are not penalized.
+1. **The points on or outside the tube:** They determine the function. Points strictly inside the tube are not penalized.
 2. **It gets wider:** More training points fall inside and drop out of the set of support vectors. The function can miss more of the wave.
 3. **It penalizes outside points more:** The function bends harder to reduce those violations.
 4. **It smooths the local bumps:** Each training point influences a wider neighborhood.

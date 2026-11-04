@@ -17,33 +17,64 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.metrics import r2_score, root_mean_squared_error
     from sklearn.model_selection import cross_val_score
     from sklearn.tree import DecisionTreeRegressor, plot_tree
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         DecisionTreeRegressor,
         RandomForestRegressor,
         cross_val_score,
+        mo,
+        np,
+        pd,
+        plt,
         plot_tree,
         r2_score,
         root_mean_squared_error,
+        sns,
     )
 
 
@@ -153,6 +184,7 @@ def _(
     )
     _axes[1].set_title("First tree inside the forest")
     _figure.tight_layout()
+    _figure
     return _figure
 
 
@@ -188,6 +220,7 @@ def _(mo, pd, plt, shallow_forest, sns, synthetic_x, synthetic_y, feature_names)
     _figure.tight_layout()
     print(f"Lowest member R² = {member_scores.min():.3f}")
     print(f"Highest member R² = {member_scores.max():.3f}")
+    _figure
     return _figure, importance
 
 
@@ -220,7 +253,7 @@ def _(RandomForestRegressor, mo, pd, synthetic_x, synthetic_y):
             }
         )
     forest_scores = pd.DataFrame(forest_rows)
-    print(forest_scores.round(3).to_string(index=False))
+    mo.Html(forest_scores.round(3).to_html(index=False))
     return mo.Html(forest_scores.round(3).to_html(index=False))
 
 
@@ -282,7 +315,7 @@ def _(RandomForestRegressor, advertising_file, cross_val_score, mo, pd):
         )
     cv_table = pd.DataFrame(cv_rows)
     print(f"{len(ads)} markets")
-    print(cv_table.round(3).to_string(index=False))
+    mo.Html(cv_table.round(3).to_html(index=False))
     return mo.Html(cv_table.round(3).to_html(index=False))
 
 
@@ -316,6 +349,118 @@ student_oob = "oob_score_"
         },
         lazy=True,
     )
+    return
+
+
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How is a random forest's prediction formed from its trees? One sentence in `student_forest_prediction`.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_forest_prediction = None
+    print(student_forest_prediction)
+    return (student_forest_prediction,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+It is the **average of the individual tree predictions** (each tree votes with a number, then the forest averages).
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which feature has the highest importance in the depth-2 forest? Store its name in `student_top_feature`.
+    """)
+    return
+
+
+@app.cell
+def _(importance):
+    student_top_feature = None
+    print(student_top_feature)
+    return (student_top_feature,)
+
+
+@app.cell(hide_code=True)
+def _(importance, mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_top_feature = importance.loc[importance["importance"].idxmax(), "feature"]
+student_top_feature
+```
+**x3** has the largest importance (about 0.93), matching the largest coefficient in the synthetic formula.
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    When is `oob_score_` available after `fit`? Answer with the two boolean arguments that must be set.
+    """)
+    return
+
+
+@app.cell
+def _():
+    student_oob_requires = None
+    print(student_oob_requires)
+    return (student_oob_requires,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion({"Show answers": mo.md(r"""
+`bootstrap=True` and `oob_score=True`. Without bootstrap sampling there is no out-of-bag row for a tree.
+""")}, lazy=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Read the 10-fold CV mean R² for the depth-3 forest from `cv_table` into `student_depth3_cv`.
+    """)
+    return
+
+
+@app.cell
+def _(cv_table):
+    student_depth3_cv = None
+    print(student_depth3_cv)
+    return (student_depth3_cv,)
+
+
+@app.cell(hide_code=True)
+def _(cv_table, mo):
+    mo.accordion({"Show answers": mo.md(r"""
+```python
+student_depth3_cv = cv_table.query(
+    "forest == 'depth 3' and folds == 10 and scoring == 'r2'"
+)["mean"].iloc[0]
+student_depth3_cv
+```
+The mean is about **0.843** on the advertising budgets.
+""")}, lazy=True)
     return
 
 
