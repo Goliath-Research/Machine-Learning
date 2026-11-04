@@ -17,21 +17,45 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.datasets import load_wine, make_blobs
     from sklearn.discriminant_analysis import (
         LinearDiscriminantAnalysis,
@@ -41,15 +65,47 @@ def _():
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         LinearDiscriminantAnalysis,
         QuadraticDiscriminantAnalysis,
+        StandardScaler,
         confusion_matrix,
         load_wine,
         make_blobs,
+        mo,
+        np,
+        pd,
+        plt,
+        sns,
         train_test_split,
-        StandardScaler,
     )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Discriminant Analysis
+
+    ## Objectives
+
+    - Separate classes with linear discriminant analysis, then with quadratic discriminant analysis.
+    - Standardize a new case with the means and standard deviations learned from the training rows.
+    - Read a confusion matrix and the training and test accuracy.
+
+    ## Background
+
+    Discriminant analysis classifies a row by how well its measurements match each class. Linear discriminant analysis (LDA) uses one shared covariance, so the boundary between two classes is a straight line. Quadratic discriminant analysis (QDA) estimates a covariance for each class, so the boundary can curve.
+
+    ## Datasets Used
+
+    - **Synthetic blobs.** Two features and two classes, from `make_blobs`.
+    - **Raisin Dataset.** Seven measurements of Kecimen and Besni raisins.
+    - **Wine Dataset.** Thirteen chemical measurements and three cultivars, loaded from scikit-learn.
+    """)
+    return
 
 
 @app.cell
@@ -88,24 +144,23 @@ def _(StandardScaler, pd):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Discriminant Analysis
+    ### Try it yourself
 
-    ## Objectives
-
-    - Separate classes with linear discriminant analysis, then with quadratic discriminant analysis.
-    - Standardize a new case with the means and standard deviations learned from the training rows.
-    - Read a confusion matrix and the training and test accuracy.
-
-    ## Background
-
-    Discriminant analysis classifies a row by how well its measurements match each class. Linear discriminant analysis (LDA) uses one shared covariance, so the boundary between two classes is a straight line. Quadratic discriminant analysis (QDA) estimates a covariance for each class, so the boundary can curve.
-
-    ## Datasets Used
-
-    - **Synthetic blobs.** Two features and two classes, from `make_blobs`.
-    - **Raisin Dataset.** Seven measurements of Kecimen and Besni raisins.
-    - **Wine Dataset.** Thirteen chemical measurements and three cultivars, loaded from scikit-learn.
+    Two classes share one covariance matrix in LDA. Why is the boundary between them a straight line?
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**One shared covariance:** Each class gets a linear score. When the covariances match, the quadratic terms cancel and the decision set is a line.
+""")
+        },
+        lazy=True,
+    )
     return
 
 
@@ -151,7 +206,7 @@ def _(make_blobs, pd, plt, sns, train_test_split):
         ax=_axes,
     )
     _axes.set_title("Training circles and test crosses")
-    return _figure
+    _figure
 
 
 @app.cell
@@ -167,13 +222,14 @@ def _(LinearDiscriminantAnalysis, Xb_train, mo, pd, yb_train, Xb_test, yb_test):
     print(f"Intercept:    {lda.intercept_.round(3)}")
     print(f"Training accuracy = {lda.score(Xb_train, yb_train):.3f}")
     print(f"Testing accuracy  = {lda.score(Xb_test, yb_test):.3f}")
-    return mo.Html(data_train.head().round(3).to_html())
+    mo.Html(data_train.head().round(3).to_html())
+    return (lda,)
 
 
 @app.cell
 def _(Xb_test, confusion_table, lda, mo, yb_test):
     _table = confusion_table(yb_test, lda.predict(Xb_test))
-    return mo.Html(_table.to_html())
+    mo.Html(_table.to_html())
 
 
 @app.cell
@@ -207,7 +263,7 @@ def _(Xb_train, lda, np, pd, plt, sns, yb_train):
         ax=_axes,
     )
     _axes.set_title("Linear discriminant regions")
-    return _figure
+    _figure
 
 
 @app.cell(hide_code=True)
@@ -215,6 +271,30 @@ def _(mo):
     mo.md(r"""
     The pale background is the class LDA would assign across the plot. The boundary is a straight cut. Counts on the main diagonal of the confusion matrix are the test rows that landed in the right class.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On this blob split, what is the LDA test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xb_test, lda, mo, yb_test):
+    _test_acc = lda.score(Xb_test, yb_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_test_acc:.3f}.** Eighty training rows and twenty test rows; LDA labels {_test_acc * len(yb_test):.0f} of the test rows correctly here.
+""")
+        },
+        lazy=True,
+    )
     return
 
 
@@ -256,7 +336,7 @@ def _(mo, pd, raisin_file, scale_train_test, train_test_split):
     )
     Xr_train, Xr_test, raisin_scaler = scale_train_test(_Xr_train, _Xr_test)
     print(f"Train = {len(Xr_train)} cases \t Test = {len(Xr_test)} cases")
-    return mo.Html(Xr_train.head().round(3).to_html())
+    mo.Html(Xr_train.head().round(3).to_html())
 
 
 @app.cell(hide_code=True)
@@ -273,19 +353,21 @@ def _(mo):
 def _(LinearDiscriminantAnalysis, Xr_test, Xr_train, mo, yr_test, yr_train):
     lda_r = LinearDiscriminantAnalysis()
     lda_r.fit(Xr_train, yr_train)
-    print(f"Coefficients: {lda_r.coef_.round(3)}")
-    print(f"Intercept:    {lda_r.intercept_.round(3)}")
-    print(f"LDA training accuracy = {lda_r.score(Xr_train, yr_train):.3f}")
-    print(f"LDA testing accuracy  = {lda_r.score(Xr_test, yr_test):.3f}")
+    mo.md(
+        f"LDA training accuracy = {lda_r.score(Xr_train, yr_train):.3f}. "
+        f"Testing accuracy = {lda_r.score(Xr_test, yr_test):.3f}."
+    )
     return (lda_r,)
 
 
 @app.cell
-def _(QuadraticDiscriminantAnalysis, Xr_test, Xr_train, yr_test, yr_train):
+def _(QuadraticDiscriminantAnalysis, Xr_test, Xr_train, mo, yr_test, yr_train):
     qda_r = QuadraticDiscriminantAnalysis()
     qda_r.fit(Xr_train, yr_train)
-    print(f"QDA training accuracy = {qda_r.score(Xr_train, yr_train):.3f}")
-    print(f"QDA testing accuracy  = {qda_r.score(Xr_test, yr_test):.3f}")
+    mo.md(
+        f"QDA training accuracy = {qda_r.score(Xr_train, yr_train):.3f}. "
+        f"Testing accuracy = {qda_r.score(Xr_test, yr_test):.3f}."
+    )
     return (qda_r,)
 
 
@@ -297,7 +379,7 @@ def _(Xr_test, confusion_table, lda_r, mo, pd, qda_r, yr_test):
             confusion_table(yr_test, qda_r.predict(Xr_test)).assign(model="QDA"),
         ]
     )
-    return mo.Html(_side.to_html())
+    mo.Html(_side.to_html())
 
 
 @app.cell(hide_code=True)
@@ -305,28 +387,42 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which method can draw a curved boundary, LDA or QDA? Replace `None` with the short name.
+    Which method can draw a curved boundary, LDA or QDA?
     """)
     return
-
-
-@app.cell
-def _():
-    student_curved_boundary = None
-    print(student_curved_boundary)
-    return (student_curved_boundary,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_curved_boundary = "QDA"
-```
+            "Show answers": mo.md(r"""
 **QDA.** It estimates a separate covariance for each class. LDA shares one covariance, so its two-class boundary is a line.
-''')
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the standardized raisins, what is the QDA test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, qda_r, Xr_test, yr_test):
+    _acc = qda_r.score(Xr_test, yr_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** On this split, LDA test accuracy is slightly lower than QDA because QDA can bend the boundary.
+""")
         },
         lazy=True,
     )
@@ -362,16 +458,28 @@ def _(LinearDiscriminantAnalysis, load_wine, mo, pd, plt, scale_train_test, trai
     _show = pd.DataFrame(_prob, columns=[f"prob_{name}" for name in lda_w.classes_])
     _show["Class"] = yw_test.to_numpy()
     _show["Class_pred"] = lda_w.predict(Xw_test)
-    print(dfw.shape)
-    print(f"Train = {len(Xw_train)} cases \t Test = {len(Xw_test)} cases")
-    print(pd.DataFrame(lda_w.coef_.round(2), index=lda_w.classes_, columns=Xw_train.columns))
-    print(f"Training accuracy = {lda_w.score(Xw_train, yw_train):.3f}")
-    print(f"Testing accuracy  = {lda_w.score(Xw_test, yw_test):.3f}")
+    _coef = pd.DataFrame(
+        lda_w.coef_.round(2), index=lda_w.classes_, columns=Xw_train.columns
+    )
     _figure, _axes = plt.subplots(figsize=(6, 4))
     dfw["Class"].value_counts(sort=False).plot(
         kind="bar", rot=0, ax=_axes, title="Wine cultivars"
     )
-    return _figure, mo.Html(_show.head().round(3).to_html())
+    mo.vstack(
+        [
+            mo.md(
+                f"{dfw.shape[0]} wines, {dfw.shape[1] - 1} features. "
+                f"Train = {len(Xw_train)} cases, test = {len(Xw_test)} cases. "
+                f"Training accuracy = {lda_w.score(Xw_train, yw_train):.3f}. "
+                f"Testing accuracy = {lda_w.score(Xw_test, yw_test):.3f}."
+            ),
+            _figure,
+            mo.Html(_coef.to_html()),
+            mo.Html(_show.head().round(3).to_html()),
+        ],
+        gap=1,
+    )
+    return (lda_w,)
 
 
 @app.cell(hide_code=True)
@@ -379,6 +487,29 @@ def _(mo):
     mo.md(r"""
     The coefficient table has three rows. Each row is the linear score for one cultivar. The probability columns in the preview are those scores after they have been turned into probabilities. The predicted class is the largest probability.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many coefficient rows does the wine LDA have (one per cultivar)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(lda_w, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{len(lda_w.coef_)}.** With three cultivars, LDA keeps one linear score per class.
+""")
+        },
+        lazy=True,
+    )
     return
 
 
@@ -395,39 +526,6 @@ def _(Xr_test, lda, lda_r, mo, qda_r, Xb_test, yb_test, yr_test):
     - A confusion matrix counts correct rows on the main diagonal.
     - With three wine cultivars, LDA keeps one linear score per class and assigns the class with the largest score.
     """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Check your understanding
-
-    1. Why is the two-class LDA boundary a straight line?
-    2. What does QDA estimate that LDA does not?
-    3. Why is the scaler fit on the training rows only?
-    4. Which integer is Besni?
-    5. What does `store_covariance=True` keep for the wine model?
-    6. Where are the correct classifications in a confusion matrix?
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **One shared covariance:** Two classes with the same spread are separated by a linear score.
-2. **A covariance per class:** That extra flexibility makes the boundary quadratic.
-3. **So the test rows do not affect the means:** A new case must be scaled with the training means and standard deviations.
-4. **1:** Kecimen is 0 and Besni is 1.
-5. **The class covariances:** `predict_proba` uses them.
-6. **On the main diagonal:** Those cells are predicted class equal to true class.
-""")
-        },
-        lazy=True,
-    )
     return
 
 

@@ -18,47 +18,66 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
+    import statsmodels.api as sm
     from sklearn import linear_model, metrics
     from sklearn.datasets import load_wine, make_blobs
     from sklearn.model_selection import train_test_split
 
-    return linear_model, load_wine, make_blobs, metrics, train_test_split
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
 
-
-@app.cell
-def _():
-    import statsmodels.api as sm
-
-    return (sm,)
-
-
-@app.cell
-def _(metrics, pd):
-    def confusion_table(y_true, y_pred):
-        labels = sorted(set(y_true).union(set(y_pred)))
-        matrix = metrics.confusion_matrix(y_true, y_pred, labels=labels)
-        return pd.DataFrame(
-            matrix,
-            index=[f"true {label}" for label in labels],
-            columns=[f"pred {label}" for label in labels],
-        )
-
-    return (confusion_table,)
+    return (
+        linear_model,
+        load_wine,
+        make_blobs,
+        metrics,
+        mo,
+        np,
+        pd,
+        plt,
+        sm,
+        sns,
+        train_test_split,
+    )
 
 
 @app.cell(hide_code=True)
@@ -85,6 +104,20 @@ def _(mo):
     - **Wine Dataset.** Thirteen chemical measurements of wines from three cultivars in the same region of Italy. This lesson loads the copy shipped with scikit-learn. The folder also contains `wine.csv`.
     """)
     return
+
+
+@app.cell
+def _(metrics, pd):
+    def confusion_table(y_true, y_pred):
+        labels = sorted(set(y_true).union(set(y_pred)))
+        matrix = metrics.confusion_matrix(y_true, y_pred, labels=labels)
+        return pd.DataFrame(
+            matrix,
+            index=[f"true {label}" for label in labels],
+            columns=[f"pred {label}" for label in labels],
+        )
+
+    return (confusion_table,)
 
 
 @app.cell(hide_code=True)
@@ -120,7 +153,7 @@ def _(np, plt, sigmoid):
     _axes.set_title("The sigmoid function")
     _axes.set_xlabel("linear score")
     _axes.set_ylabel("probability of class 1")
-    return _figure
+    _figure
 
 
 @app.cell(hide_code=True)
@@ -128,28 +161,18 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    What does the sigmoid return when the score is 0? Replace `None` with that number.
+    What probability does the sigmoid assign when the linear score is 0?
     """)
     return
-
-
-@app.cell
-def _():
-    student_sigmoid_at_zero = None
-    print(student_sigmoid_at_zero)
-    return (student_sigmoid_at_zero,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_sigmoid_at_zero = 0.5
-```
+            "Show answers": mo.md(r"""
 **0.5.** The sigmoid of 0 is `1 / (1 + e^0)`, and `e^0` is 1, so the value is 1/2.
-''')
+""")
         },
         lazy=True,
     )
@@ -191,7 +214,7 @@ def _(make_blobs, pd, plt, sns):
         ax=_axes,
     )
     _axes.set_title("Make blobs data")
-    return _figure
+    _figure
 
 
 @app.cell
@@ -226,7 +249,7 @@ def _(Xb_test, Xb_train, plt, sns, yb_test, yb_train):
         ax=_axes,
     )
     _axes.set_title("Training circles and test crosses")
-    return _figure
+    _figure
 
 
 @app.cell(hide_code=True)
@@ -255,7 +278,7 @@ def _(Xb_train, log_model, mo, pd, yb_train):
     data_train["prob_0_sl"] = _prob[:, 0]
     data_train["prob_1_sl"] = _prob[:, 1]
     data_train["Class_sl"] = log_model.predict(Xb_train)
-    return mo.Html(data_train.head().round(3).to_html())
+    mo.Html(data_train.head().round(3).to_html())
 
 
 @app.cell(hide_code=True)
@@ -273,7 +296,7 @@ def _(Xb_test, log_model, mo, pd, yb_test):
     data_test["prob_0_sl"] = _prob[:, 0]
     data_test["prob_1_sl"] = _prob[:, 1]
     data_test["Class_sl"] = log_model.predict(Xb_test)
-    return mo.Html(data_test.head().round(3).to_html())
+    mo.Html(data_test.head().round(3).to_html())
 
 
 @app.cell
@@ -307,13 +330,13 @@ def _(Xb_train, log_model, np, pd, plt, sns, yb_train):
         ax=_axes,
     )
     _axes.set_title("Logistic regression regions")
-    return _figure
+    _figure
 
 
 @app.cell
 def _(confusion_table, data_test, mo):
     _table = confusion_table(data_test["Class"], data_test["Class_sl"])
-    return mo.Html(_table.to_html())
+    mo.Html(_table.to_html())
 
 
 @app.cell(hide_code=True)
@@ -331,6 +354,30 @@ def _(Xb_test, Xb_train, log_model, mo, yb_test, yb_train):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### Try it yourself
+
+    On this blob split, what is the test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xb_test, log_model, mo, yb_test):
+    _test_acc = log_model.score(Xb_test, yb_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_test_acc:.3f}.** Twenty test rows; the model labels {_test_acc * len(yb_test):.0f} of them correctly on this split.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### Statsmodels
 
     `sm.Logit` fits the same two-class model by maximum likelihood. `add_constant` inserts the intercept column that scikit-learn adds on its own.
@@ -341,9 +388,17 @@ def _(mo):
 
 
 @app.cell
-def _(Xb_train, sm, yb_train):
+def _(Xb_train, mo, pd, sm, yb_train):
     log_model_sm = sm.Logit(yb_train, sm.add_constant(Xb_train)).fit()
-    print(log_model_sm.summary())
+    _coef_table = pd.DataFrame(
+        {
+            "coef": log_model_sm.params,
+            "std err": log_model_sm.bse,
+            "z": log_model_sm.tvalues,
+            "P>|z|": log_model_sm.pvalues,
+        }
+    )
+    mo.Html(_coef_table.round(4).to_html())
     return (log_model_sm,)
 
 
@@ -358,7 +413,30 @@ def _(log_model, log_model_sm, mo, np, pd):
     )
     _gap = np.max(np.abs(_compare["sklearn"] - _compare["statsmodels"]))
     print(f"Largest absolute gap between the two fits: {_gap:.6f}")
-    return mo.Html(_compare.round(4).to_html())
+    mo.Html(_compare.round(4).to_html())
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Why is `C` set to `1e9` in the scikit-learn fits that are compared with statsmodels?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**To turn the penalty almost off.** Scikit-learn regularizes by default. Statsmodels does not. A huge `C` lets the two coefficient tables be compared.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -390,7 +468,7 @@ def _(data_test, data_train, mo, pd, sm, log_model_sm):
     )
     print(f"Share of test rows with the same class from both libraries: {_agree:.3f}")
     print(f"Training rows scored with statsmodels: {len(_prob_train)}")
-    return mo.Html(_show.head().round(3).to_html())
+    mo.Html(_show.head().round(3).to_html())
 
 
 @app.cell(hide_code=True)
@@ -433,14 +511,14 @@ def _(mo, pd, raisin_file):
     # dfr = pd.read_csv("Raisin.csv")
     dfr = pd.read_csv(raisin_file)
     print(dfr.shape)
-    return mo.Html(dfr.head().to_html())
+    mo.Html(dfr.head().to_html())
 
 
 @app.cell
 def _(dfr, plt):
     _figure, _axes = plt.subplots(figsize=(6, 4))
     dfr["Class"].value_counts().plot(kind="bar", rot=0, ax=_axes, title="Raisin varieties")
-    return _figure
+    _figure
 
 
 @app.cell
@@ -454,7 +532,7 @@ def _(dfr, mo, train_test_split):
         Xr, yr, test_size=0.2, random_state=23
     )
     print(f"Train = {len(Xr_train)} cases \t Test = {len(Xr_test)} cases")
-    return mo.Html(dfr_coded.head().to_html())
+    mo.Html(dfr_coded.head().to_html())
 
 
 @app.cell(hide_code=True)
@@ -462,28 +540,18 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    After the recoding above, which integer means Besni? Replace `None` with that integer.
+    After the recoding above, which integer means Besni?
     """)
     return
-
-
-@app.cell
-def _():
-    student_besni_code = None
-    print(student_besni_code)
-    return (student_besni_code,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_besni_code = 1
-```
-**1.** The dictionary is `{"Kecimen": 0, "Besni": 1}`. The probability in column 1 is the probability of Besni.
-''')
+            "Show answers": mo.md(r"""
+**1.** The dictionary is `{"Kecimen": 0, "Besni": 1}`. Column 1 of `predict_proba` is the probability of Besni.
+""")
         },
         lazy=True,
     )
@@ -515,7 +583,7 @@ def _(Xr_test, Xr_train, confusion_table, linear_model, mo, yr_test, yr_train):
     print(f"Intercept:    {log_model_r.intercept_.round(3)}")
     print(f"Training accuracy = {log_model_r.score(Xr_train, yr_train):.3f}")
     print(f"Testing accuracy  = {log_model_r.score(Xr_test, yr_test):.3f}")
-    return mo.Html(_table.to_html())
+    mo.Html(_table.to_html())
 
 
 @app.cell(hide_code=True)
@@ -540,7 +608,7 @@ def _(load_wine, mo, pd, plt):
     dfw["Class"].value_counts(sort=False).plot(
         kind="bar", rot=0, ax=_axes, title="Wine cultivars"
     )
-    return _figure
+    _figure
 
 
 @app.cell
@@ -557,19 +625,24 @@ def _(dfw, linear_model, mo, pd, train_test_split):
     _show = pd.DataFrame(_prob, columns=[f"prob_{name}" for name in log_model_w.classes_])
     _show["Class"] = yw_test.to_numpy()
     _show["Class_pred"] = _pred
+    _coef = pd.DataFrame(
+        log_model_w.coef_.round(2), index=log_model_w.classes_, columns=Xw.columns
+    )
     print(f"Train = {len(Xw_train)} cases \t Test = {len(Xw_test)} cases")
-    print("Coefficient rows, one per class:")
-    print(pd.DataFrame(log_model_w.coef_.round(2), index=log_model_w.classes_, columns=Xw.columns))
     print(f"Intercepts: {log_model_w.intercept_.round(2)}")
     print(f"Training accuracy = {log_model_w.score(Xw_train, yw_train):.3f}")
     print(f"Testing accuracy  = {log_model_w.score(Xw_test, yw_test):.3f}")
-    return mo.Html(_show.head().round(3).to_html())
+    mo.vstack(
+        [mo.Html(_coef.to_html()), mo.Html(_show.head().round(3).to_html())],
+        gap=1,
+    )
+    return (log_model_w,)
 
 
 @app.cell
 def _(confusion_table, log_model_w, mo, Xw_test, yw_test):
     _table = confusion_table(yw_test, log_model_w.predict(Xw_test))
-    return mo.Html(_table.to_html())
+    mo.Html(_table.to_html())
 
 
 @app.cell(hide_code=True)
@@ -577,6 +650,29 @@ def _(mo):
     mo.md(r"""
     Each test row has three probabilities, one per cultivar. The predicted class is the largest of the three. On this split the test diagonal is the whole matrix: every held-out wine is assigned to its own cultivar.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many coefficient rows does the wine model have (one per cultivar)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(log_model_w, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{len(log_model_w.coef_)}.** Multinomial logistic regression estimates one linear score per class; scikit-learn stores one coefficient row per cultivar.
+""")
+        },
+        lazy=True,
+    )
     return
 
 
@@ -595,39 +691,6 @@ def _(Xr_test, Xw_test, log_model, log_model_r, log_model_w, mo, Xb_test, yb_tes
     - The wine model has one coefficient row per cultivar. Its test accuracy on this split is {log_model_w.score(Xw_test, yw_test):.3f}.
     - The blob test accuracy is {log_model.score(Xb_test, yb_test):.3f}. A confusion matrix shows which of those errors, if any, are which class.
     """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Check your understanding
-
-    1. What does a sigmoid value of 0.8 mean for a two-class model?
-    2. Why is `C` set to `1e9` in the scikit-learn fits that are compared with statsmodels?
-    3. Which integer is Besni, and which probability column matches it?
-    4. How many coefficient rows does the wine model have?
-    5. What do the counts on the main diagonal of a confusion matrix represent?
-    6. What does `random_state=23` change about the 80/20 split?
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **Class 1 is more likely:** 0.8 is above 0.5, so the predicted class is class 1. The model also says the chance of class 0 is 0.2.
-2. **To turn the penalty almost off:** Scikit-learn regularizes by default. Statsmodels does not. A huge `C` lets the coefficients be compared.
-3. **Besni is 1:** That is column 1 of `predict_proba`. Kecimen is 0.
-4. **Three:** There is one linear score for each cultivar.
-5. **Correct classifications:** Each diagonal cell counts rows whose predicted class matches the true class.
-6. **It fixes the split:** The same 80 training rows and 20 test rows are used every time the notebook runs.
-""")
-        },
-        lazy=True,
-    )
     return
 
 

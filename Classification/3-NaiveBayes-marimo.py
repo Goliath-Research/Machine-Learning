@@ -17,21 +17,45 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.datasets import make_blobs
     from sklearn.feature_extraction.text import CountVectorizer
     from sklearn.metrics import confusion_matrix
@@ -39,29 +63,23 @@ def _():
     from sklearn.naive_bayes import GaussianNB, MultinomialNB
     from sklearn.preprocessing import StandardScaler
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         CountVectorizer,
         GaussianNB,
         MultinomialNB,
+        StandardScaler,
         confusion_matrix,
         make_blobs,
+        mo,
+        np,
+        pd,
+        plt,
+        sns,
         train_test_split,
-        StandardScaler,
     )
-
-
-@app.cell
-def _(confusion_matrix, pd):
-    def confusion_table(y_true, y_pred):
-        labels = sorted(set(y_true).union(set(y_pred)))
-        matrix = confusion_matrix(y_true, y_pred, labels=labels)
-        return pd.DataFrame(
-            matrix,
-            index=[f"true {label}" for label in labels],
-            columns=[f"pred {label}" for label in labels],
-        )
-
-    return (confusion_table,)
 
 
 @app.cell(hide_code=True)
@@ -90,6 +108,43 @@ def _(mo):
     return
 
 
+@app.cell
+def _(confusion_matrix, pd):
+    def confusion_table(y_true, y_pred):
+        labels = sorted(set(y_true).union(set(y_pred)))
+        matrix = confusion_matrix(y_true, y_pred, labels=labels)
+        return pd.DataFrame(
+            matrix,
+            index=[f"true {label}" for label in labels],
+            columns=[f"pred {label}" for label in labels],
+        )
+
+    return (confusion_table,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What does the "naive" part of naive Bayes assume about the features once the class is known?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**They are independent.** The model multiplies one probability per feature. Real measurements are often related, but the shortcut still works as a fast baseline.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -101,7 +156,7 @@ def _(mo):
 
 
 @app.cell
-def _(GaussianNB, make_blobs, pd, plt, sns, train_test_split):
+def _(GaussianNB, make_blobs, mo, pd, plt, sns, train_test_split):
     _X, _cl = make_blobs(
         n_samples=100, n_features=2, centers=2, random_state=2, cluster_std=2.5
     )
@@ -113,9 +168,6 @@ def _(GaussianNB, make_blobs, pd, plt, sns, train_test_split):
     )
     nb_g = GaussianNB()
     nb_g.fit(Xb_train, yb_train)
-    print(f"Train = {len(Xb_train)} cases \t Test = {len(Xb_test)} cases")
-    print(f"Training accuracy = {nb_g.score(Xb_train, yb_train):.3f}")
-    print(f"Testing accuracy  = {nb_g.score(Xb_test, yb_test):.3f}")
     _figure, _axes = plt.subplots(figsize=(6, 4))
     sns.scatterplot(
         x=Xb_train.X1,
@@ -136,7 +188,17 @@ def _(GaussianNB, make_blobs, pd, plt, sns, train_test_split):
         ax=_axes,
     )
     _axes.set_title("Training circles and test crosses")
-    return _figure
+    mo.vstack(
+        [
+            mo.md(
+                f"Train = {len(Xb_train)} cases, test = {len(Xb_test)} cases. "
+                f"Training accuracy = {nb_g.score(Xb_train, yb_train):.3f}. "
+                f"Testing accuracy = {nb_g.score(Xb_test, yb_test):.3f}."
+            ),
+            _figure,
+        ],
+        gap=1,
+    )
 
 
 @app.cell
@@ -170,13 +232,13 @@ def _(Xb_train, nb_g, np, pd, plt, sns, yb_train):
         ax=_axes,
     )
     _axes.set_title("Gaussian naive Bayes regions")
-    return _figure
+    _figure
 
 
 @app.cell
 def _(Xb_test, confusion_table, mo, nb_g, yb_test):
     _table = confusion_table(yb_test, nb_g.predict(Xb_test))
-    return mo.Html(_table.to_html())
+    mo.Html(_table.to_html())
 
 
 @app.cell(hide_code=True)
@@ -184,6 +246,30 @@ def _(mo):
     mo.md(r"""
     The boundary can bend because each class has its own mean and variance. The confusion matrix compares the 20 test labels with the predicted labels. The main diagonal holds the correct ones.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On this blob split, what is the Gaussian naive Bayes test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xb_test, mo, nb_g, yb_test):
+    _acc = nb_g.score(Xb_test, yb_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** Each class keeps its own mean and variance for `X1` and `X2`.
+""")
+        },
+        lazy=True,
+    )
     return
 
 
@@ -240,19 +326,50 @@ def _(
     )
     nb_g2 = GaussianNB()
     nb_g2.fit(Xr_train, yr_train)
-    print(dfr.shape)
-    print(f"Train = {len(Xr_train)} cases \t Test = {len(Xr_test)} cases")
-    print(f"Training accuracy = {nb_g2.score(Xr_train, yr_train):.3f}")
-    print(f"Testing accuracy  = {nb_g2.score(Xr_test, yr_test):.3f}")
     _figure, _axes = plt.subplots(figsize=(6, 4))
     dfr["Class"].value_counts().plot(kind="bar", rot=0, ax=_axes, title="Raisin varieties")
-    return _figure
+    mo.vstack(
+        [
+            mo.md(
+                f"{dfr.shape[0]} rows, {dfr.shape[1]} columns. "
+                f"Train = {len(Xr_train)} cases, test = {len(Xr_test)} cases. "
+                f"Training accuracy = {nb_g2.score(Xr_train, yr_train):.3f}. "
+                f"Testing accuracy = {nb_g2.score(Xr_test, yr_test):.3f}."
+            ),
+            _figure,
+        ],
+        gap=1,
+    )
 
 
 @app.cell
 def _(Xr_test, confusion_table, mo, nb_g2, yr_test):
     _table = confusion_table(yr_test, nb_g2.predict(Xr_test))
-    return mo.Html(_table.to_html())
+    mo.Html(_table.to_html())
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the standardized raisins, what is the Gaussian naive Bayes test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xr_test, mo, nb_g2, yr_test):
+    _acc = nb_g2.score(Xr_test, yr_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** The scaler was fit on the training rows only before the Gaussian fit.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -290,9 +407,17 @@ def _(CountVectorizer, MultinomialNB, mo, pd):
     nb_m = MultinomialNB()
     nb_m.fit(X_text, y_text)
     _counts = pd.DataFrame(X_text.toarray(), columns=vectorizer.get_feature_names_out())
-    print(f"Training accuracy on the six messages = {nb_m.score(X_text, y_text):.3f}")
-    print(f"Words in the vocabulary: {len(vectorizer.get_feature_names_out())}")
-    return mo.Html(_counts.iloc[:, :8].to_html()), X_text, nb_m, vectorizer, y_text
+    mo.vstack(
+        [
+            mo.md(
+                f"Training accuracy on the six messages = {nb_m.score(X_text, y_text):.3f}. "
+                f"Words in the vocabulary: {len(vectorizer.get_feature_names_out())}."
+            ),
+            mo.Html(_counts.iloc[:, :8].to_html()),
+        ],
+        gap=1,
+    )
+    return (X_text, nb_m, vectorizer, y_text)
 
 
 @app.cell
@@ -312,7 +437,53 @@ def _(mo, nb_m, pd, vectorizer):
             "predicted": y_new,
         }
     )
-    return mo.Html(_report.to_html())
+    mo.Html(_report.to_html())
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many words appear in the `CountVectorizer` vocabulary for the six training messages?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, vectorizer):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{len(vectorizer.get_feature_names_out())}.** Each column in the count matrix is one of those words.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which naive Bayes variant in this lesson uses those word counts, Gaussian or multinomial?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**Multinomial.** `MultinomialNB` is fit on the count matrix. `GaussianNB` is used for the numeric blob and raisin columns.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -336,39 +507,6 @@ def _(mo, nb_m, new_messages, vectorizer):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### Try it yourself
-
-    Which naive Bayes model uses word counts in this lesson, Gaussian or multinomial? Replace `None` with the name.
-    """)
-    return
-
-
-@app.cell
-def _():
-    student_count_model = None
-    print(student_count_model)
-    return (student_count_model,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r'''
-```python
-student_count_model = "multinomial"
-```
-**Multinomial.** `MultinomialNB` is fit on the word-count matrix from `CountVectorizer`. `GaussianNB` is the model used for the numeric blob and raisin columns.
-''')
-        },
-        lazy=True,
-    )
-    return
-
-
-@app.cell(hide_code=True)
 def _(Xr_test, mo, nb_g, nb_g2, Xb_test, yb_test, yr_test):
     mo.md(f"""
     ## Conclusions
@@ -381,39 +519,6 @@ def _(Xr_test, mo, nb_g, nb_g2, Xb_test, yb_test, yr_test):
     - Accuracy on those six messages only says the model fit its own training list. The three new messages are the check that matters, and a short list can mislabel an ordinary sentence.
     - The independence assumption is what makes the arithmetic simple. It is also why overlapping words can produce a wrong label.
     """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Check your understanding
-
-    1. What does the "naive" assumption say about the features?
-    2. Which model is used for the raisin measurements?
-    3. Why are the raisin columns standardized from the training rows?
-    4. What does `CountVectorizer` put in each column?
-    5. Why is a perfect score on the six messages not evidence about new mail?
-    6. Which class code is Besni?
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **They are independent given the class:** The model multiplies per-feature probabilities. Real features are often related anyway.
-2. **Gaussian naive Bayes:** The measurements are numeric, so each class keeps a mean and a variance per column.
-3. **The columns do not share a scale:** The scaler is not fit on the test rows, so those rows do not change the means.
-4. **A word:** Each cell is how many times that word appears in the message.
-5. **Those messages were the training data:** The score does not use a held-out message. The three new sentences are the check.
-6. **1:** Kecimen is 0 and Besni is 1.
-""")
-        },
-        lazy=True,
-    )
     return
 
 
