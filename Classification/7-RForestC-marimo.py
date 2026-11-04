@@ -535,7 +535,7 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {"Show answer": mo.md(r"""
-**The column was used more to reduce impurity:** Importance is a summary across the trees, not a coefficient.
+**A larger share of impurity reduction:** That column's decrease is averaged across the trees and normalized to sum to 1. It is not a coefficient.
 """)},
         lazy=True,
     )
