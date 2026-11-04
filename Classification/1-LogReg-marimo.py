@@ -633,7 +633,11 @@ def _(dfw, linear_model, mo, pd, train_test_split):
     print(f"Training accuracy = {log_model_w.score(Xw_train, yw_train):.3f}")
     print(f"Testing accuracy  = {log_model_w.score(Xw_test, yw_test):.3f}")
     mo.vstack(
-        [mo.Html(_coef.to_html()), mo.Html(_show.head().round(3).to_html())],
+        [
+            mo.Html(_coef.iloc[:, :7].to_html()),
+            mo.Html(_coef.iloc[:, 7:].to_html()),
+            mo.Html(_show.head().round(3).to_html()),
+        ],
         gap=1,
     )
     return (log_model_w,)

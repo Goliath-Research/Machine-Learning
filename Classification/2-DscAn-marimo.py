@@ -462,19 +462,17 @@ def _(LinearDiscriminantAnalysis, load_wine, mo, pd, plt, scale_train_test, trai
         lda_w.coef_.round(2), index=lda_w.classes_, columns=Xw_train.columns
     )
     _figure, _axes = plt.subplots(figsize=(6, 4))
-    dfw["Class"].value_counts(sort=False).plot(
-        kind="bar", rot=0, ax=_axes, title="Wine cultivars"
+    dfw["Class"].value_counts(sort=False).plot(kind="bar", rot=0, ax=_axes)
+    _axes.set_title(
+        f"Wine cultivars ({dfw.shape[0]} rows, train={len(Xw_train)}, test={len(Xw_test)}; "
+        f"train acc={lda_w.score(Xw_train, yw_train):.3f}, "
+        f"test acc={lda_w.score(Xw_test, yw_test):.3f})"
     )
     mo.vstack(
         [
-            mo.md(
-                f"{dfw.shape[0]} wines, {dfw.shape[1] - 1} features. "
-                f"Train = {len(Xw_train)} cases, test = {len(Xw_test)} cases. "
-                f"Training accuracy = {lda_w.score(Xw_train, yw_train):.3f}. "
-                f"Testing accuracy = {lda_w.score(Xw_test, yw_test):.3f}."
-            ),
             _figure,
-            mo.Html(_coef.to_html()),
+            mo.Html(_coef.iloc[:, :7].to_html()),
+            mo.Html(_coef.iloc[:, 7:].to_html()),
             mo.Html(_show.head().round(3).to_html()),
         ],
         gap=1,

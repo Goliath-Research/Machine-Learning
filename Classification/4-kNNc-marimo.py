@@ -283,7 +283,7 @@ def _():
 
 
 @app.cell
-def _(KNeighborsClassifier, StandardScaler, pd, raisin_file, train_test_split):
+def _(KNeighborsClassifier, StandardScaler, mo, pd, raisin_file, train_test_split):
     # dfr = pd.read_csv("Raisin.csv")
     dfr = pd.read_csv(raisin_file)
     _coded = dfr.copy()
@@ -449,7 +449,7 @@ def _(mo):
 
 
 @app.cell
-def _(GridSearchCV, KNeighborsClassifier, Xr_train, k_range, yr_train):
+def _(GridSearchCV, KNeighborsClassifier, Xr_train, k_range, mo, yr_train):
     _param_grid = {"n_neighbors": k_range}
     _base = KNeighborsClassifier()
     grid_acc = GridSearchCV(_base, _param_grid, cv=10, scoring="accuracy")

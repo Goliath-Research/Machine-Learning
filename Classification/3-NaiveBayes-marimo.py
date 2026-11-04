@@ -187,18 +187,12 @@ def _(GaussianNB, make_blobs, mo, pd, plt, sns, train_test_split):
         legend=False,
         ax=_axes,
     )
-    _axes.set_title("Training circles and test crosses")
-    mo.vstack(
-        [
-            mo.md(
-                f"Train = {len(Xb_train)} cases, test = {len(Xb_test)} cases. "
-                f"Training accuracy = {nb_g.score(Xb_train, yb_train):.3f}. "
-                f"Testing accuracy = {nb_g.score(Xb_test, yb_test):.3f}."
-            ),
-            _figure,
-        ],
-        gap=1,
+    _axes.set_title(
+        f"Training circles and test crosses (train={len(Xb_train)}, test={len(Xb_test)}; "
+        f"train acc={nb_g.score(Xb_train, yb_train):.3f}, "
+        f"test acc={nb_g.score(Xb_test, yb_test):.3f})"
     )
+    _figure
 
 
 @app.cell
@@ -327,19 +321,13 @@ def _(
     nb_g2 = GaussianNB()
     nb_g2.fit(Xr_train, yr_train)
     _figure, _axes = plt.subplots(figsize=(6, 4))
-    dfr["Class"].value_counts().plot(kind="bar", rot=0, ax=_axes, title="Raisin varieties")
-    mo.vstack(
-        [
-            mo.md(
-                f"{dfr.shape[0]} rows, {dfr.shape[1]} columns. "
-                f"Train = {len(Xr_train)} cases, test = {len(Xr_test)} cases. "
-                f"Training accuracy = {nb_g2.score(Xr_train, yr_train):.3f}. "
-                f"Testing accuracy = {nb_g2.score(Xr_test, yr_test):.3f}."
-            ),
-            _figure,
-        ],
-        gap=1,
+    dfr["Class"].value_counts().plot(kind="bar", rot=0, ax=_axes)
+    _axes.set_title(
+        f"Raisin varieties ({dfr.shape[0]} rows, train={len(Xr_train)}, test={len(Xr_test)}; "
+        f"train acc={nb_g2.score(Xr_train, yr_train):.3f}, "
+        f"test acc={nb_g2.score(Xr_test, yr_test):.3f})"
     )
+    _figure
 
 
 @app.cell
