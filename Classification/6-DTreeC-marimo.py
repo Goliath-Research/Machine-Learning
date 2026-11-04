@@ -183,12 +183,12 @@ def _(Xb_test, mo, tree_a, yb_test):
 @app.cell(hide_code=True)
 def _(Xb_train, mo, tree_a):
     _node = tree_a.tree_
-    _counts = _node.value[0, 0]
+    _counts = (_node.value[0, 0] * _node.n_node_samples[0]).round().astype(int)
     _feature = Xb_train.columns[_node.feature[0]]
     mo.md(f"""
     ## Reading the root of tree A
 
-    The root holds all {int(_node.n_node_samples[0])} training rows. The class counts are {int(round(_counts[0]))} and {int(round(_counts[1]))}. Its Gini impurity is {_node.impurity[0]:.3f}.
+    The root holds all {int(_node.n_node_samples[0])} training rows. The class counts are {int(_counts[0])} and {int(_counts[1])}. Its Gini impurity is {_node.impurity[0]:.3f}.
 
     The first question is `{_feature} <= {_node.threshold[0]:.3f}`. Follow the plot for the next question.     A leaf with Gini 0 contains only one class.
     """)
