@@ -29,7 +29,6 @@ async def _():
         "matplotlib": "matplotlib",
         "seaborn": "seaborn",
         "sklearn": "scikit-learn>=1.2",
-        "statsmodels": "statsmodels>=0.15.0",
     }
     _missing = [
         _package for _module, _package in _packages.items()
@@ -127,7 +126,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    What does the "naive" part of naive Bayes assume about the features once the class is known?
+    How many numeric features does Gaussian naive Bayes use on the blobs?
     """)
     return
 
@@ -137,7 +136,7 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-**They are independent.** The model multiplies one probability per feature. Real measurements are often related, but the shortcut still works as a fast baseline.
+**2.** Each class keeps a mean and variance for `X1` and for `X2`.
 """)
         },
         lazy=True,
@@ -456,7 +455,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which naive Bayes variant in this lesson uses those word counts, Gaussian or multinomial?
+    Which naive Bayes model fits the word counts? Replace `None` with `gaussian` or with `multinomial`.
     """)
     return
 
@@ -465,9 +464,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-**Multinomial.** `MultinomialNB` is fit on the count matrix. `GaussianNB` is used for the numeric blob and raisin columns.
-""")
+            "Show answers": mo.md(r'''
+```python
+student_count_model = "multinomial"
+student_count_model
+```
+**multinomial.** The columns are word counts, not continuous measurements.
+''')
         },
         lazy=True,
     )
@@ -507,6 +510,122 @@ def _(Xr_test, mo, nb_g, nb_g2, Xb_test, yb_test, yr_test):
     - Accuracy on those six messages only says the model fit its own training list. The three new messages are the check that matters, and a short list can mislabel an ordinary sentence.
     - The independence assumption is what makes the arithmetic simple. It is also why overlapping words can produce a wrong label.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. What does the "naive" assumption say about the features?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**They are independent given the class:** The model multiplies per-feature probabilities. Real features are often related anyway.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. Which model is used for the raisin measurements?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Gaussian naive Bayes:** The measurements are numeric, so each class keeps a mean and a variance per column.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. Why are the raisin columns standardized from the training rows?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The columns do not share a scale:** The scaler is not fit on the test rows, so those rows do not change the means.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. What does `CountVectorizer` put in each column?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A word:** Each cell is how many times that word appears in the message.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. Why is a perfect score on the six messages not evidence about new mail?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Those messages were the training data:** The score does not use a held-out message. The three new sentences are the check.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. Which class code is Besni?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**1:** Kecimen is 0 and Besni is 1.
+""")},
+        lazy=True,
+    )
     return
 
 

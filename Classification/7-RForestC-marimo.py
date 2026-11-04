@@ -260,7 +260,7 @@ def _(importance, mo):
     mo.accordion(
         {
             "Show answers": mo.md(f"""
-**{_top['feature']}.** Importances are {_top['importance']:.3f} for `{_top['feature']}` and {_second['importance']:.3f} for `{_second['feature']}` (sklearn's total impurity-weighted reduction across trees).
+**{_top['feature']}.** Importances are {_top['importance']:.3f} for `{_top['feature']}` and {_second['importance']:.3f} for `{_second['feature']}` (sklearn averages impurity decrease across trees, normalized to sum to 1).
 """)
         },
         lazy=True,
@@ -407,7 +407,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    An out-of-bag row is a training row that was left out of which trees, some or every?
+    An out-of-bag row is a training row that was left out of which trees? Replace `None` with `some` or with `every`.
     """)
     return
 
@@ -416,9 +416,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(r'''
+```python
+student_oob = "some"
+student_oob
+```
 **some.** Each tree draws its own bootstrap sample. A row left out of that draw is out-of-bag for that tree, and it can still be in the sample of another tree. The out-of-bag score uses, for each row, only the trees that missed it.
-""")
+''')
         },
         lazy=True,
     )
@@ -458,9 +462,125 @@ def _(Xb_test, forest_best, forest_blobs, mo, tree_one, Xr_test, yb_test, yr_tes
     - The forest label is a majority vote of its trees. On the blobs, the single depth-2 tree has test accuracy {tree_one.score(Xb_test, yb_test):.3f}, and the forest of 20 has test accuracy {forest_blobs.score(Xb_test, yb_test):.3f}.
     - Individual trees in that forest can score lower than the vote. The leaf counts differ because each tree saw a bootstrap sample.
     - The out-of-bag score for the blob forest is {forest_blobs.oob_score_:.3f}. It reuses training rows that a given tree did not see. It is not a substitute for a test set that was held out of the whole fit.
-    - Feature importance sums each column's impurity-weighted reduction across trees (`feature_importances_`). On the blobs that bar has two columns, `X1` and `X2`.
+    - Feature importance is the impurity decrease averaged across trees, normalized to sum to 1 (`feature_importances_`). On the blobs that bar has two columns, `X1` and `X2`.
     - Raisin columns are not standardized. The cross-validated forest uses {forest_best.get_params()["n_estimators"]} trees, depth {forest_best.get_params()["max_depth"]}, leaf size {forest_best.get_params()["min_samples_leaf"]}, and split size {forest_best.get_params()["min_samples_split"]}. Its test accuracy is {forest_best.score(Xr_test, yr_test):.3f}.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. What does the forest return as its predicted class?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The majority class:** Each tree votes, and the forest keeps the class with the most votes.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. Why do the leaf counts of one plotted tree not equal the full training set?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**That tree saw a bootstrap sample:** Some training rows were drawn more than once and some were left out.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. Which trees vote on a row in the out-of-bag score?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The trees that did not train on it:** A row can be in some samples and out of others.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. What does a taller bar in the importance chart mean?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The column was used more to reduce impurity:** Importance is a summary across the trees, not a coefficient.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. Why can the raisin fit skip standardization?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A threshold does not use distance:** Area and extent can stay on their own scales.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. What does the grid search vary that the three single forests do not vary together?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**All four settings at once:** The three forests each change one setting. The grid scores combinations of `n_estimators`, depth, leaf size, and split size.
+""")},
+        lazy=True,
+    )
     return
 
 

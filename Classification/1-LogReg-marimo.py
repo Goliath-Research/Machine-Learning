@@ -161,7 +161,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    What probability does the sigmoid assign when the linear score is 0?
+    What does the sigmoid return when the score is 0? Replace `None` with that number.
     """)
     return
 
@@ -170,9 +170,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(r'''
+```python
+student_sigmoid_at_zero = 0.5
+student_sigmoid_at_zero
+```
 **0.5.** The sigmoid of 0 is `1 / (1 + e^0)`, and `e^0` is 1, so the value is 1/2.
-""")
+''')
         },
         lazy=True,
     )
@@ -421,17 +425,29 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Why is `C` set to `1e9` in the scikit-learn fits that are compared with statsmodels?
+    What is the largest absolute gap between the scikit-learn and statsmodels coefficients on the blobs (six decimals)?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(log_model, log_model_sm, mo, np, pd):
+    _compare = pd.DataFrame(
+        {
+            "sklearn": np.r_[log_model.intercept_, log_model.coef_.ravel()],
+            "statsmodels": log_model_sm.params.to_numpy(),
+        },
+        index=["intercept", "X1", "X2"],
+    )
+    _gap = float(np.max(np.abs(_compare["sklearn"] - _compare["statsmodels"])))
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-**To turn the penalty almost off.** Scikit-learn regularizes by default. Statsmodels does not. A huge `C` lets the two coefficient tables be compared.
+            "Show answers": mo.md(f"""
+```python
+_gap = np.max(np.abs(_compare["sklearn"] - _compare["statsmodels"]))
+_gap
+```
+**{_gap:.6f}.** With `C=1e9`, the two fits stay close on this split.
 """)
         },
         lazy=True,
@@ -540,7 +556,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    After the recoding above, which integer means Besni?
+    After the recoding above, which integer means Besni? Replace `None` with that integer.
     """)
     return
 
@@ -549,9 +565,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-**1.** The dictionary is `{"Kecimen": 0, "Besni": 1}`. Column 1 of `predict_proba` is the probability of Besni.
-""")
+            "Show answers": mo.md(r'''
+```python
+student_besni_code = 1
+student_besni_code
+```
+**1.** The dictionary is `{"Kecimen": 0, "Besni": 1}`. The probability in column 1 is the probability of Besni.
+''')
         },
         lazy=True,
     )
@@ -574,16 +594,25 @@ def _(mo):
 
 
 @app.cell
-def _(Xr_test, Xr_train, confusion_table, linear_model, mo, yr_test, yr_train):
+def _(Xr_test, Xr_train, confusion_table, linear_model, mo, pd, yr_test, yr_train):
     log_model_r = linear_model.LogisticRegression(solver="lbfgs", C=1e9, max_iter=500)
     log_model_r.fit(Xr_train, yr_train)
     _pred = log_model_r.predict(Xr_test)
     _table = confusion_table(yr_test, _pred)
-    print(f"Coefficients: {log_model_r.coef_.round(3)}")
-    print(f"Intercept:    {log_model_r.intercept_.round(3)}")
+    _coef = pd.DataFrame(
+        log_model_r.coef_.round(3), columns=Xr_train.columns, index=["Besni"]
+    )
+    _intercept = pd.DataFrame({"intercept": log_model_r.intercept_.round(3)})
     print(f"Training accuracy = {log_model_r.score(Xr_train, yr_train):.3f}")
     print(f"Testing accuracy  = {log_model_r.score(Xr_test, yr_test):.3f}")
-    mo.Html(_table.to_html())
+    mo.vstack(
+        [
+            mo.Html(_coef.to_html()),
+            mo.Html(_intercept.to_html()),
+            mo.Html(_table.to_html()),
+        ],
+        gap=1,
+    )
 
 
 @app.cell(hide_code=True)
@@ -662,17 +691,24 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    How many coefficient rows does the wine model have (one per cultivar)?
+    On the blob test rows, what share get the same class label from scikit-learn and statsmodels (three decimals)?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(log_model_w, mo):
+def _(data_test, log_model_sm, mo, pd, sm):
+    _prob_test = log_model_sm.predict(sm.add_constant(data_test[["X1", "X2"]]))
+    _class_sm = (_prob_test >= 0.5).astype(int)
+    _agree = float((data_test["Class_sl"] == _class_sm).mean())
     mo.accordion(
         {
             "Show answers": mo.md(f"""
-**{len(log_model_w.coef_)}.** Multinomial logistic regression estimates one linear score per class; scikit-learn stores one coefficient row per cultivar.
+```python
+_agree = (data_test["Class_sl"] == (_prob_test >= 0.5).astype(int)).mean()
+_agree
+```
+**{_agree:.3f}.** Statsmodels returns the probability of class 1; scikit-learn uses the larger of the two class probabilities.
 """)
         },
         lazy=True,
@@ -695,6 +731,122 @@ def _(Xr_test, Xw_test, log_model, log_model_r, log_model_w, mo, Xb_test, yb_tes
     - The wine model has one coefficient row per cultivar. Its test accuracy on this split is {log_model_w.score(Xw_test, yw_test):.3f}.
     - The blob test accuracy is {log_model.score(Xb_test, yb_test):.3f}. A confusion matrix shows which of those errors, if any, are which class.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. What does a sigmoid value of 0.8 mean for a two-class model?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Class 1 is more likely:** 0.8 is above 0.5, so the predicted class is class 1. The model also says the chance of class 0 is 0.2.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. Why is `C` set to `1e9` in the scikit-learn fits that are compared with statsmodels?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**To turn the penalty almost off:** Scikit-learn regularizes by default. Statsmodels does not. A huge `C` lets the coefficients be compared.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. Which integer is Besni, and which probability column matches it?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Besni is 1:** That is column 1 of `predict_proba`. Kecimen is 0.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. How many coefficient rows does the wine model have?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Three:** There is one linear score for each cultivar.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. What do the counts on the main diagonal of a confusion matrix represent?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Correct classifications:** Each diagonal cell counts rows whose predicted class matches the true class.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. What does `random_state=23` change about the 80/20 split?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**It fixes the split:** The same 80 training rows and 20 test rows are used every time the notebook runs.
+""")},
+        lazy=True,
+    )
     return
 
 

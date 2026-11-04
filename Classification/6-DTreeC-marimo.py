@@ -453,7 +453,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    What Gini impurity does a pure leaf have?
+    A node whose Gini impurity is 0 contains which kind of rows? Replace `None` with `mixed` or with `one class`.
     """)
     return
 
@@ -462,9 +462,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-**0.** Gini is 0 only when every row in the node has the same label. A mixed node has a larger Gini.
-""")
+            "Show answers": mo.md(r'''
+```python
+student_gini_zero = "one class"
+student_gini_zero
+```
+**one class.** Gini is 0 only when every row in the node has the same label. A mixed node has a larger Gini.
+''')
         },
         lazy=True,
     )
@@ -485,6 +489,122 @@ def _(mo, tree_a, tree_b, tree_best, Xb_test, Xr_test, yb_test, yr_test):
     - The cross-validated raisin tree uses {tree_best.get_params()["max_depth"]} for `max_depth`, {tree_best.get_params()["min_samples_leaf"]} for `min_samples_leaf`, and {tree_best.get_params()["min_samples_split"]} for `min_samples_split`. Its test accuracy is {tree_best.score(Xr_test, yr_test):.3f}.
     - A tree that is allowed to grow until every leaf is pure can memorize the training rows. The limits above are what keep that from happening.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. What question does a split ask?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A threshold on one feature:** The row goes left or right. Later questions cut the same axes, so the regions are rectangles.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. What does a Gini of 0 say about a node?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The node is pure:** Every training row in it has the same class.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. What does `max_depth=2` stop the tree from doing?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A third question:** The longest path has two splits.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. What does `min_samples_leaf=10` require?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**At least 10 training rows in a leaf:** The tree will not peel off a smaller leaf.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. Why does this lesson skip standardization for the raisins?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Splits do not use distance:** A cutoff on area is unaffected by the size of the extent column.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. What is the difference between fitting the three raisin trees and the grid search?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The grid tries the limits together:** Each of the three trees uses one limit. Cross-validation scores combinations and then refits the winner.
+""")},
+        lazy=True,
+    )
     return
 
 

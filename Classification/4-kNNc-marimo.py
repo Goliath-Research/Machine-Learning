@@ -132,7 +132,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    How does k-nearest neighbors pick a class for a new row?
+    How many classes do the synthetic blobs have?
     """)
     return
 
@@ -142,7 +142,7 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-**Majority vote among the nearest training rows.** The `k` closest neighbors each contribute one vote; the winning class is the label.
+**2.** Each new point receives the majority label among its `k` nearest training neighbors.
 """)
         },
         lazy=True,
@@ -243,17 +243,20 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    On the blob charts, which `k` gives the smoother decision region, 3 or 7?
+    On the blob charts, which `k` misclassifies more test rows, 3 or 7?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(Xb_test, knn_k3, knn_k7, mo, yb_test):
+    _e3 = 1 - knn_k3.score(Xb_test, yb_test)
+    _e7 = 1 - knn_k7.score(Xb_test, yb_test)
+    _worse = 3 if _e3 > _e7 else 7
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-**7.** More neighbors average out a single nearby point, so the painted region changes less abruptly.
+            "Show answers": mo.md(f"""
+**{_worse}.** Test error rates are {_e3:.3f} for k=3 and {_e7:.3f} for k=7 on this split.
 """)
         },
         lazy=True,
@@ -383,7 +386,8 @@ def _(plt, test_scores):
         _axes.scatter(_best_k, test_scores.loc[_best_k, _name], s=80, facecolors="none", edgecolors="black")
     _axes.set_xlabel("k")
     _axes.set_title("Scores on the held-out raisins")
-    _axes.legend()
+    _axes.legend(loc="upper left", bbox_to_anchor=(1.02, 1))
+    _figure.tight_layout()
     _figure
 
 
@@ -392,7 +396,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Why should you not pick `k` from the test-set score curve alone?
+    Why does this lesson standardize the raisin columns before k-nearest neighbors? Replace `None` with `scale` or with `distance`.
     """)
     return
 
@@ -401,9 +405,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
-**It spends the test rows on the choice.** The reported test score would then be for a `k` tuned to look good on those same rows.
-""")
+            "Show answers": mo.md(r'''
+```python
+student_why_scale = "scale"
+student_why_scale
+```
+**scale.** Neighbors are chosen by distance. Without scaling, a column with large numbers would dominate the distance.
+''')
         },
         lazy=True,
     )
@@ -488,7 +496,8 @@ def _(grid_acc, grid_f1, grid_prc, grid_rec, k_range, plt):
         _axes.scatter(_best_k, _grid.best_score_, s=80, facecolors="none", edgecolors="black")
     _axes.set_xlabel("k")
     _axes.set_title("Cross-validated scores on the training raisins")
-    _axes.legend()
+    _axes.legend(loc="upper left", bbox_to_anchor=(1.02, 1))
+    _figure.tight_layout()
     _figure
 
 
@@ -536,6 +545,122 @@ def _(grid_acc, knn_k3, knn_k7, mo, Xb_test, yb_test):
     - Accuracy, precision, recall, and F1 answer different questions. Precision watches false Besni labels. Recall watches missed Besni labels.
     - A curve computed on the test set is only a picture. Cross-validation on the training rows picks `k`. For accuracy, that search picks k={grid_acc.best_params_["n_neighbors"]}.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. What do the `k` neighbors do?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**They vote:** The new row gets the class that appears most often among those neighbors.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. Why can a large-valued column dominate k-nearest neighbors?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Distance uses the raw numbers:** A gap of thousands in area swamps a gap of tenths in extent. Standardization prevents that.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. Which class is the positive class for the raisin precision and recall?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Besni:** It is coded as 1. Kecimen is 0.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. Why is the test-set curve not the way to choose `k`?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**It spends the test rows on the choice:** The reported test score would then be the score of a `k` that was picked to look good on those same rows.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. What does a cross-validation fold hold out?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A slice of the training rows:** `cv=10` leaves out one tenth of the training rows at a time.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. Which `k` is smoother on the blob charts, 3 or 7?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**7:** More neighbors average out a single nearby point, so the region changes less abruptly.
+""")},
+        lazy=True,
+    )
     return
 
 

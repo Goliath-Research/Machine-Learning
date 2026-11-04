@@ -301,7 +301,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which chest-pain level is represented by a row of zeros in the scaled models?
+    Which chest-pain level is represented by a row of zeros in the scaled models? Replace `None` with that code.
     """)
     return
 
@@ -310,9 +310,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(r'''
+```python
+student_dropped_pain = "ASY"
+student_dropped_pain
+```
 **ASY.** `drop_first=True` drops the first alphabetical level. The remaining columns are ATA, NAP, and TA. All three equal to 0 means the dropped level, ASY.
-""")
+''')
         },
         lazy=True,
     )
@@ -631,6 +635,122 @@ def _(mo, results):
     - F1 is in the table because a missed heart-disease case and a false alarm do not have the same cost. Accuracy alone does not show that split.
     - The importance chart is the forest's ranking of the columns it was given. It is not a ranking shared by the logistic model.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. Which five models use the standardized columns?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**LRM, LDA, QDA, KNN, and SVM:** The tree and the forest use the original age, blood pressure, cholesterol, and heart rate.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. What does a row of zeros mean for chest pain in those models?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**ASY:** That level was dropped. ATA, NAP, and TA are the columns that remain.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. What does the z-score cutoff remove?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Rows more than 3 standard deviations from a numeric mean:** The rule looks at age, resting blood pressure, cholesterol, and maximum heart rate. Most cholesterol zeros stay, because that value is common enough to fall inside the cutoff.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. Why is F1 reported along with accuracy?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Missed cases and false alarms are different:** F1 combines precision and recall. Accuracy only counts how often the label matched.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. What does an AUC of 0.5 mean?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**No better than a coin flip:** The ROC area is the probability that a random patient with heart disease is scored above a random patient without it. 0.5 means those rankings are tied with chance.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. Which models in this lesson are limited to depth 5?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The decision tree and the random forest:** Both use `max_depth=5`.
+""")},
+        lazy=True,
+    )
     return
 
 

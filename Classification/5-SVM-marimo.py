@@ -216,7 +216,7 @@ def _(mo, svm1):
     mo.accordion(
         {
             "Show answers": mo.md(f"""
-**{int(svm1.n_support_.sum())}.** Only the circled points on the margin matter. The counts per class are {list(svm1.n_support_)}.
+**{int(svm1.n_support_.sum())}.** Only the circled points on the margin matter. The counts per class are {svm1.n_support_.tolist()}.
 """)
         },
         lazy=True,
@@ -345,7 +345,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which value of `C` asks for the harder margin, `10000` or `0.001`?
+    Which value of `C` asks for the harder margin, `10000` or `0.001`? Replace `None` with that number.
     """)
     return
 
@@ -354,9 +354,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(r'''
+```python
+student_hard_c = 10000
+student_hard_c
+```
 **10000.** A large `C` penalizes points inside the margin more heavily. `0.001` lets the margin grow and take points in.
-""")
+''')
         },
         lazy=True,
     )
@@ -498,6 +502,122 @@ def _(mo, svm1, svm_best, X1_test, y1_test):
     - Large `C` hardens the margin. Small `C` lets points sit inside it.
     - On the raisins, cross-validation selects kernel `{svm_best.kernel}` and C={svm_best.C}.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. What is a support vector?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A training point on the margin:** Those points are circled. Moving a point that is far outside the margin does not change the fit.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. What do the dashed contours show?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The edges of the margin:** The solid contour is the decision line. The dashed contours sit one unit away in decision-function units.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. Why does the circle data need a kernel other than `linear`?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**No straight line works:** One class sits inside the other, so the boundary has to close.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. What does a small `C` allow?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Points inside the margin:** The fit accepts a wider margin and more violations.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. Why are the raisin columns standardized before this fit?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The kernel uses distances or a dot product:** Area would otherwise dominate extent. The scaler is fit on the training rows.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. When is the test accuracy of the raisin search computed, relative to choosing the kernel?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**After the choice:** Cross-validation uses the training rows. The test score is computed once the kernel and `C` are already chosen.
+""")},
+        lazy=True,
+    )
     return
 
 

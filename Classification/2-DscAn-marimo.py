@@ -29,7 +29,6 @@ async def _():
         "matplotlib": "matplotlib",
         "seaborn": "seaborn",
         "sklearn": "scikit-learn>=1.2",
-        "statsmodels": "statsmodels>=0.15.0",
     }
     _missing = [
         _package for _module, _package in _packages.items()
@@ -146,7 +145,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Two classes share one covariance matrix in LDA. Why is the boundary between them a straight line?
+    How many numeric predictors does the blob LDA use?
     """)
     return
 
@@ -156,7 +155,7 @@ def _(mo):
     mo.accordion(
         {
             "Show answers": mo.md(r"""
-**One shared covariance:** Each class gets a linear score. When the covariances match, the quadratic terms cancel and the decision set is a line.
+**2.** The table has `X1` and `X2`; the class label is not a predictor.
 """)
         },
         lazy=True,
@@ -350,12 +349,21 @@ def _(mo):
 
 
 @app.cell
-def _(LinearDiscriminantAnalysis, Xr_test, Xr_train, mo, yr_test, yr_train):
+def _(LinearDiscriminantAnalysis, Xr_test, Xr_train, mo, pd, yr_test, yr_train):
     lda_r = LinearDiscriminantAnalysis()
     lda_r.fit(Xr_train, yr_train)
-    mo.md(
-        f"LDA training accuracy = {lda_r.score(Xr_train, yr_train):.3f}. "
-        f"Testing accuracy = {lda_r.score(Xr_test, yr_test):.3f}."
+    _coef = pd.DataFrame(lda_r.coef_.round(3), columns=Xr_train.columns, index=["Besni"])
+    _intercept = pd.DataFrame({"intercept": lda_r.intercept_.round(3)})
+    mo.vstack(
+        [
+            mo.md(
+                f"LDA training accuracy = {lda_r.score(Xr_train, yr_train):.3f}. "
+                f"Testing accuracy = {lda_r.score(Xr_test, yr_test):.3f}."
+            ),
+            mo.Html(_coef.to_html()),
+            mo.Html(_intercept.to_html()),
+        ],
+        gap=1,
     )
     return (lda_r,)
 
@@ -387,7 +395,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which method can draw a curved boundary, LDA or QDA?
+    Which method can draw a curved boundary, LDA or QDA? Replace `None` with the short name.
     """)
     return
 
@@ -396,9 +404,13 @@ def _(mo):
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r"""
+            "Show answers": mo.md(r'''
+```python
+student_curved_boundary = "QDA"
+student_curved_boundary
+```
 **QDA.** It estimates a separate covariance for each class. LDA shares one covariance, so its two-class boundary is a line.
-""")
+''')
         },
         lazy=True,
     )
@@ -524,6 +536,122 @@ def _(Xr_test, lda, lda_r, mo, qda_r, Xb_test, yb_test, yr_test):
     - A confusion matrix counts correct rows on the main diagonal.
     - With three wine cultivars, LDA keeps one linear score per class and assigns the class with the largest score.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Check your understanding
+
+1. Why is the two-class LDA boundary a straight line?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**One shared covariance:** Two classes with the same spread are separated by a linear score.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    2. What does QDA estimate that LDA does not?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A covariance per class:** That extra flexibility makes the boundary quadratic.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. Why is the scaler fit on the training rows only?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**So the test rows do not affect the means:** A new case must be scaled with the training means and standard deviations.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. Which integer is Besni?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**1:** Kecimen is 0 and Besni is 1.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    5. What does `store_covariance=True` keep for the wine model?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The class covariances:** `predict_proba` uses them.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    6. Where are the correct classifications in a confusion matrix?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**On the main diagonal:** Those cells are predicted class equal to true class.
+""")},
+        lazy=True,
+    )
     return
 
 
