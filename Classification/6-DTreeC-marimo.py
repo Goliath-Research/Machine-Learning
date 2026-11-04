@@ -17,32 +17,64 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.datasets import make_blobs
     from sklearn.metrics import confusion_matrix
     from sklearn.model_selection import GridSearchCV, train_test_split
     from sklearn.tree import DecisionTreeClassifier, plot_tree
+
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
 
     return (
         DecisionTreeClassifier,
         GridSearchCV,
         confusion_matrix,
         make_blobs,
+        mo,
+        np,
+        pd,
         plot_tree,
+        plt,
+        sns,
         train_test_split,
     )
 
@@ -72,6 +104,20 @@ def _(mo):
     - **Raisin Dataset.** Seven measurements of Kecimen and Besni raisins. Kecimen is 0 and Besni is 1.
     """)
     return
+
+
+@app.cell
+def _(confusion_matrix, pd):
+    def confusion_table(y_true, y_pred):
+        labels = sorted(set(y_true).union(set(y_pred)))
+        matrix = confusion_matrix(y_true, y_pred, labels=labels)
+        return pd.DataFrame(
+            matrix,
+            index=[f"true {label}" for label in labels],
+            columns=[f"pred {label}" for label in labels],
+        )
+
+    return (confusion_table,)
 
 
 @app.cell(hide_code=True)
@@ -107,7 +153,31 @@ def _(DecisionTreeClassifier, make_blobs, pd, train_test_split):
     print(f"Train = {len(Xb_train)} cases \t Test = {len(Xb_test)} cases")
     print(f"Tree A train / test = {tree_a.score(Xb_train, yb_train):.3f} / {tree_a.score(Xb_test, yb_test):.3f}")
     print(f"Tree B train / test = {tree_b.score(Xb_train, yb_train):.3f} / {tree_b.score(Xb_test, yb_test):.3f}")
-    return tree_a, tree_b
+    return Xb_test, tree_a, tree_b, yb_test
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On this blob split, what is Tree A's test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xb_test, mo, tree_a, yb_test):
+    _acc = tree_a.score(Xb_test, yb_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** Tree A stops at depth 2, so it can ask at most two questions.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -120,8 +190,32 @@ def _(Xb_train, mo, tree_a):
 
     The root holds all {int(_node.n_node_samples[0])} training rows. The class counts are {int(round(_counts[0]))} and {int(round(_counts[1]))}. Its Gini impurity is {_node.impurity[0]:.3f}.
 
-    The first question is `{_feature} <= {_node.threshold[0]:.3f}`. Follow the plot for the next question. A leaf with Gini 0 contains only one class.
+    The first question is `{_feature} <= {_node.threshold[0]:.3f}`. Follow the plot for the next question.     A leaf with Gini 0 contains only one class.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What is the Gini impurity at the root of Tree A (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, tree_a):
+    _gini = tree_a.tree_.impurity[0]
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_gini:.3f}.** Gini is 0 in a pure node and larger when the classes are mixed.
+""")
+        },
+        lazy=True,
+    )
     return
 
 
@@ -147,7 +241,7 @@ def _(Xb_train, plot_tree, plt, tree_a, tree_b):
     )
     _axes[1].set_title("Tree B, min_samples_leaf = 10")
     _figure.tight_layout()
-    return _figure
+    _figure
 
 
 @app.cell
@@ -188,7 +282,7 @@ def _(Xb_train, np, pd, plt, sns, tree_a, tree_b, yb_train):
         )
         _axis.set_title(_title)
     _figure.tight_layout()
-    return _figure
+    _figure
 
 
 @app.cell(hide_code=True)
@@ -200,12 +294,37 @@ def _(mo):
 
 
 @app.cell
-def _(Xb_test, confusion_matrix, mo, pd, tree_a, tree_b, yb_test):
+def _(Xb_test, confusion_table, mo, pd, tree_a, tree_b, yb_test):
     _tables = []
     for _name, _model in (("Tree A", tree_a), ("Tree B", tree_b)):
-        _matrix = confusion_matrix(yb_test, _model.predict(Xb_test))
-        _tables.append(pd.DataFrame(_matrix, index=["true 0", "true 1"], columns=["pred 0", "pred 1"]).assign(model=_name))
-    return mo.Html(pd.concat(_tables).to_html())
+        _tables.append(confusion_table(yb_test, _model.predict(Xb_test)).assign(model=_name))
+    mo.Html(pd.concat(_tables).to_html())
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which tree has the higher test accuracy on the blobs, Tree A or Tree B?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xb_test, mo, tree_a, tree_b, yb_test):
+    _acc_a = tree_a.score(Xb_test, yb_test)
+    _acc_b = tree_b.score(Xb_test, yb_test)
+    _winner = "Tree A" if _acc_a >= _acc_b else "Tree B"
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_winner}.** Tree A scores {_acc_a:.3f} on the test rows; Tree B scores {_acc_b:.3f}.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -267,7 +386,8 @@ def _(DecisionTreeClassifier, pd, plot_tree, plt, raisin_file, train_test_split)
         ax=_axes,
     )
     _axes.set_title("Raisin tree with at least 50 rows in each leaf")
-    return _figure
+    _figure
+    return Xr_test, Xr_train, tree_depth, tree_leaf, tree_split, yr_test
 
 
 @app.cell
@@ -295,7 +415,8 @@ def _(GridSearchCV, DecisionTreeClassifier, Xr_test, Xr_train, plot_tree, plt, y
         ax=_axes,
     )
     _axes.set_title("Tree chosen by cross-validation")
-    return _figure
+    _figure
+    return (tree_best,)
 
 
 @app.cell(hide_code=True)
@@ -303,28 +424,47 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    A node whose Gini impurity is 0 contains which kind of rows? Replace `None` with `mixed` or with `one class`.
+    Among the three single-limit raisin trees, which restriction gives the highest test accuracy?
     """)
     return
 
 
-@app.cell
-def _():
-    student_gini_zero = None
-    print(student_gini_zero)
-    return (student_gini_zero,)
+@app.cell(hide_code=True)
+def _(Xr_test, mo, tree_depth, tree_leaf, tree_split, yr_test):
+    _scores = {
+        "min_samples_leaf=50": tree_leaf.score(Xr_test, yr_test),
+        "min_samples_split=100": tree_split.score(Xr_test, yr_test),
+        "max_depth=4": tree_depth.score(Xr_test, yr_test),
+    }
+    _best = max(_scores, key=_scores.get)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_best}.** Test accuracies are {", ".join(f"{name} {_scores[name]:.3f}" for name in _scores)}.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What Gini impurity does a pure leaf have?
+    """)
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_gini_zero = "one class"
-```
-**one class.** Gini is 0 only when every row in the node has the same label. A mixed node has a larger Gini.
-''')
+            "Show answers": mo.md(r"""
+**0.** Gini is 0 only when every row in the node has the same label. A mixed node has a larger Gini.
+""")
         },
         lazy=True,
     )
@@ -345,39 +485,6 @@ def _(mo, tree_a, tree_b, tree_best, Xb_test, Xr_test, yb_test, yr_test):
     - The cross-validated raisin tree uses {tree_best.get_params()["max_depth"]} for `max_depth`, {tree_best.get_params()["min_samples_leaf"]} for `min_samples_leaf`, and {tree_best.get_params()["min_samples_split"]} for `min_samples_split`. Its test accuracy is {tree_best.score(Xr_test, yr_test):.3f}.
     - A tree that is allowed to grow until every leaf is pure can memorize the training rows. The limits above are what keep that from happening.
     """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Check your understanding
-
-    1. What question does a split ask?
-    2. What does a Gini of 0 say about a node?
-    3. What does `max_depth=2` stop the tree from doing?
-    4. What does `min_samples_leaf=10` require?
-    5. Why does this lesson skip standardization for the raisins?
-    6. What is the difference between fitting the three raisin trees and the grid search?
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **A threshold on one feature:** The row goes left or right. Later questions cut the same axes, so the regions are rectangles.
-2. **The node is pure:** Every training row in it has the same class.
-3. **A third question:** The longest path has two splits.
-4. **At least 10 training rows in a leaf:** The tree will not peel off a smaller leaf.
-5. **Splits do not use distance:** A cutoff on area is unaffected by the size of the extent column.
-6. **The grid tries the limits together:** Each of the three trees uses one limit. Cross-validation scores combinations and then refits the winner.
-""")
-        },
-        lazy=True,
-    )
     return
 
 

@@ -17,21 +17,46 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
+    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.discriminant_analysis import (
         LinearDiscriminantAnalysis,
         QuadraticDiscriminantAnalysis,
@@ -42,26 +67,57 @@ def _():
     from sklearn.model_selection import train_test_split
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.preprocessing import StandardScaler
-    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.svm import SVC
     from sklearn.tree import DecisionTreeClassifier
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
+        CalibratedClassifierCV,
         DecisionTreeClassifier,
         KNeighborsClassifier,
         LinearDiscriminantAnalysis,
         LogisticRegression,
         QuadraticDiscriminantAnalysis,
         RandomForestClassifier,
-        CalibratedClassifierCV,
         SVC,
         StandardScaler,
         accuracy_score,
         auc,
         f1_score,
+        mo,
+        np,
+        pd,
+        plt,
         roc_curve,
+        sns,
         train_test_split,
     )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Several Classifiers on Heart Disease
+
+    ## Objectives
+
+    - Prepare the same patient table for models that need a common scale and for models that do not.
+    - Compare logistic regression, linear and quadratic discriminant analysis, k-nearest neighbors, a support vector machine, a tree, and a forest.
+    - Read accuracy, F1, and the area under the ROC curve on one shared test set.
+
+    ## Background
+
+    The label is whether the patient has heart disease. A false negative is a missed case. F1 uses both precision and recall, so a model that finds more of the true cases can outrank a model with a similar accuracy. The ROC curve draws the true-positive rate against the false-positive rate as the cutoff moves. Its area, the AUC, is 0.5 for a coin flip and 1 for a perfect ranking of the probabilities.
+
+    The settings below are the ones used in this comparison. They are not a full search over every option. A different depth, or a different `k`, could change the order.
+
+    ## Datasets Used
+
+    - **Heart Dataset.** Clinical measurements for 918 patients. This lesson keeps age, sex, chest-pain type, resting blood pressure, cholesterol, maximum heart rate, and the heart-disease label.
+    """)
+    return
 
 
 @app.cell
@@ -97,30 +153,6 @@ def _(plt, sns):
         return _figure
 
     return (numeric_panel,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    # Several Classifiers on Heart Disease
-
-    ## Objectives
-
-    - Prepare the same patient table for models that need a common scale and for models that do not.
-    - Compare logistic regression, linear and quadratic discriminant analysis, k-nearest neighbors, a support vector machine, a tree, and a forest.
-    - Read accuracy, F1, and the area under the ROC curve on one shared test set.
-
-    ## Background
-
-    The label is whether the patient has heart disease. A false negative is a missed case. F1 uses both precision and recall, so a model that finds more of the true cases can outrank a model with a similar accuracy. The ROC curve draws the true-positive rate against the false-positive rate as the cutoff moves. Its area, the AUC, is 0.5 for a coin flip and 1 for a perfect ranking of the probabilities.
-
-    The settings below are the ones used in this comparison. They are not a full search over every option. A different depth, or a different `k`, could change the order.
-
-    ## Datasets Used
-
-    - **Heart Dataset.** Clinical measurements for 918 patients. This lesson keeps age, sex, chest-pain type, resting blood pressure, cholesterol, maximum heart rate, and the heart-disease label.
-    """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -170,13 +202,14 @@ def _(heart_file, mo, pd, plt, sns):
     sns.countplot(x=heart["ChestPainType"], ax=_axes[2])
     _axes[2].set_title("Chest pain")
     _figure.tight_layout()
-    return _figure, mo.Html(heart.head().to_html())
+    mo.vstack([_figure, mo.Html(heart.head().to_html())], gap=1)
+    return (heart,)
 
 
 @app.cell
-def _(heart, numeric_panel):
+def _(heart, mo, numeric_panel):
     raw_panel = numeric_panel(heart[["Age", "RestingBP", "Cholesterol", "MaxHR"]])
-    return (raw_panel,)
+    raw_panel
 
 
 @app.cell(hide_code=True)
@@ -212,7 +245,8 @@ def _(StandardScaler, heart, mo, numeric_panel, np, pd):
     print(f"Removed rows whose cholesterol is 0: {n_zero_removed}")
     print(f"Rows after the cutoff: {len(heart_clean)}")
     scaled_panel = numeric_panel(scaled_clean)
-    return mo.Html(scaled_clean.head().round(3).to_html()), scaled_panel
+    mo.vstack([mo.Html(scaled_clean.head().round(3).to_html()), scaled_panel], gap=1)
+    return heart_clean, n_zero_cholesterol, n_zero_removed, scaled_clean
 
 
 @app.cell(hide_code=True)
@@ -267,28 +301,41 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which chest-pain level is represented by a row of zeros in the scaled models? Replace `None` with that code.
+    Which chest-pain level is represented by a row of zeros in the scaled models?
     """)
     return
-
-
-@app.cell
-def _():
-    student_dropped_pain = None
-    print(student_dropped_pain)
-    return (student_dropped_pain,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_dropped_pain = "ASY"
-```
+            "Show answers": mo.md(r"""
 **ASY.** `drop_first=True` drops the first alphabetical level. The remaining columns are ATA, NAP, and TA. All three equal to 0 means the dropped level, ASY.
-''')
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(index_train, mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many patients are in the training split after the outlier cutoff?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(index_train, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{len(index_train)}.** The test split holds the remaining patients after the same cutoff.
+""")
         },
         lazy=True,
     )
@@ -442,7 +489,8 @@ def _(
     sns.barplot(data=importance, y="feature", x="importance", ax=_axes, color="steelblue")
     _axes.set_title("Random forest feature importance")
     print(f"Forest training accuracy = {forest_heart.score(features_tree.loc[index_train], y_heart.loc[index_train]):.3f}")
-    return _figure, mo.Html(importance.round(3).to_html())
+    mo.vstack([_figure, mo.Html(importance.round(3).to_html())], gap=1)
+    return (forest_result,)
 
 
 @app.cell
@@ -476,7 +524,82 @@ def _(
     _score_table["accuracy"].plot(kind="bar", rot=0, ax=_axes[0], title="Test accuracy")
     _score_table["F1"].plot(kind="bar", rot=0, ax=_axes[1], title="Test F1", color="darkred")
     _figure.tight_layout()
-    return _figure, mo.Html(_score_table.round(3).to_html())
+    mo.vstack([_figure, mo.Html(_score_table.round(3).to_html())], gap=1)
+    return (results,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    After the z-score cutoff, how many rows were removed?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(heart, heart_clean, mo):
+    _removed = len(heart) - len(heart_clean)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_removed}.** A row is dropped when any of the four numeric columns is more than 3 standard deviations from its mean after scaling.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On this split, which model has the highest test AUC?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, results):
+    _best_auc = results["auc"].astype(float).idxmax()
+    _val = results.loc[_best_auc, "auc"]
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_best_auc}** ({_val:.3f}). The ROC area summarizes ranking quality across cutoffs, not just accuracy at 0.5.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which model has the highest test F1 on the same split?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, results):
+    _best_f1 = results["f1"].astype(float).idxmax()
+    _val = results.loc[_best_f1, "f1"]
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_best_f1}** ({_val:.3f}). F1 balances precision and recall for the heart-disease label.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell
@@ -489,7 +612,7 @@ def _(plt, results):
     _axes.set_ylabel("True positive rate")
     _axes.set_title("ROC curves")
     _axes.legend()
-    return _figure
+    _figure
 
 
 @app.cell(hide_code=True)
@@ -508,39 +631,6 @@ def _(mo, results):
     - F1 is in the table because a missed heart-disease case and a false alarm do not have the same cost. Accuracy alone does not show that split.
     - The importance chart is the forest's ranking of the columns it was given. It is not a ranking shared by the logistic model.
     """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Check your understanding
-
-    1. Which five models use the standardized columns?
-    2. What does a row of zeros mean for chest pain in those models?
-    3. What does the z-score cutoff remove?
-    4. Why is F1 reported along with accuracy?
-    5. What does an AUC of 0.5 mean?
-    6. Which models in this lesson are limited to depth 5?
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **LRM, LDA, QDA, KNN, and SVM:** The tree and the forest use the original age, blood pressure, cholesterol, and heart rate.
-2. **ASY:** That level was dropped. ATA, NAP, and TA are the columns that remain.
-3. **Rows more than 3 standard deviations from a numeric mean:** The rule looks at age, resting blood pressure, cholesterol, and maximum heart rate. Most cholesterol zeros stay, because that value is common enough to fall inside the cutoff.
-4. **Missed cases and false alarms are different:** F1 combines precision and recall. Accuracy only counts how often the label matched.
-5. **No better than a coin flip:** The ROC area is the probability that a random patient with heart disease is scored above a random patient without it. 0.5 means those rankings are tied with chance.
-6. **The decision tree and the random forest:** Both use `max_depth=5`.
-""")
-        },
-        lazy=True,
-    )
     return
 
 

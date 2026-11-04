@@ -17,27 +17,93 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.datasets import make_blobs, make_circles
     from sklearn.model_selection import GridSearchCV, train_test_split
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
 
-    return GridSearchCV, SVC, StandardScaler, make_blobs, make_circles, train_test_split
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
+    return (
+        GridSearchCV,
+        SVC,
+        StandardScaler,
+        make_blobs,
+        make_circles,
+        mo,
+        np,
+        pd,
+        plt,
+        sns,
+        train_test_split,
+    )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Support Vector Machines
+
+    ## Objectives
+
+    - Place a linear margin between two classes, and see which points hold that margin in place.
+    - Switch to a radial-basis kernel when no straight line can separate the classes.
+    - Soften the margin with `C`, then choose `C` and the kernel by cross-validation.
+
+    ## Background
+
+    A support vector machine looks for a boundary with the widest empty margin it can manage. Only the points on the margin, the support vectors, determine that boundary. Points far on the correct side of the margin can move without changing the fit.
+
+    `C` sets how hard the margin is. A large `C` tries to keep every point on its own side. A small `C` allows some points inside the margin.
+
+    ## Datasets Used
+
+    - **Separated blobs.** Two tight groups, used for a linear margin.
+    - **Circles.** One class inside the other, used for a radial-basis kernel.
+    - **Overlapping blobs.** The same generator with a wider spread, used to compare a hard margin with a soft one.
+    - **Raisin Dataset.** Seven measurements of Kecimen and Besni raisins.
+    """)
+    return
 
 
 @app.cell
@@ -84,33 +150,6 @@ def _(np, pd):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Support Vector Machines
-
-    ## Objectives
-
-    - Place a linear margin between two classes, and see which points hold that margin in place.
-    - Switch to a radial-basis kernel when no straight line can separate the classes.
-    - Soften the margin with `C`, then choose `C` and the kernel by cross-validation.
-
-    ## Background
-
-    A support vector machine looks for a boundary with the widest empty margin it can manage. Only the points on the margin, the support vectors, determine that boundary. Points far on the correct side of the margin can move without changing the fit.
-
-    `C` sets how hard the margin is. A large `C` tries to keep every point on its own side. A small `C` allows some points inside the margin.
-
-    ## Datasets Used
-
-    - **Separated blobs.** Two tight groups, used for a linear margin.
-    - **Circles.** One class inside the other, used for a radial-basis kernel.
-    - **Overlapping blobs.** The same generator with a wider spread, used to compare a hard margin with a soft one.
-    - **Raisin Dataset.** Seven measurements of Kecimen and Besni raisins.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
     ## More than one separating line
 
     The two groups below can be separated by many straight lines. The grey lines are three of them. The black point is a new case. Which class it gets depends on which line was drawn.
@@ -141,7 +180,8 @@ def _(make_blobs, np, pd, plt, sns):
         _axes.plot(_x_line, _slope * _x_line + _intercept, color="gray")
     _axes.scatter([-1], [-5], s=80, c="black", zorder=3)
     _axes.set_title("Three lines that separate the same points")
-    return _figure, df1
+    _figure
+    return (df1,)
 
 
 @app.cell
@@ -157,7 +197,31 @@ def _(SVC, df1, plot_svc, plt, train_test_split):
     print(f"Test accuracy = {svm1.score(X1_test, y1_test):.3f}")
     _figure, _axes = plt.subplots(figsize=(6, 4))
     plot_svc(data_train1, svm1, _axes)
-    return _figure, data_train1, svm1
+    _figure
+    return X1_test, data_train1, svm1, y1_test
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the separated blobs, how many support vectors does the linear hard-margin model use in total?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, svm1):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{int(svm1.n_support_.sum())}.** Only the circled points on the margin matter. The counts per class are {list(svm1.n_support_)}.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -179,7 +243,7 @@ def _(SVC, data_train1, plot_svc, plt):
         plot_svc(_part, _model, _axis)
         _axis.set_title(f"First {_n} training rows")
     _figure.tight_layout()
-    return _figure
+    _figure
 
 
 @app.cell(hide_code=True)
@@ -208,7 +272,32 @@ def _(SVC, make_circles, pd, plot_svc, plt, train_test_split):
     print(f"Test accuracy = {svm2.score(X2_test, y2_test):.3f}")
     _figure, _axes = plt.subplots(figsize=(6, 4))
     plot_svc(data_train2, svm2, _axes)
-    return _figure
+    _figure
+    return svm2, X2_test, y2_test
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the circle split, what is the test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(X2_test, mo, svm2, y2_test):
+    _acc = svm2.score(X2_test, y2_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** The radial-basis kernel can close a boundary around the inner class where a straight line cannot.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -247,7 +336,8 @@ def _(SVC, make_blobs, pd, plot_svc, plt, train_test_split):
     plot_svc(data_train3, svm_soft, _axes[1])
     _axes[1].set_title("C = 0.001")
     _figure.tight_layout()
-    return _figure
+    _figure
+    return svm_hard, svm_soft
 
 
 @app.cell(hide_code=True)
@@ -255,28 +345,44 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which value of `C` asks for the harder margin, `10000` or `0.001`? Replace `None` with that number.
+    Which value of `C` asks for the harder margin, `10000` or `0.001`?
     """)
     return
-
-
-@app.cell
-def _():
-    student_hard_c = None
-    print(student_hard_c)
-    return (student_hard_c,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_hard_c = 10000
-```
+            "Show answers": mo.md(r"""
 **10000.** A large `C` penalizes points inside the margin more heavily. `0.001` lets the margin grow and take points in.
-''')
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    With overlapping blobs, which linear model uses more support vectors, `C=10000` or `C=0.001`?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, svm_hard, svm_soft):
+    _hard = int(svm_hard.n_support_.sum())
+    _soft = int(svm_soft.n_support_.sum())
+    _answer = "C=0.001" if _soft > _hard else "C=10000"
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_answer}.** The hard margin uses {_hard} support vectors; the soft margin uses {_soft}.
+""")
         },
         lazy=True,
     )
@@ -343,6 +449,30 @@ def _(
     print(f"Best parameters: {_search.best_params_}")
     print(f"Best model training accuracy = {svm_best.score(Xr_train, yr_train):.3f}")
     print(f"Best model testing accuracy  = {svm_best.score(Xr_test, yr_test):.3f}")
+    return svm_best, Xr_test, yr_test
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which kernel does five-fold cross-validation pick for the raisins?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, svm_best):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**`{svm_best.kernel}`.** With C={svm_best.C}, that pair wins the grid on the training rows.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -368,39 +498,6 @@ def _(mo, svm1, svm_best, X1_test, y1_test):
     - Large `C` hardens the margin. Small `C` lets points sit inside it.
     - On the raisins, cross-validation selects kernel `{svm_best.kernel}` and C={svm_best.C}.
     """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Check your understanding
-
-    1. What is a support vector?
-    2. What do the dashed contours show?
-    3. Why does the circle data need a kernel other than `linear`?
-    4. What does a small `C` allow?
-    5. Why are the raisin columns standardized before this fit?
-    6. When is the test accuracy of the raisin search computed, relative to choosing the kernel?
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **A training point on the margin:** Those points are circled. Moving a point that is far outside the margin does not change the fit.
-2. **The edges of the margin:** The solid contour is the decision line. The dashed contours sit one unit away in decision-function units.
-3. **No straight line works:** One class sits inside the other, so the boundary has to close.
-4. **Points inside the margin:** The fit accepts a wider margin and more violations.
-5. **The kernel uses distances or a dot product:** Area would otherwise dominate extent. The scaler is fit on the training rows.
-6. **After the choice:** Cross-validation uses the training rows. The test score is computed once the kernel and `C` are already chosen.
-""")
-        },
-        lazy=True,
-    )
     return
 
 
