@@ -17,26 +17,53 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.datasets import make_blobs
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import confusion_matrix
     from sklearn.model_selection import GridSearchCV, train_test_split
     from sklearn.tree import DecisionTreeClassifier, plot_tree
+
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
 
     return (
         DecisionTreeClassifier,
@@ -44,7 +71,12 @@ def _():
         RandomForestClassifier,
         confusion_matrix,
         make_blobs,
+        mo,
+        np,
+        pd,
         plot_tree,
+        plt,
+        sns,
         train_test_split,
     )
 
@@ -72,6 +104,20 @@ def _(mo):
     - **Raisin Dataset.** Seven measurements of Kecimen and Besni raisins. Kecimen is 0 and Besni is 1. Trees and forests do not need those columns standardized.
     """)
     return
+
+
+@app.cell
+def _(confusion_matrix, pd):
+    def confusion_table(y_true, y_pred):
+        labels = sorted(set(y_true).union(set(y_pred)))
+        matrix = confusion_matrix(y_true, y_pred, labels=labels)
+        return pd.DataFrame(
+            matrix,
+            index=[f"true {label}" for label in labels],
+            columns=[f"pred {label}" for label in labels],
+        )
+
+    return (confusion_table,)
 
 
 @app.cell(hide_code=True)
@@ -128,7 +174,32 @@ def _(
         )
         _axis.set_title(f"Tree {_index}")
     _figure.tight_layout()
-    return _figure
+    _figure
+    return Xb_test, forest_blobs, tree_one, yb_test
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the blobs, what is the forest's test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xb_test, forest_blobs, mo, yb_test):
+    _acc = forest_blobs.score(Xb_test, yb_test)
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** The forest vote can beat a single depth-2 tree on the same split.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell
@@ -144,7 +215,7 @@ def _(Xb_train, forest_blobs, mo, pd, yb_train):
     print(f"Lowest single-tree training score = {_scores.min():.3f}")
     print(f"Highest single-tree training score = {_scores.max():.3f}")
     print(f"Forest training score = {forest_blobs.score(Xb_train, yb_train):.3f}")
-    return mo.Html(_scores.round(3).to_frame("training score").to_html())
+    mo.Html(_scores.round(3).to_frame("training score").to_html())
 
 
 @app.cell(hide_code=True)
@@ -168,11 +239,60 @@ def _(Xb_train, forest_blobs, mo, pd, plt, sns):
     _figure, _axes = plt.subplots(figsize=(5, 3))
     sns.barplot(data=importance, x="feature", y="importance", ax=_axes, color="steelblue")
     _axes.set_title("Feature importance in the blob forest")
-    return _figure, mo.Html(importance.round(3).to_html())
+    mo.vstack([_figure, mo.Html(importance.round(3).to_html())], gap=1)
+    return (importance,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Which blob feature has the larger forest importance, `X1` or `X2`?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(importance, mo):
+    _top = importance.sort_values("importance", ascending=False).iloc[0]
+    _second = importance.sort_values("importance", ascending=False).iloc[1]
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_top['feature']}.** Importances are {_top['importance']:.3f} for `{_top['feature']}` and {_second['importance']:.3f} for `{_second['feature']}` (sklearn averages impurity decrease across trees, normalized to sum to 1).
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(forest_blobs, mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    What is the out-of-bag score for the blob forest (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(forest_blobs, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{forest_blobs.oob_score_:.3f}.** Each tree votes only on rows it did not train on; that internal check is not the same as the held-out test accuracy.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell
-def _(Xb_test, Xb_train, confusion_matrix, forest_blobs, mo, np, pd, plt, sns, tree_one, yb_test, yb_train):
+def _(Xb_test, Xb_train, confusion_table, forest_blobs, mo, np, pd, plt, sns, tree_one, yb_test, yb_train):
     _rng = np.random.default_rng(0)
     _grid = pd.DataFrame(
         {
@@ -211,11 +331,8 @@ def _(Xb_test, Xb_train, confusion_matrix, forest_blobs, mo, np, pd, plt, sns, t
     _figure.tight_layout()
     _rows = []
     for _name, _model in (("tree", tree_one), ("forest", forest_blobs)):
-        _matrix = confusion_matrix(yb_test, _model.predict(Xb_test))
-        _rows.append(
-            pd.DataFrame(_matrix, index=["true 0", "true 1"], columns=["pred 0", "pred 1"]).assign(model=_name)
-        )
-    return _figure, mo.Html(pd.concat(_rows).to_html())
+        _rows.append(confusion_table(yb_test, _model.predict(Xb_test)).assign(model=_name))
+    mo.vstack([_figure, mo.Html(pd.concat(_rows).to_html())], gap=1)
 
 
 @app.cell(hide_code=True)
@@ -261,7 +378,7 @@ def _(RandomForestClassifier, pd, raisin_file, train_test_split):
         ("max_depth=4", forest_depth),
     ):
         print(f"{_name}: {len(_model.estimators_)} trees, train {_model.score(Xr_train, yr_train):.3f}, test {_model.score(Xr_test, yr_test):.3f}")
-    return
+    return Xr_test, Xr_train, yr_test
 
 
 @app.cell
@@ -282,7 +399,7 @@ def _(GridSearchCV, RandomForestClassifier, Xr_test, Xr_train, yr_test, yr_train
     print(f"Best parameters: {_search.best_params_}")
     print(f"Training accuracy = {forest_best.score(Xr_train, yr_train):.3f}")
     print(f"Testing accuracy  = {forest_best.score(Xr_test, yr_test):.3f}")
-    return
+    return (forest_best,)
 
 
 @app.cell(hide_code=True)
@@ -290,28 +407,41 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    An out-of-bag row is a training row that was left out of which trees? Replace `None` with `some` or with `every`.
+    How many trees does the blob forest grow?
     """)
     return
 
 
-@app.cell
-def _():
-    student_oob = None
-    print(student_oob)
-    return (student_oob,)
+@app.cell(hide_code=True)
+def _(forest_blobs, mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{forest_blobs.n_estimators}.** Each of those trees is limited to depth 2 and votes on the class label.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(forest_best, mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many trees does cross-validation pick for the raisins?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(forest_best, mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_oob = "some"
-```
-**some.** Each tree draws its own bootstrap sample. A row left out of that draw is out-of-bag for that tree, and it can still be in the sample of another tree. The out-of-bag score uses, for each row, only the trees that missed it.
-''')
+            "Show answers": mo.md(f"""
+**{forest_best.get_params()['n_estimators']}.** That count is one of the settings the grid varies together with depth and leaf size.
+""")
         },
         lazy=True,
     )
@@ -328,7 +458,7 @@ def _(Xb_test, forest_best, forest_blobs, mo, tree_one, Xr_test, yb_test, yr_tes
     - The forest label is a majority vote of its trees. On the blobs, the single depth-2 tree has test accuracy {tree_one.score(Xb_test, yb_test):.3f}, and the forest of 20 has test accuracy {forest_blobs.score(Xb_test, yb_test):.3f}.
     - Individual trees in that forest can score lower than the vote. The leaf counts differ because each tree saw a bootstrap sample.
     - The out-of-bag score for the blob forest is {forest_blobs.oob_score_:.3f}. It reuses training rows that a given tree did not see. It is not a substitute for a test set that was held out of the whole fit.
-    - Feature importance is the forest's summary of which column reduced impurity most often. On the blobs that bar has two columns, `X1` and `X2`.
+    - Feature importance is the impurity decrease averaged across trees, normalized to sum to 1 (`feature_importances_`). On the blobs that bar has two columns, `X1` and `X2`.
     - Raisin columns are not standardized. The cross-validated forest uses {forest_best.get_params()["n_estimators"]} trees, depth {forest_best.get_params()["max_depth"]}, leaf size {forest_best.get_params()["min_samples_leaf"]}, and split size {forest_best.get_params()["min_samples_split"]}. Its test accuracy is {forest_best.score(Xr_test, yr_test):.3f}.
     """)
     return
@@ -339,11 +469,101 @@ def _(mo):
     mo.md(r"""
     ## Check your understanding
 
-    1. What does the forest return as its predicted class?
+1. What does the forest return as its predicted class?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The majority class:** Each tree votes, and the forest keeps the class with the most votes.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     2. Why do the leaf counts of one plotted tree not equal the full training set?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**That tree saw a bootstrap sample:** Some training rows were drawn more than once and some were left out.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     3. Which trees vote on a row in the out-of-bag score?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The trees that did not train on it:** A row can be in some samples and out of others.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     4. What does a taller bar in the importance chart mean?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**The column was used more to reduce impurity:** Importance is a summary across the trees, not a coefficient.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     5. Why can the raisin fit skip standardization?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A threshold does not use distance:** Area and extent can stay on their own scales.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     6. What does the grid search vary that the three single forests do not vary together?
     """)
     return
@@ -352,16 +572,9 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **The majority class:** Each tree votes, and the forest keeps the class with the most votes.
-2. **That tree saw a bootstrap sample:** Some training rows were drawn more than once and some were left out.
-3. **The trees that did not train on it:** A row can be in some samples and out of others.
-4. **The column was used more to reduce impurity:** Importance is a summary across the trees, not a coefficient.
-5. **A threshold does not use distance:** Area and extent can stay on their own scales.
-6. **All four settings at once:** The three forests each change one setting. The grid scores combinations of `n_estimators`, depth, leaf size, and split size.
-""")
-        },
+        {"Show answer": mo.md(r"""
+**All four settings at once:** The three forests each change one setting. The grid scores combinations of `n_estimators`, depth, leaf size, and split size.
+""")},
         lazy=True,
     )
     return

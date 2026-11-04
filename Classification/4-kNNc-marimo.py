@@ -17,21 +17,45 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import importlib.util as _import_util
+    import sys as _sys
+
+    # Setup: run this cell to install any missing packages.
+    # You do not need to modify this code.
+    _packages = {
+        "numpy": "numpy",
+        "pandas": "pandas",
+        "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "sklearn": "scikit-learn>=1.2",
+        "statsmodels": "statsmodels>=0.15.0",
+    }
+    _missing = [
+        _package for _module, _package in _packages.items()
+        if _import_util.find_spec(_module) is None
+    ]
+    if _missing:
+        if _sys.platform == "emscripten":
+            import micropip as _micropip
+            await _micropip.install(_missing)
+        else:
+            import subprocess as _subprocess
+            _subprocess.check_call([_sys.executable, "-m", "pip", "install", *_missing])
+
+    packages_ready = True
+    return (packages_ready,)
+
+
+
+@app.cell
+def _(packages_ready):
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
-
-    plt.rcParams["figure.max_open_warning"] = 0
-    sns.set_theme(style="whitegrid")
-
-    return mo, np, pd, plt, sns
-
-
-@app.cell
-def _():
     from sklearn.datasets import make_blobs
     from sklearn.metrics import (
         accuracy_score,
@@ -44,32 +68,26 @@ def _():
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.preprocessing import StandardScaler
 
+    plt.rcParams["figure.max_open_warning"] = 0
+    sns.set_theme(style="whitegrid")
+
     return (
         GridSearchCV,
         KNeighborsClassifier,
+        StandardScaler,
         accuracy_score,
         confusion_matrix,
         f1_score,
         make_blobs,
+        mo,
+        np,
+        pd,
+        plt,
         precision_score,
         recall_score,
+        sns,
         train_test_split,
-        StandardScaler,
     )
-
-
-@app.cell
-def _(confusion_matrix, pd):
-    def confusion_table(y_true, y_pred):
-        labels = sorted(set(y_true).union(set(y_pred)))
-        matrix = confusion_matrix(y_true, y_pred, labels=labels)
-        return pd.DataFrame(
-            matrix,
-            index=[f"true {label}" for label in labels],
-            columns=[f"pred {label}" for label in labels],
-        )
-
-    return (confusion_table,)
 
 
 @app.cell(hide_code=True)
@@ -95,6 +113,43 @@ def _(mo):
     return
 
 
+@app.cell
+def _(confusion_matrix, pd):
+    def confusion_table(y_true, y_pred):
+        labels = sorted(set(y_true).union(set(y_pred)))
+        matrix = confusion_matrix(y_true, y_pred, labels=labels)
+        return pd.DataFrame(
+            matrix,
+            index=[f"true {label}" for label in labels],
+            columns=[f"pred {label}" for label in labels],
+        )
+
+    return (confusion_table,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    How many classes do the synthetic blobs have?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r"""
+**2.** Each new point receives the majority label among its `k` nearest training neighbors.
+""")
+        },
+        lazy=True,
+    )
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -108,7 +163,7 @@ def _(mo):
 
 
 @app.cell
-def _(KNeighborsClassifier, make_blobs, pd, train_test_split):
+def _(KNeighborsClassifier, make_blobs, mo, pd, train_test_split):
     _X, _cl = make_blobs(
         n_samples=100, n_features=2, centers=2, random_state=2, cluster_std=3
     )
@@ -122,11 +177,13 @@ def _(KNeighborsClassifier, make_blobs, pd, train_test_split):
     knn_k7 = KNeighborsClassifier(n_neighbors=7)
     knn_k3.fit(Xb_train, yb_train)
     knn_k7.fit(Xb_train, yb_train)
-    print(f"Train = {len(Xb_train)} cases \t Test = {len(Xb_test)} cases")
-    print(f"k=3 training accuracy = {knn_k3.score(Xb_train, yb_train):.3f}")
-    print(f"k=3 testing accuracy  = {knn_k3.score(Xb_test, yb_test):.3f}")
-    print(f"k=7 training accuracy = {knn_k7.score(Xb_train, yb_train):.3f}")
-    print(f"k=7 testing accuracy  = {knn_k7.score(Xb_test, yb_test):.3f}")
+    mo.md(
+        f"Train = {len(Xb_train)} cases, test = {len(Xb_test)} cases. "
+        f"k=3 training accuracy = {knn_k3.score(Xb_train, yb_train):.3f}, "
+        f"testing = {knn_k3.score(Xb_test, yb_test):.3f}. "
+        f"k=7 training accuracy = {knn_k7.score(Xb_train, yb_train):.3f}, "
+        f"testing = {knn_k7.score(Xb_test, yb_test):.3f}."
+    )
     return knn_k3, knn_k7
 
 
@@ -167,7 +224,7 @@ def _(Xb_train, knn_k3, knn_k7, np, pd, plt, sns, yb_train):
         )
         _axis.set_title(_title)
     _figure.tight_layout()
-    return _figure
+    _figure
 
 
 @app.cell
@@ -178,7 +235,33 @@ def _(Xb_test, confusion_table, knn_k3, knn_k7, mo, pd, yb_test):
             confusion_table(yb_test, knn_k7.predict(Xb_test)).assign(model="k=7"),
         ]
     )
-    return mo.Html(_side.to_html())
+    mo.Html(_side.to_html())
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the blobs, which `k` has higher training accuracy, 3 or 7?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(Xb_train, knn_k3, knn_k7, mo, yb_train):
+    _a3 = knn_k3.score(Xb_train, yb_train)
+    _a7 = knn_k7.score(Xb_train, yb_train)
+    _better = 3 if _a3 > _a7 else 7
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_better}.** Training accuracy is {_a3:.3f} for k=3 and {_a7:.3f} for k=7 on the 80 training rows.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -203,7 +286,7 @@ def _():
 
 
 @app.cell
-def _(KNeighborsClassifier, StandardScaler, pd, raisin_file, train_test_split):
+def _(KNeighborsClassifier, StandardScaler, mo, pd, raisin_file, train_test_split):
     # dfr = pd.read_csv("Raisin.csv")
     dfr = pd.read_csv(raisin_file)
     _coded = dfr.copy()
@@ -224,10 +307,11 @@ def _(KNeighborsClassifier, StandardScaler, pd, raisin_file, train_test_split):
     knn_r5 = KNeighborsClassifier(n_neighbors=5)
     knn_r3.fit(Xr_train, yr_train)
     knn_r5.fit(Xr_train, yr_train)
-    print(dfr.shape)
-    print(f"Train = {len(Xr_train)} cases \t Test = {len(Xr_test)} cases")
-    print(f"k=3 test accuracy = {knn_r3.score(Xr_test, yr_test):.3f}")
-    print(f"k=5 test accuracy = {knn_r5.score(Xr_test, yr_test):.3f}")
+    mo.md(
+        f"{dfr.shape[0]} rows. Train = {len(Xr_train)} cases, test = {len(Xr_test)} cases. "
+        f"k=3 test accuracy = {knn_r3.score(Xr_test, yr_test):.3f}. "
+        f"k=5 test accuracy = {knn_r5.score(Xr_test, yr_test):.3f}."
+    )
     return Xr_test, Xr_train, yr_test, yr_train
 
 
@@ -255,7 +339,7 @@ def _(
     Xr_train,
     accuracy_score,
     f1_score,
-    np,
+    mo,
     pd,
     precision_score,
     recall_score,
@@ -284,6 +368,7 @@ def _(
             f"On the test set, {_name} is highest at k={_best_k} "
             f"({test_scores.loc[_best_k, _name]:.3f})"
         )
+    mo.Html(test_scores.head(5).round(3).to_html())
     return (test_scores,)
 
 
@@ -301,8 +386,61 @@ def _(plt, test_scores):
         _axes.scatter(_best_k, test_scores.loc[_best_k, _name], s=80, facecolors="none", edgecolors="black")
     _axes.set_xlabel("k")
     _axes.set_title("Scores on the held-out raisins")
-    _axes.legend()
-    return _figure
+    _axes.legend(loc="upper left", bbox_to_anchor=(1.02, 1))
+    _figure.tight_layout()
+    _figure
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    Why are the raisin columns standardized before k-nearest neighbors? Replace `None` with `scale` or with `shape`. Use `scale` if the reason is the size of the numbers, and `shape` if the reason is the number of columns.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {
+            "Show answers": mo.md(r'''
+```python
+student_why_scale = "scale"
+```
+**scale.** Distance treats a difference of 1000 in area as much larger than a difference of 0.1 in extent. Standardization puts the columns on a common scale before the neighbors are found. The number of columns is not the reason.
+''')
+        },
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Try it yourself
+
+    On the standardized raisins, what is the k=5 test accuracy (three decimals)?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(KNeighborsClassifier, Xr_test, Xr_train, mo, yr_test, yr_train):
+    _acc = KNeighborsClassifier(n_neighbors=5).fit(Xr_train, yr_train).score(
+        Xr_test, yr_test
+    )
+    mo.accordion(
+        {
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** Distance uses every column, so the rows were standardized from the training set first.
+""")
+        },
+        lazy=True,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -318,7 +456,7 @@ def _(mo):
 
 
 @app.cell
-def _(GridSearchCV, KNeighborsClassifier, Xr_train, k_range, yr_train):
+def _(GridSearchCV, KNeighborsClassifier, Xr_train, k_range, mo, yr_train):
     _param_grid = {"n_neighbors": k_range}
     _base = KNeighborsClassifier()
     grid_acc = GridSearchCV(_base, _param_grid, cv=10, scoring="accuracy")
@@ -329,10 +467,16 @@ def _(GridSearchCV, KNeighborsClassifier, Xr_train, k_range, yr_train):
     grid_prc.fit(Xr_train, yr_train)
     grid_rec.fit(Xr_train, yr_train)
     grid_f1.fit(Xr_train, yr_train)
-    print(f"CV accuracy  picks k={grid_acc.best_params_['n_neighbors']} at {grid_acc.best_score_:.3f}")
-    print(f"CV precision picks k={grid_prc.best_params_['n_neighbors']} at {grid_prc.best_score_:.3f}")
-    print(f"CV recall    picks k={grid_rec.best_params_['n_neighbors']} at {grid_rec.best_score_:.3f}")
-    print(f"CV F1        picks k={grid_f1.best_params_['n_neighbors']} at {grid_f1.best_score_:.3f}")
+    mo.md(
+        f"CV accuracy picks k={grid_acc.best_params_['n_neighbors']} "
+        f"at {grid_acc.best_score_:.3f}. "
+        f"CV precision picks k={grid_prc.best_params_['n_neighbors']} "
+        f"at {grid_prc.best_score_:.3f}. "
+        f"CV recall picks k={grid_rec.best_params_['n_neighbors']} "
+        f"at {grid_rec.best_score_:.3f}. "
+        f"CV F1 picks k={grid_f1.best_params_['n_neighbors']} "
+        f"at {grid_f1.best_score_:.3f}."
+    )
     return grid_acc, grid_f1, grid_prc, grid_rec
 
 
@@ -351,8 +495,9 @@ def _(grid_acc, grid_f1, grid_prc, grid_rec, k_range, plt):
         _axes.scatter(_best_k, _grid.best_score_, s=80, facecolors="none", edgecolors="black")
     _axes.set_xlabel("k")
     _axes.set_title("Cross-validated scores on the training raisins")
-    _axes.legend()
-    return _figure
+    _axes.legend(loc="upper left", bbox_to_anchor=(1.02, 1))
+    _figure.tight_layout()
+    _figure
 
 
 @app.cell(hide_code=True)
@@ -368,28 +513,18 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Why are the raisin columns standardized before k-nearest neighbors? Replace `None` with `scale` or with `shape`. Use `scale` if the reason is the size of the numbers, and `shape` if the reason is the number of columns.
+    For accuracy, which `k` does 10-fold cross-validation pick on the training raisins?
     """)
     return
 
 
-@app.cell
-def _():
-    student_why_scale = None
-    print(student_why_scale)
-    return (student_why_scale,)
-
-
 @app.cell(hide_code=True)
-def _(mo):
+def _(grid_acc, mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_why_scale = "scale"
-```
-**scale.** Distance treats a difference of 1000 in area as much larger than a difference of 0.1 in extent. Standardization puts the columns on a common scale before the neighbors are found. The number of columns is not the reason.
-''')
+            "Show answers": mo.md(f"""
+**k={grid_acc.best_params_['n_neighbors']}.** Mean CV accuracy is {grid_acc.best_score_:.3f} at that setting.
+""")
         },
         lazy=True,
     )
@@ -417,11 +552,101 @@ def _(mo):
     mo.md(r"""
     ## Check your understanding
 
-    1. What do the `k` neighbors do?
+1. What do the `k` neighbors do?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**They vote:** The new row gets the class that appears most often among those neighbors.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     2. Why can a large-valued column dominate k-nearest neighbors?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Distance uses the raw numbers:** A gap of thousands in area swamps a gap of tenths in extent. Standardization prevents that.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     3. Which class is the positive class for the raisin precision and recall?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**Besni:** It is coded as 1. Kecimen is 0.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     4. Why is the test-set curve not the way to choose `k`?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**It spends the test rows on the choice:** The reported test score would then be the score of a `k` that was picked to look good on those same rows.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     5. What does a cross-validation fold hold out?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.accordion(
+        {"Show answer": mo.md(r"""
+**A slice of the training rows:** `cv=10` leaves out one tenth of the training rows at a time.
+""")},
+        lazy=True,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     6. Which `k` is smoother on the blob charts, 3 or 7?
     """)
     return
@@ -430,16 +655,9 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.accordion(
-        {
-            "Show answers": mo.md(r"""
-1. **They vote:** The new row gets the class that appears most often among those neighbors.
-2. **Distance uses the raw numbers:** A gap of thousands in area swamps a gap of tenths in extent. Standardization prevents that.
-3. **Besni:** It is coded as 1. Kecimen is 0.
-4. **It spends the test rows on the choice:** The reported test score would then be the score of a `k` that was picked to look good on those same rows.
-5. **A slice of the training rows:** `cv=10` leaves out one tenth of the training rows at a time.
-6. **7:** More neighbors average out a single nearby point, so the region changes less abruptly.
-""")
-        },
+        {"Show answer": mo.md(r"""
+**7:** More neighbors average out a single nearby point, so the region changes less abruptly.
+""")},
         lazy=True,
     )
     return
