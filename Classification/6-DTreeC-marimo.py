@@ -453,22 +453,19 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    A node whose Gini impurity is 0 contains which kind of rows? Replace `None` with `mixed` or with `one class`.
+    On this blob split, what is Tree B's test accuracy (three decimals)?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(Xb_test, mo, tree_b, yb_test):
+    _acc = tree_b.score(Xb_test, yb_test)
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_gini_zero = "one class"
-student_gini_zero
-```
-**one class.** Gini is 0 only when every row in the node has the same label. A mixed node has a larger Gini.
-''')
+            "Show answers": mo.md(f"""
+**{_acc:.3f}.** Tree B requires at least 10 training rows in every leaf (`min_samples_leaf=10`).
+""")
         },
         lazy=True,
     )

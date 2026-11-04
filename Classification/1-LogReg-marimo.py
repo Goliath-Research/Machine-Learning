@@ -556,22 +556,18 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    After the recoding above, which integer means Besni? Replace `None` with that integer.
+    How many raisin rows are in the test holdout after the 80/20 split?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(Xr_test, mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_besni_code = 1
-student_besni_code
-```
-**1.** The dictionary is `{"Kecimen": 0, "Besni": 1}`. The probability in column 1 is the probability of Besni.
-''')
+            "Show answers": mo.md(f"""
+**{len(Xr_test)}.** `test_size=0.2` and `random_state=23` leave 180 of 900 rows for testing.
+""")
         },
         lazy=True,
     )

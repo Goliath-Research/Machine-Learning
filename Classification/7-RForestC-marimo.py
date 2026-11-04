@@ -407,22 +407,18 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    An out-of-bag row is a training row that was left out of which trees? Replace `None` with `some` or with `every`.
+    How many trees does the blob forest grow?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(forest_blobs, mo):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_oob = "some"
-student_oob
-```
-**some.** Each tree draws its own bootstrap sample. A row left out of that draw is out-of-bag for that tree, and it can still be in the sample of another tree. The out-of-bag score uses, for each row, only the trees that missed it.
-''')
+            "Show answers": mo.md(f"""
+**{forest_blobs.n_estimators}.** Each of those trees is limited to depth 2 and votes on the class label.
+""")
         },
         lazy=True,
     )

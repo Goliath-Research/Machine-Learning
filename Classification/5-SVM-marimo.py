@@ -345,22 +345,18 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which value of `C` asks for the harder margin, `10000` or `0.001`? Replace `None` with that number.
+    On the overlapping blob panel, how many support vectors does the `C=0.001` model use in total?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(mo, svm_hard, svm_soft):
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_hard_c = 10000
-student_hard_c
-```
-**10000.** A large `C` penalizes points inside the margin more heavily. `0.001` lets the margin grow and take points in.
-''')
+            "Show answers": mo.md(f"""
+**{int(svm_soft.n_support_.sum())}.** The softer margin keeps {svm_soft.n_support_.tolist()} support vectors per class, compared with {int(svm_hard.n_support_.sum())} for `C=10000`.
+""")
         },
         lazy=True,
     )

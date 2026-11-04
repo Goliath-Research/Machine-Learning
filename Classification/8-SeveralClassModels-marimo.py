@@ -301,22 +301,19 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which chest-pain level is represented by a row of zeros in the scaled models? Replace `None` with that code.
+    How many chest-pain dummy columns do the scaled models use after `drop_first=True`?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(features_scaled, mo, scaled_clean):
+    _n = len(features_scaled.columns) - len(scaled_clean.columns) - 1
     mo.accordion(
         {
-            "Show answers": mo.md(r'''
-```python
-student_dropped_pain = "ASY"
-student_dropped_pain
-```
-**ASY.** `drop_first=True` drops the first alphabetical level. The remaining columns are ATA, NAP, and TA. All three equal to 0 means the dropped level, ASY.
-''')
+            "Show answers": mo.md(f"""
+**{_n}.** Four levels (ASY, ATA, NAP, TA) minus the dropped first level leaves three columns in `features_scaled`.
+""")
         },
         lazy=True,
     )

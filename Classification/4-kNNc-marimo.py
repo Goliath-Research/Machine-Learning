@@ -243,20 +243,20 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    On the blob charts, which `k` misclassifies more test rows, 3 or 7?
+    On the blobs, which `k` has higher training accuracy, 3 or 7?
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(Xb_test, knn_k3, knn_k7, mo, yb_test):
-    _e3 = 1 - knn_k3.score(Xb_test, yb_test)
-    _e7 = 1 - knn_k7.score(Xb_test, yb_test)
-    _worse = 3 if _e3 > _e7 else 7
+def _(Xb_train, knn_k3, knn_k7, mo, yb_train):
+    _a3 = knn_k3.score(Xb_train, yb_train)
+    _a7 = knn_k7.score(Xb_train, yb_train)
+    _better = 3 if _a3 > _a7 else 7
     mo.accordion(
         {
             "Show answers": mo.md(f"""
-**{_worse}.** Test error rates are {_e3:.3f} for k=3 and {_e7:.3f} for k=7 on this split.
+**{_better}.** Training accuracy is {_a3:.3f} for k=3 and {_a7:.3f} for k=7 on the 80 training rows.
 """)
         },
         lazy=True,
@@ -396,7 +396,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Why does this lesson standardize the raisin columns before k-nearest neighbors? Replace `None` with `scale` or with `distance`.
+    Why are the raisin columns standardized before k-nearest neighbors? Replace `None` with `scale` or with `shape`. Use `scale` if the reason is the size of the numbers, and `shape` if the reason is the number of columns.
     """)
     return
 
@@ -408,9 +408,8 @@ def _(mo):
             "Show answers": mo.md(r'''
 ```python
 student_why_scale = "scale"
-student_why_scale
 ```
-**scale.** Neighbors are chosen by distance. Without scaling, a column with large numbers would dominate the distance.
+**scale.** Distance treats a difference of 1000 in area as much larger than a difference of 0.1 in extent. Standardization puts the columns on a common scale before the neighbors are found. The number of columns is not the reason.
 ''')
         },
         lazy=True,

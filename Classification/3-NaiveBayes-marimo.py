@@ -455,7 +455,7 @@ def _(mo):
     mo.md(r"""
     ### Try it yourself
 
-    Which naive Bayes model fits the word counts? Replace `None` with `gaussian` or with `multinomial`.
+    Which naive Bayes model uses word counts in this lesson, Gaussian or multinomial? Replace `None` with the name.
     """)
     return
 
@@ -467,9 +467,8 @@ def _(mo):
             "Show answers": mo.md(r'''
 ```python
 student_count_model = "multinomial"
-student_count_model
 ```
-**multinomial.** The columns are word counts, not continuous measurements.
+**Multinomial.** `MultinomialNB` is fit on the word-count matrix from `CountVectorizer`. `GaussianNB` is the model used for the numeric blob and raisin columns.
 ''')
         },
         lazy=True,
